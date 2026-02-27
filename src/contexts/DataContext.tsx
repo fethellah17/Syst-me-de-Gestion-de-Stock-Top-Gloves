@@ -42,6 +42,8 @@ export interface Mouvement {
   ref: string;
   type: "Entrée" | "Sortie" | "Transfert" | "Ajustement";
   qte: number;
+  lotNumber: string;           // Lot/Batch Number for traceability (medical compliance)
+  lotDate?: string;             // Lot/Batch Production Date for traceability
   emplacementSource?: string;
   emplacementDestination: string;
   operateur: string;
@@ -130,12 +132,12 @@ const initialLocations: Emplacement[] = [
 ];
 
 const initialMovements: Mouvement[] = [
-  { id: 1, date: "2026-02-24 14:32:20", article: "Gants Nitrile M", ref: "GN-M-001", type: "Entrée", qte: 500, emplacementDestination: "Zone A-12", operateur: "Karim B." },
-  { id: 2, date: "2026-02-24 13:15:45", article: "Gants Latex S", ref: "GL-S-002", type: "Sortie", qte: 200, emplacementDestination: "Département Production", operateur: "Sara M." },
-  { id: 3, date: "2026-02-26 09:30:15", article: "Gants Nitrile M", ref: "GN-M-001", type: "Sortie", qte: 50, emplacementSource: "Zone A - Rack 12", emplacementDestination: "Département Production", operateur: "Jean D.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
-  { id: 4, date: "2026-02-26 10:45:30", article: "Gants Nitrile M", ref: "GN-M-001", type: "Sortie", qte: 50, emplacementSource: "Zone A - Rack 12", emplacementDestination: "Département Production", operateur: "Pierre M.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
-  { id: 5, date: "2026-02-26 11:20:00", article: "Masques FFP2", ref: "MK-FFP2-006", type: "Sortie", qte: 100, emplacementSource: "Zone D - Rack 05", emplacementDestination: "Département Production", operateur: "Sophie R.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
-  { id: 6, date: "2026-02-26 14:15:45", article: "Masques FFP2", ref: "MK-FFP2-006", type: "Sortie", qte: 150, emplacementSource: "Zone D - Rack 05", emplacementDestination: "Département Production", operateur: "Luc B.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
+  { id: 1, date: "2026-02-24 14:32:20", article: "Gants Nitrile M", ref: "GN-M-001", type: "Entrée", qte: 500, lotNumber: "LOT-2026-02-001", lotDate: "2026-02-20", emplacementDestination: "Zone A-12", operateur: "Karim B." },
+  { id: 2, date: "2026-02-24 13:15:45", article: "Gants Latex S", ref: "GL-S-002", type: "Sortie", qte: 200, lotNumber: "LOT-2026-02-002", lotDate: "2026-02-18", emplacementDestination: "Département Production", operateur: "Sara M." },
+  { id: 3, date: "2026-02-26 09:30:15", article: "Gants Nitrile M", ref: "GN-M-001", type: "Sortie", qte: 50, lotNumber: "LOT-2026-02-003", lotDate: "2026-02-22", emplacementSource: "Zone A - Rack 12", emplacementDestination: "Département Production", operateur: "Jean D.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
+  { id: 4, date: "2026-02-26 10:45:30", article: "Gants Nitrile M", ref: "GN-M-001", type: "Sortie", qte: 50, lotNumber: "LOT-2026-02-004", lotDate: "2026-02-23", emplacementSource: "Zone A - Rack 12", emplacementDestination: "Département Production", operateur: "Pierre M.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
+  { id: 5, date: "2026-02-26 11:20:00", article: "Masques FFP2", ref: "MK-FFP2-006", type: "Sortie", qte: 100, lotNumber: "LOT-2026-02-005", lotDate: "2026-02-21", emplacementSource: "Zone D - Rack 05", emplacementDestination: "Département Production", operateur: "Sophie R.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
+  { id: 6, date: "2026-02-26 14:15:45", article: "Masques FFP2", ref: "MK-FFP2-006", type: "Sortie", qte: 150, lotNumber: "LOT-2026-02-006", lotDate: "2026-02-24", emplacementSource: "Zone D - Rack 05", emplacementDestination: "Département Production", operateur: "Luc B.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
 ];
 
 const initialHistory: InventoryRecord[] = [

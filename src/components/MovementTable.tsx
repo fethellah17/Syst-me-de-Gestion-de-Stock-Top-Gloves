@@ -7,6 +7,8 @@ interface Movement {
   ref: string;
   type: "Entrée" | "Sortie" | "Transfert" | "Ajustement";
   qte: number;
+  lotNumber?: string;          // Lot/Batch Number for traceability
+  lotDate?: string;             // Lot/Batch Production Date
   emplacementSource?: string;
   emplacementDestination: string;
   operateur: string;
@@ -170,6 +172,8 @@ export const MovementTable = ({
             <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date</th>
             <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Article</th>
             <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Type</th>
+            <th className="text-left py-3 px-4 text-xs font-semibold text-primary uppercase tracking-wide">Numéro de Lot</th>
+            <th className="text-left py-3 px-4 text-xs font-semibold text-primary uppercase tracking-wide">Date du Lot</th>
             <th className="text-right py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Qté Total</th>
             <th className="text-right py-3 px-4 text-xs font-semibold text-success uppercase tracking-wide">Qté Valide</th>
             <th className="text-right py-3 px-4 text-xs font-semibold text-destructive uppercase tracking-wide">Qté Défect.</th>
@@ -184,7 +188,7 @@ export const MovementTable = ({
         <tbody>
           {movements.length === 0 ? (
             <tr>
-              <td colSpan={showActions ? 12 : 11} className="py-8 text-center text-muted-foreground">
+              <td colSpan={showActions ? 14 : 13} className="py-8 text-center text-muted-foreground">
                 Aucun mouvement récent
               </td>
             </tr>
@@ -208,6 +212,16 @@ export const MovementTable = ({
                       ? `Ajustement (${m.typeAjustement === "Surplus" ? "+" : "-"})`
                       : m.type
                     }
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="font-mono text-xs font-semibold text-primary bg-primary/5 px-2 py-1 rounded border border-primary/20">
+                    {m.lotNumber || "N/A"}
+                  </span>
+                </td>
+                <td className="py-3 px-4">
+                  <span className="font-mono text-xs text-foreground">
+                    {m.lotDate ? new Date(m.lotDate).toLocaleDateString('fr-FR') : "N/A"}
                   </span>
                 </td>
                 <td className="py-3 px-4 text-right font-mono font-semibold text-foreground">{m.qte.toLocaleString()}</td>

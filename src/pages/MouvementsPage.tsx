@@ -1,9 +1,13 @@
 import { useState } from "react";
-import { ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, Plus, Search, Pencil, Trash2, Shield, CheckCircle2, AlertCircle, MapPin, FileEdit } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, Plus, Search, Pencil, Trash2, Shield, CheckCircle2, AlertCircle, MapPin, FileEdit, Calendar as CalendarIcon } from "lucide-react";
 import { useData } from "@/contexts/DataContext";
 import { Modal } from "@/components/Modal";
 import { Toast } from "@/components/Toast";
 import { MovementTable } from "@/components/MovementTable";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
+import { fr } from "date-fns/locale";
 
 const MouvementsPage = () => {
   const { mouvements, articles, emplacements, addMouvement, updateMouvement, deleteMouvement, getArticleLocations, getArticleStockByLocation, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies } = useData();
@@ -20,6 +24,8 @@ const MouvementsPage = () => {
     articleId: "",
     type: "Entrée" as "Entrée" | "Sortie" | "Transfert" | "Ajustement",
     qte: 0,
+    lotNumber: "",
+    lotDate: undefined as Date | undefined,
     operateur: "",
     emplacementSource: "",
     emplacementDestination: "",
@@ -62,6 +68,8 @@ const MouvementsPage = () => {
       articleId: "", 
       type: "Entrée", 
       qte: 0, 
+      lotNumber: "",
+      lotDate: undefined,
       operateur: "", 
       emplacementSource: "",
       emplacementDestination: "",
@@ -81,6 +89,8 @@ const MouvementsPage = () => {
       articleId: article?.id.toString() || "",
       type: mouvement.type,
       qte: mouvement.qte,
+      lotNumber: mouvement.lotNumber || "",
+      lotDate: mouvement.lotDate ? new Date(mouvement.lotDate) : undefined,
       operateur: mouvement.operateur,
       emplacementSource: mouvement.emplacementSource || "",
       emplacementDestination: mouvement.emplacementDestination,
@@ -179,8 +189,8 @@ const MouvementsPage = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.articleId || !formData.qte || !formData.operateur) {
-      setToast({ message: "Veuillez remplir tous les champs", type: "error" });
+    if (!formData.articleId || !formData.qte || !formData.operateur || !formData.lotNumber || !formData.lotDate) {
+      setToast({ message: "Veuillez remplir tous les champs obligatoires (y compris le numéro et la date du lot)", type: "error" });
       return;
     }
 
@@ -271,6 +281,8 @@ const MouvementsPage = () => {
       updateMouvement(editingId, {
         type: formData.type,
         qte: formData.qte,
+        lotNumber: formData.lotNumber,
+        lotDate: formData.lotDate ? format(formData.lotDate, "yyyy-MM-dd") : undefined,
         operateur: formData.operateur,
         emplacementSource: formData.emplacementSource || undefined,
         emplacementDestination: formData.emplacementDestination,
@@ -283,6 +295,8 @@ const MouvementsPage = () => {
         ref: article.ref,
         type: formData.type,
         qte: formData.qte,
+        lotNumber: formData.lotNumber,
+        lotDate: formData.lotDate ? format(formData.lotDate, "yyyy-MM-dd") : undefined,
         emplacementSource: formData.emplacementSource || undefined,
         emplacementDestination: formData.emplacementDestination || "N/A",
         operateur: formData.operateur,
@@ -447,6 +461,54 @@ const MouvementsPage = () => {
               min="1"
             />
           </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Numéro de Lot <span className="text-destructive">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.lotNumber}
+                onChange={(e) => setFormData({ ...formData, lotNumber: e.target.value })}
+                className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                placeholder="Ex: LOT-2026-02-001"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Date du Lot <span className="text-destructive">*</span>
+              </label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring flex items-center justify-between"
+                  >
+                    <span className={formData.lotDate ? "text-foreground" : "text-muted-foreground"}>
+                      {formData.lotDate ? format(formData.lotDate, "dd/MM/yyyy", { locale: fr }) : "Sélectionner"}
+                    </span>
+                    <CalendarIcon className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={formData.lotDate}
+                    onSelect={(date) => setFormData({ ...formData, lotDate: date })}
+                    initialFocus
+                    locale={fr}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+          
+          <p className="text-xs text-muted-foreground -mt-2">
+            Requis pour la traçabilité et la conformité des dispositifs médicaux
+          </p>
 
           {/* Entrée: Emplacement de Destination */}
           {formData.type === "Entrée" && (
