@@ -117,10 +117,10 @@ export const MovementTable = ({
             <tr className="border-b">
               <th className="text-left py-2 text-muted-foreground font-medium">Type</th>
               <th className="text-left py-2 text-muted-foreground font-medium">Article</th>
-              <th className="text-left py-2 text-muted-foreground font-medium hidden sm:table-cell">Source</th>
-              <th className="text-left py-2 text-muted-foreground font-medium hidden md:table-cell">Destination</th>
+              <th className="text-left py-2 text-muted-foreground font-medium">Source</th>
+              <th className="text-left py-2 text-muted-foreground font-medium">Destination</th>
               <th className="text-right py-2 text-muted-foreground font-medium">Date</th>
-              <th className="text-center py-2 text-muted-foreground font-medium hidden lg:table-cell">Statut</th>
+              <th className="text-center py-2 text-muted-foreground font-medium">Statut</th>
             </tr>
           </thead>
           <tbody>
@@ -145,10 +145,10 @@ export const MovementTable = ({
                     </span>
                   </td>
                   <td className="py-2.5 font-medium text-foreground">{m.article}</td>
-                  <td className="py-2.5 text-muted-foreground hidden sm:table-cell">{getSourceLabel(m)}</td>
-                  <td className="py-2.5 text-muted-foreground hidden md:table-cell">{getDestinationLabel(m)}</td>
+                  <td className="py-2.5 text-muted-foreground">{getSourceLabel(m)}</td>
+                  <td className="py-2.5 text-muted-foreground">{getDestinationLabel(m)}</td>
                   <td className="py-2.5 text-right text-muted-foreground font-mono">{m.date.split(' ')[1]?.substring(0, 5) || "00:00"}</td>
-                  <td className="py-2.5 text-center hidden lg:table-cell">{getStatusBadge(m)}</td>
+                  <td className="py-2.5 text-center">{getStatusBadge(m)}</td>
                 </tr>
               ))
             )}
@@ -168,11 +168,11 @@ export const MovementTable = ({
             <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Article</th>
             <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Type</th>
             <th className="text-right py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Quantité</th>
-            <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden xl:table-cell">Source</th>
-            <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Destination</th>
-            <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Statut</th>
-            <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Opérateur</th>
-            <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Approuvé par</th>
+            <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Source</th>
+            <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Destination</th>
+            <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Statut</th>
+            <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Opérateur</th>
+            <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Approuvé par</th>
             {showActions && <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>}
           </tr>
         </thead>
@@ -206,15 +206,15 @@ export const MovementTable = ({
                   </span>
                 </td>
                 <td className="py-3 px-4 text-right font-mono font-semibold text-foreground">{m.qte.toLocaleString()}</td>
-                <td className="py-3 px-4 text-muted-foreground text-xs hidden xl:table-cell">
+                <td className="py-3 px-4 text-muted-foreground text-xs">
                   <span className="font-medium">{getSourceLabel(m)}</span>
                 </td>
-                <td className="py-3 px-4 text-muted-foreground text-xs hidden md:table-cell">
+                <td className="py-3 px-4 text-muted-foreground text-xs">
                   <span className="font-medium">{getDestinationLabel(m)}</span>
                 </td>
-                <td className="py-3 px-4 text-center hidden sm:table-cell">{getStatusBadge(m)}</td>
-                <td className="py-3 px-4 text-muted-foreground hidden lg:table-cell">{m.operateur}</td>
-                <td className="py-3 px-4 text-muted-foreground text-xs hidden lg:table-cell">
+                <td className="py-3 px-4 text-center">{getStatusBadge(m)}</td>
+                <td className="py-3 px-4 text-muted-foreground">{m.operateur}</td>
+                <td className="py-3 px-4 text-muted-foreground text-xs">
                   <span className={`${
                     getApprovedByLabel(m) === "En attente" ? "text-orange-600 font-medium" :
                     getApprovedByLabel(m) === "Système" ? "text-blue-600 font-medium" :

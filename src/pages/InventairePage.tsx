@@ -117,7 +117,7 @@ const InventairePage = () => {
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Article</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Emplacement</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Emplacement</th>
                 <th className="text-right py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Théorique</th>
                 <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Physique</th>
                 <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Écart</th>
@@ -134,7 +134,7 @@ const InventairePage = () => {
                       <span className="font-medium text-foreground">{item.nom}</span>
                       <span className="block text-[10px] text-muted-foreground font-mono">{item.ref}</span>
                     </td>
-                    <td className="py-3 px-4 text-muted-foreground font-mono text-xs hidden sm:table-cell">{item.emplacement}</td>
+                    <td className="py-3 px-4 text-muted-foreground font-mono text-xs">{item.emplacement}</td>
                     <td className="py-3 px-4 text-right font-mono font-semibold text-foreground">{item.stockTheorique.toLocaleString()}</td>
                     <td className="py-3 px-4">
                       <input

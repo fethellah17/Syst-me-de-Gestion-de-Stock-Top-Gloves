@@ -194,10 +194,10 @@ const ArticlesPage = () => {
               <tr className="border-b bg-muted/50">
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Réf</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Article</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Catégorie</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden lg:table-cell">Emplacement</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Catégorie</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Emplacement</th>
                 <th className="text-right py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Stock</th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Seuil</th>
+                <th className="text-right py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Seuil</th>
                 <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Temps Restant</th>
                 <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Statut</th>
                 <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
@@ -224,8 +224,8 @@ const ArticlesPage = () => {
                         <span className="font-medium text-foreground">{a.nom}</span>
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-muted-foreground hidden md:table-cell">{a.categorie}</td>
-                    <td className="py-3 px-4 text-muted-foreground hidden lg:table-cell">
+                    <td className="py-3 px-4 text-muted-foreground">{a.categorie}</td>
+                    <td className="py-3 px-4 text-muted-foreground">
                       <div className="flex flex-wrap gap-1">
                         {getArticleLocations(a.ref).length > 0 ? (
                           getArticleLocations(a.ref).map((loc, idx) => (
@@ -240,7 +240,7 @@ const ArticlesPage = () => {
                       </div>
                     </td>
                     <td className="py-3 px-4 text-right font-mono font-semibold text-foreground">{a.stock.toLocaleString()}</td>
-                    <td className="py-3 px-4 text-right font-mono text-muted-foreground hidden sm:table-cell">{a.seuil}</td>
+                    <td className="py-3 px-4 text-right font-mono text-muted-foreground">{a.seuil}</td>
                     <td className="py-3 px-4 text-center">
                       <AutonomyBadge autonomy={autonomy} />
                     </td>
