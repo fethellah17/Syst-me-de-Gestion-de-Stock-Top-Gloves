@@ -49,6 +49,8 @@ export interface Mouvement {
   controleur?: string;
   etatArticles?: "Conforme" | "Non-conforme";
   unitesDefectueuses?: number;
+  validQuantity?: number;      // QC metadata: quantity approved for use
+  defectiveQuantity?: number;  // QC metadata: quantity marked as defective
   raison?: string;
   motif?: string;
   typeAjustement?: "Surplus" | "Manquant";
@@ -370,7 +372,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const mouvement = mouvements.find(m => m.id === id);
     if (!mouvement || mouvement.type !== "Sortie") return;
 
-    // Mettre à jour le mouvement avec le statut "Terminé"
+    // CRITICAL: ALL units (including defective) have physically left the warehouse
+    // We ALWAYS deduct the TOTAL quantity from inventory
+    // Defective units are a PERMANENT LOSS and are NOT added back to stock
+    const totalQtyToDeduct = mouvement.qte;
+
+    // Calculer les quantités pour l'affichage dans le tableau (metadata only)
+    const validQty = etatArticles === "Non-conforme" 
+      ? mouvement.qte - unitesDefectueuses 
+      : mouvement.qte;
+    const defectiveQty = etatArticles === "Non-conforme" ? unitesDefectueuses : 0;
+
+    // Mettre à jour le mouvement avec le statut "Terminé" et les métadonnées QC
     setMouvements(mouvements.map(m => 
       m.id === id 
         ? { 
@@ -378,23 +391,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             statut: "Terminé" as const,
             controleur,
             etatArticles,
-            unitesDefectueuses
+            unitesDefectueuses: etatArticles === "Non-conforme" ? unitesDefectueuses : undefined,
+            validQuantity: validQty,
+            defectiveQuantity: defectiveQty
           }
         : m
     ));
 
-    // Déduire le stock maintenant que le contrôle est approuvé
+    // Déduire le TOTAL du stock (100% des unités ont quitté l'entrepôt)
+    // Les unités défectueuses sont une PERTE PERMANENTE
     const article = articles.find(a => a.ref === mouvement.ref);
     if (article && mouvement.emplacementSource) {
       const updatedLocations = article.locations.map(loc => {
         if (loc.emplacementNom === mouvement.emplacementSource) {
-          return { ...loc, quantite: Math.max(0, loc.quantite - mouvement.qte) };
+          return { ...loc, quantite: Math.max(0, loc.quantite - totalQtyToDeduct) };
         }
         return loc;
       }).filter(l => l.quantite > 0);
       
       updateArticle(article.id, { 
-        stock: Math.max(0, article.stock - mouvement.qte),
+        stock: Math.max(0, article.stock - totalQtyToDeduct),
         locations: updatedLocations 
       });
       
@@ -405,7 +421,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .reduce((sum, a) => {
             const loc = a.locations.find(l => l.emplacementNom === mouvement.emplacementSource);
             return sum + (loc?.quantite || 0);
-          }, 0) - mouvement.qte;
+          }, 0) - totalQtyToDeduct;
         
         updateEmplacement(sourceEmplacement.id, { occupe: Math.max(0, newOccupancy) });
       }

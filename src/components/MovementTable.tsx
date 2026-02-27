@@ -13,6 +13,9 @@ interface Movement {
   statut?: string;
   controleur?: string;
   typeAjustement?: "Surplus" | "Manquant";
+  validQuantity?: number;      // QC metadata
+  defectiveQuantity?: number;  // QC metadata
+  etatArticles?: "Conforme" | "Non-conforme";
 }
 
 interface MovementTableProps {
@@ -167,7 +170,9 @@ export const MovementTable = ({
             <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date</th>
             <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Article</th>
             <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Type</th>
-            <th className="text-right py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Quantité</th>
+            <th className="text-right py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Qté Total</th>
+            <th className="text-right py-3 px-4 text-xs font-semibold text-success uppercase tracking-wide">Qté Valide</th>
+            <th className="text-right py-3 px-4 text-xs font-semibold text-destructive uppercase tracking-wide">Qté Défect.</th>
             <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Source</th>
             <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Destination</th>
             <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Statut</th>
@@ -179,7 +184,7 @@ export const MovementTable = ({
         <tbody>
           {movements.length === 0 ? (
             <tr>
-              <td colSpan={showActions ? 10 : 9} className="py-8 text-center text-muted-foreground">
+              <td colSpan={showActions ? 12 : 11} className="py-8 text-center text-muted-foreground">
                 Aucun mouvement récent
               </td>
             </tr>
@@ -206,6 +211,20 @@ export const MovementTable = ({
                   </span>
                 </td>
                 <td className="py-3 px-4 text-right font-mono font-semibold text-foreground">{m.qte.toLocaleString()}</td>
+                <td className="py-3 px-4 text-right font-mono">
+                  {m.validQuantity !== undefined ? (
+                    <span className="text-success font-semibold">{m.validQuantity.toLocaleString()}</span>
+                  ) : (
+                    <span className="text-muted-foreground/30">—</span>
+                  )}
+                </td>
+                <td className="py-3 px-4 text-right font-mono">
+                  {m.defectiveQuantity !== undefined && m.defectiveQuantity > 0 ? (
+                    <span className="text-destructive font-semibold">{m.defectiveQuantity.toLocaleString()}</span>
+                  ) : (
+                    <span className="text-muted-foreground/30">—</span>
+                  )}
+                </td>
                 <td className="py-3 px-4 text-muted-foreground text-xs">
                   <span className="font-medium">{getSourceLabel(m)}</span>
                 </td>

@@ -91,6 +91,9 @@ const MouvementsPage = () => {
   };
 
   const handleOpenQCModal = (id: number) => {
+    const mouvement = mouvements.find(m => m.id === id);
+    if (!mouvement) return;
+    
     setQCMouvementId(id);
     setQCFormData({
       etatArticles: "Conforme",
@@ -120,7 +123,25 @@ const MouvementsPage = () => {
     }
 
     if (qcMouvementId) {
+      const mouvement = mouvements.find(m => m.id === qcMouvementId);
+      const article = mouvement ? articles.find(a => a.ref === mouvement.ref) : null;
+      
       if (qcFormData.decision === "Approuver") {
+        // Validation: Vérifier que le stock ne deviendra pas négatif
+        // IMPORTANT: On déduit TOUJOURS la quantité TOTALE (incluant les défectueux)
+        // Les unités défectueuses sont une PERTE PERMANENTE
+        if (article && mouvement) {
+          const totalQtyToDeduct = mouvement.qte; // TOUJOURS le total
+          
+          if (article.stock < totalQtyToDeduct) {
+            setToast({ 
+              message: `Impossible d'approuver: stock insuffisant. Stock actuel: ${article.stock}, quantité requise: ${totalQtyToDeduct}`, 
+              type: "error" 
+            });
+            return;
+          }
+        }
+        
         approveQualityControl(qcMouvementId, qcFormData.controleur, qcFormData.etatArticles, qcFormData.unitesDefectueuses);
         setToast({ message: "✓ Qualité validée. Stock mis à jour avec succès.", type: "success" });
       } else {
@@ -673,6 +694,76 @@ const MouvementsPage = () => {
       {/* Quality Control Modal */}
       <Modal isOpen={isQCModalOpen} onClose={handleCloseQCModal} title="Contrôle Qualité - Sortie">
         <form onSubmit={handleSubmitQC} className="space-y-4">
+          {/* Stock Information Display */}
+          {qcMouvementId && (() => {
+            const mouvement = mouvements.find(m => m.id === qcMouvementId);
+            const article = mouvement ? articles.find(a => a.ref === mouvement.ref) : null;
+            // IMPORTANT: On déduit TOUJOURS la quantité TOTALE (incluant les défectueux)
+            // Les unités défectueuses sont une PERTE PERMANENTE
+            const totalQtyToDeduct = mouvement?.qte || 0;
+            const newStock = article ? article.stock - totalQtyToDeduct : 0;
+            const isStockInsufficient = newStock < 0;
+            
+            // Calcul pour l'affichage des quantités valides/défectueuses
+            const validQty = qcFormData.etatArticles === "Non-conforme" 
+              ? (mouvement?.qte || 0) - qcFormData.unitesDefectueuses 
+              : (mouvement?.qte || 0);
+            const defectiveQty = qcFormData.etatArticles === "Non-conforme" ? qcFormData.unitesDefectueuses : 0;
+
+            return article && mouvement ? (
+              <div className="p-3 bg-muted/50 rounded-md border border-border/50 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">Article:</span>
+                  <span className="text-sm font-semibold text-foreground">{article.nom} ({article.ref})</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">Stock Actuel:</span>
+                  <span className="text-sm font-semibold text-foreground">{article.stock.toLocaleString()} {article.unite}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">Quantité Totale Sortie:</span>
+                  <span className="text-sm font-semibold text-warning">{mouvement.qte.toLocaleString()} {article.unite}</span>
+                </div>
+                {qcFormData.etatArticles === "Non-conforme" && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-success">└─ Valides:</span>
+                      <span className="text-sm font-semibold text-success">{validQty.toLocaleString()} {article.unite}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-destructive">└─ Défectueuses (Perte):</span>
+                      <span className="text-sm font-semibold text-destructive">{defectiveQty.toLocaleString()} {article.unite}</span>
+                    </div>
+                  </>
+                )}
+                <div className="h-px bg-border my-2"></div>
+                <div className="p-2 bg-orange-50 border border-orange-200 rounded text-xs">
+                  <p className="text-orange-800 font-medium">
+                    ⚠️ Les {totalQtyToDeduct} unités seront déduites du stock (incluant les défectueuses)
+                  </p>
+                  {defectiveQty > 0 && (
+                    <p className="text-orange-700 mt-1">
+                      Les {defectiveQty} unités défectueuses sont une perte permanente.
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">Stock Après Approbation:</span>
+                  <span className={`text-sm font-bold ${isStockInsufficient ? 'text-destructive' : newStock <= article.seuil ? 'text-warning' : 'text-success'}`}>
+                    {newStock.toLocaleString()} {article.unite}
+                    {isStockInsufficient && " ⚠️ NÉGATIF"}
+                    {!isStockInsufficient && newStock <= article.seuil && " ⚠️ Sous Seuil"}
+                  </span>
+                </div>
+                {isStockInsufficient && (
+                  <div className="p-2 bg-destructive/10 border border-destructive/20 rounded text-xs text-destructive font-medium">
+                    ⚠️ Attention: Le stock deviendra négatif après cette opération!
+                  </div>
+                )}
+              </div>
+            ) : null;
+          })()}
+
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">État des Articles</label>
             <div className="flex gap-2">
@@ -680,7 +771,7 @@ const MouvementsPage = () => {
                 <button
                   key={etat}
                   type="button"
-                  onClick={() => setQCFormData({ ...qcFormData, etatArticles: etat })}
+                  onClick={() => setQCFormData({ ...qcFormData, etatArticles: etat, unitesDefectueuses: 0 })}
                   className={`flex-1 h-9 rounded-md text-sm font-medium transition-colors ${
                     qcFormData.etatArticles === etat
                       ? etat === "Conforme" ? "bg-success text-success-foreground" : "bg-warning text-warning-foreground"
@@ -703,7 +794,11 @@ const MouvementsPage = () => {
                 onChange={(e) => setQCFormData({ ...qcFormData, unitesDefectueuses: Number(e.target.value) || 0 })}
                 className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 min="0"
+                max={qcMouvementId ? mouvements.find(m => m.id === qcMouvementId)?.qte : undefined}
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                Les unités défectueuses ne seront pas déduites du stock
+              </p>
             </div>
           )}
 
