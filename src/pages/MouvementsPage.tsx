@@ -47,6 +47,7 @@ const MouvementsPage = () => {
     "Expédition",
     "Destruction",
     "Retour Fournisseur",
+    "Échantillons",
   ];
 
   // Récupérer l'article sélectionné et ses emplacements
@@ -472,7 +473,7 @@ const MouvementsPage = () => {
                 value={formData.lotNumber}
                 onChange={(e) => setFormData({ ...formData, lotNumber: e.target.value })}
                 className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder="Ex: LOT-2026-02-001"
+                placeholder="Entrez le numéro de lot"
                 required
               />
             </div>

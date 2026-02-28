@@ -19,7 +19,7 @@
 - **Validation**: Both fields required - form won't submit without them
 - **UI Features**:
   - Red asterisk (*) indicating required fields
-  - Placeholder: "Ex: LOT-2026-02-001" for lot number
+  - Placeholder: "Entrez le numéro de lot" for lot number
   - Calendar icon button for date picker
   - French date format (dd/MM/yyyy)
   - Popover calendar with French locale
