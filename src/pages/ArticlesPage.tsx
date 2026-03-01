@@ -6,6 +6,7 @@ import { Toast } from "@/components/Toast";
 import { getStockStatus, calculateAutonomy } from "@/lib/stock-utils";
 import { AutonomyBadge } from "@/components/AutonomyBadge";
 import { StockStatusBadge } from "@/components/StockStatusBadge";
+import { UnitBadge } from "@/components/UnitBadge";
 
 const Tooltip = ({ text, children }: { text: string; children: React.ReactNode }) => {
   const [isVisible, setIsVisible] = useState(false);
@@ -195,6 +196,7 @@ const ArticlesPage = () => {
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Réf</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Article</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Catégorie</th>
+                <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Unité</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Emplacement</th>
                 <th className="text-right py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Stock</th>
                 <th className="text-right py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Seuil</th>
@@ -225,6 +227,9 @@ const ArticlesPage = () => {
                       </div>
                     </td>
                     <td className="py-3 px-4 text-muted-foreground">{a.categorie}</td>
+                    <td className="py-3 px-4 text-center">
+                      <UnitBadge unit={a.unite} />
+                    </td>
                     <td className="py-3 px-4 text-muted-foreground">
                       <div className="flex flex-wrap gap-1">
                         {getArticleLocations(a.ref).length > 0 ? (
