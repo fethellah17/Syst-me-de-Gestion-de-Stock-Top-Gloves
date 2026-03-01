@@ -17,9 +17,10 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useData } from "@/contexts/DataContext";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { getStockStatus } from "@/lib/stock-utils";
 import logoImg from "@/assets/logo-topgloves.jpg";
+import NotificationBottomSheet from "./NotificationBottomSheet";
 
 const navItems = [
   { to: "/dashboard", label: "Tableau de Bord", icon: LayoutDashboard },
@@ -37,6 +38,19 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Calculate alerts
   const alerts = useMemo(() => {
@@ -147,8 +161,8 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               )}
             </button>
 
-            {/* Notifications Dropdown */}
-            {notificationsOpen && (
+            {/* Desktop Notifications Dropdown */}
+            {notificationsOpen && !isMobile && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setNotificationsOpen(false)} />
                 <div className="absolute right-0 top-full mt-2 w-80 bg-card border rounded-lg shadow-lg z-50 max-h-96 overflow-hidden flex flex-col">
@@ -230,6 +244,15 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
               </>
             )}
           </div>
+
+          {/* Mobile Bottom Sheet */}
+          {isMobile && (
+            <NotificationBottomSheet
+              isOpen={notificationsOpen}
+              onClose={() => setNotificationsOpen(false)}
+              alerts={alerts}
+            />
+          )}
 
           <div className="text-xs text-muted-foreground font-mono">
             {new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
