@@ -11,9 +11,14 @@ import {
   Menu,
   X,
   Factory,
+  Bell,
+  AlertTriangle,
+  Users,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useState } from "react";
+import { useData } from "@/contexts/DataContext";
+import { useState, useMemo } from "react";
+import { getStockStatus } from "@/lib/stock-utils";
 import logoImg from "@/assets/logo-topgloves.jpg";
 
 const navItems = [
@@ -23,12 +28,30 @@ const navItems = [
   { to: "/emplacements", label: "Emplacements", icon: MapPin },
   { to: "/mouvements", label: "Mouvements", icon: ArrowLeftRight },
   { to: "/inventaire", label: "Inventaire", icon: ClipboardCheck },
+  { to: "/staff", label: "Personnel", icon: Users },
 ];
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const { user, logout, isAdmin } = useAuth();
+  const { articles } = useData();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  // Calculate alerts
+  const alerts = useMemo(() => {
+    const critical = articles.filter(a => {
+      const status = getStockStatus(a.stock, a.seuil, a.consommationJournaliere);
+      return status.level === "critical";
+    });
+
+    const warning = articles.filter(a => {
+      const status = getStockStatus(a.stock, a.seuil, a.consommationJournaliere);
+      return status.level === "warning";
+    });
+
+    return { critical, warning, total: critical.length + warning.length };
+  }, [articles]);
 
   const handleLogout = () => {
     logout();
@@ -44,7 +67,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
 
       {/* Sidebar */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-sidebar flex flex-col transition-transform duration-200 ${
+        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-sidebar flex flex-col transition-transform duration-200 shadow-lg lg:shadow-none border-r border-sidebar-border ${
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
@@ -109,6 +132,105 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
             <Menu className="w-5 h-5" />
           </button>
           <div className="flex-1" />
+          
+          {/* Notification Bell */}
+          <div className="relative mr-4">
+            <button
+              onClick={() => setNotificationsOpen(!notificationsOpen)}
+              className="relative p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+            >
+              <Bell className="w-5 h-5" />
+              {alerts.total > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-destructive text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {alerts.total > 9 ? '9+' : alerts.total}
+                </span>
+              )}
+            </button>
+
+            {/* Notifications Dropdown */}
+            {notificationsOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setNotificationsOpen(false)} />
+                <div className="absolute right-0 top-full mt-2 w-80 bg-card border rounded-lg shadow-lg z-50 max-h-96 overflow-hidden flex flex-col">
+                  <div className="p-4 border-b">
+                    <h3 className="font-semibold text-sm text-foreground">Alertes Stock</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {alerts.total === 0 ? "Aucune alerte" : `${alerts.total} article${alerts.total > 1 ? 's' : ''} nécessite${alerts.total > 1 ? 'nt' : ''} votre attention`}
+                    </p>
+                  </div>
+                  
+                  <div className="overflow-y-auto flex-1">
+                    {alerts.total === 0 ? (
+                      <div className="p-8 text-center">
+                        <div className="w-12 h-12 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-3">
+                          <Package className="w-6 h-6 text-success" />
+                        </div>
+                        <p className="text-sm text-muted-foreground">Tous les stocks sont sécurisés</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y">
+                        {alerts.critical.map(article => (
+                          <div key={article.id} className="p-3 hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => {
+                            setNotificationsOpen(false);
+                            navigate('/articles');
+                          }}>
+                            <div className="flex items-start gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
+                                <AlertTriangle className="w-4 h-4 text-destructive" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-foreground truncate">{article.nom}</p>
+                                <p className="text-xs text-muted-foreground font-mono">{article.ref}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-xs font-semibold text-destructive">Stock: {article.stock}</span>
+                                  <span className="text-xs text-muted-foreground">Seuil: {article.seuil}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {alerts.warning.map(article => (
+                          <div key={article.id} className="p-3 hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => {
+                            setNotificationsOpen(false);
+                            navigate('/articles');
+                          }}>
+                            <div className="flex items-start gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-warning/10 flex items-center justify-center shrink-0">
+                                <AlertTriangle className="w-4 h-4 text-warning" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-foreground truncate">{article.nom}</p>
+                                <p className="text-xs text-muted-foreground font-mono">{article.ref}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-xs font-semibold text-warning">Stock: {article.stock}</span>
+                                  <span className="text-xs text-muted-foreground">Seuil: {article.seuil}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {alerts.total > 0 && (
+                    <div className="p-3 border-t">
+                      <button
+                        onClick={() => {
+                          setNotificationsOpen(false);
+                          navigate('/articles');
+                        }}
+                        className="w-full h-8 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity"
+                      >
+                        Voir tous les articles
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+
           <div className="text-xs text-muted-foreground font-mono">
             {new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
           </div>

@@ -14,6 +14,8 @@ import EmplacementsPage from "@/pages/EmplacementsPage";
 import MouvementsPage from "@/pages/MouvementsPage";
 import InventairePage from "@/pages/InventairePage";
 import AdminPage from "@/pages/AdminPage";
+import StaffPage from "@/pages/StaffPage";
+import StaffFormPage from "@/pages/StaffFormPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -39,6 +41,9 @@ const AppRoutes = () => (
     <Route path="/emplacements" element={<ProtectedRoute><EmplacementsPage /></ProtectedRoute>} />
     <Route path="/mouvements" element={<ProtectedRoute><MouvementsPage /></ProtectedRoute>} />
     <Route path="/inventaire" element={<ProtectedRoute><InventairePage /></ProtectedRoute>} />
+    <Route path="/staff" element={<ProtectedRoute><StaffPage /></ProtectedRoute>} />
+    <Route path="/staff/new" element={<ProtectedRoute><StaffFormPage /></ProtectedRoute>} />
+    <Route path="/staff/edit/:id" element={<ProtectedRoute><StaffFormPage /></ProtectedRoute>} />
     <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>

@@ -129,13 +129,13 @@ const EmplacementsPage = () => {
           return (
           <div 
             key={loc.id} 
-            className="bg-card border rounded-lg p-5 hover:shadow-md transition-shadow cursor-pointer hover:border-accent/50"
+            className="bg-card border rounded-lg p-5 hover:shadow-md transition-shadow cursor-pointer hover:border-primary/30"
             onClick={() => setSelectedLocation(loc.nom)}
           >
             <div className="flex items-start justify-between mb-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                  <MapPin className="w-5 h-5 text-accent" />
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <MapPin className="w-5 h-5 text-primary" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-foreground text-sm">{loc.nom}</h3>
@@ -157,8 +157,10 @@ const EmplacementsPage = () => {
                 </button>
               </div>
             </div>
-            <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold mb-3 ${
-              loc.type === "Quarantaine" ? "status-red" : loc.type === "Expédition" ? "status-yellow" : "status-green"
+            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium mb-3 ${
+              loc.type === "Quarantaine" ? "bg-muted text-muted-foreground border border-border" : 
+              loc.type === "Expédition" ? "bg-muted text-muted-foreground border border-border" : 
+              "bg-muted text-muted-foreground border border-border"
             }`}>
               {loc.type}
             </span>
@@ -166,9 +168,9 @@ const EmplacementsPage = () => {
               <div className="flex items-center justify-between text-xs mb-1.5">
                 <span className="text-muted-foreground">Occupation</span>
                 <span className={`font-mono font-medium ${
-                  occupancyStatus === "critical" ? "text-destructive" : 
-                  occupancyStatus === "warning" ? "text-orange-500" : 
-                  "text-success"
+                  occupancyStatus === "critical" ? "text-foreground" : 
+                  occupancyStatus === "warning" ? "text-foreground" : 
+                  "text-foreground"
                 }`}>
                   {occupancyPercent}%
                 </span>
@@ -176,9 +178,9 @@ const EmplacementsPage = () => {
               <div className="h-2 bg-muted rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all ${
-                    occupancyStatus === "critical" ? "bg-destructive" : 
-                    occupancyStatus === "warning" ? "bg-orange-500" : 
-                    "bg-success"
+                    occupancyStatus === "critical" ? "bg-foreground" : 
+                    occupancyStatus === "warning" ? "bg-muted-foreground" : 
+                    "bg-primary"
                   }`}
                   style={{ width: `${Math.min(occupancyPercent, 100)}%` }}
                 />
@@ -293,13 +295,13 @@ const EmplacementsPage = () => {
                   <div className="space-y-4">
                     {/* Summary */}
                     <div className="grid grid-cols-2 gap-3 mb-6">
-                      <div className="bg-accent/10 rounded-lg p-4 border border-accent/20">
+                      <div className="bg-muted rounded-lg p-4 border">
                         <p className="text-xs text-muted-foreground mb-1">Articles différents</p>
-                        <p className="text-2xl font-bold text-accent">{totalArticles}</p>
+                        <p className="text-2xl font-bold text-foreground">{totalArticles}</p>
                       </div>
-                      <div className="bg-success/10 rounded-lg p-4 border border-success/20">
+                      <div className="bg-muted rounded-lg p-4 border">
                         <p className="text-xs text-muted-foreground mb-1">Unités totales</p>
-                        <p className="text-2xl font-bold text-success">{totalUnits.toLocaleString()}</p>
+                        <p className="text-2xl font-bold text-foreground">{totalUnits.toLocaleString()}</p>
                       </div>
                     </div>
 
@@ -317,10 +319,10 @@ const EmplacementsPage = () => {
                           <tbody>
                             {articlesInLocation.map((article, idx) => (
                               <tr key={idx} className="border-b hover:bg-muted/50 transition-colors">
-                                <td className="px-4 py-3 font-mono text-xs text-accent font-semibold">{article.ref}</td>
+                                <td className="px-4 py-3 font-mono text-xs text-primary font-semibold">{article.ref}</td>
                                 <td className="px-4 py-3 text-foreground">{article.nom}</td>
                                 <td className="px-4 py-3 text-right">
-                                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-accent/10 text-accent font-semibold">
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-muted text-foreground font-semibold text-xs">
                                     {article.quantite.toLocaleString()} {article.unite}
                                   </span>
                                 </td>

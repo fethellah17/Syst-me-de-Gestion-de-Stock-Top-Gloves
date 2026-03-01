@@ -15,7 +15,6 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { StockDashboard } from "@/components/StockDashboard";
 import { MovementTable } from "@/components/MovementTable";
 import { useData } from "@/contexts/DataContext";
 import { useMemo } from "react";
@@ -127,9 +126,6 @@ const Dashboard = () => {
         <h2 className="text-xl font-bold text-foreground">Tableau de Bord</h2>
         <p className="text-sm text-muted-foreground">Vue d'ensemble du stock</p>
       </div>
-
-      {/* Stock Predictive Dashboard */}
-      <StockDashboard />
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
