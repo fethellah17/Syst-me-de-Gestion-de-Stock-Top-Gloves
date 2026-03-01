@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Users, Plus, Edit, Trash2, Shield } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Toast } from "@/components/Toast";
@@ -12,41 +12,57 @@ export interface Staff {
   active: boolean;
 }
 
+const STORAGE_KEY = 'staff_members';
+
 const StaffPage = () => {
   const navigate = useNavigate();
-  const [staff, setStaff] = useState<Staff[]>([
-    {
-      id: 1,
-      name: "Admin Principal",
-      email: "admin@topgloves.com",
-      role: "Administrateur",
-      permissions: ["dashboard", "articles", "articles.create", "articles.edit", "articles.delete", "categories", "emplacements", "mouvements", "mouvements.create", "mouvements.edit", "mouvements.delete", "mouvements.qc", "inventaire", "inventaire.adjust", "admin"],
-      active: true,
-    },
-    {
-      id: 2,
-      name: "Jean Dupont",
-      email: "jean.dupont@topgloves.com",
-      role: "Gestionnaire",
-      permissions: ["dashboard", "articles", "articles.create", "articles.edit", "mouvements", "mouvements.create"],
-      active: true,
-    },
-    {
-      id: 3,
-      name: "Marie Martin",
-      email: "marie.martin@topgloves.com",
-      role: "Opérateur",
-      permissions: ["dashboard", "articles", "mouvements", "mouvements.create"],
-      active: true,
-    },
-  ]);
-
+  const [staff, setStaff] = useState<Staff[]>([]);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadStaff();
+  }, []);
+
+  const loadStaff = () => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        setStaff(JSON.parse(stored));
+      } else {
+        // Initialize with default admin user
+        const defaultStaff: Staff[] = [
+          {
+            id: 1,
+            name: "Admin Principal",
+            email: "admin@topgloves.com",
+            role: "Administrateur",
+            permissions: ["dashboard", "articles", "articles.create", "articles.edit", "articles.delete", "categories", "emplacements", "mouvements", "mouvements.create", "mouvements.edit", "mouvements.delete", "mouvements.qc", "inventaire", "inventaire.adjust", "staff", "admin"],
+            active: true,
+          },
+        ];
+        setStaff(defaultStaff);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultStaff));
+      }
+    } catch (error) {
+      console.error('Error loading staff:', error);
+      setToast({ message: "Erreur lors du chargement du personnel", type: "error" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleDelete = (id: number) => {
-    if (confirm("Êtes-vous sûr de vouloir supprimer ce membre ?")) {
-      setStaff(prev => prev.filter(s => s.id !== id));
+    if (!confirm("Êtes-vous sûr de vouloir supprimer ce membre ?")) return;
+
+    try {
+      const updatedStaff = staff.filter(s => s.id !== id);
+      setStaff(updatedStaff);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedStaff));
       setToast({ message: "Membre supprimé avec succès", type: "success" });
+    } catch (error) {
+      console.error('Error deleting staff:', error);
+      setToast({ message: "Erreur lors de la suppression", type: "error" });
     }
   };
 
@@ -68,7 +84,16 @@ const StaffPage = () => {
 
       {/* Staff Table */}
       <div className="bg-card border rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
+        {isLoading ? (
+          <div className="p-8 text-center text-muted-foreground">
+            Chargement...
+          </div>
+        ) : staff.length === 0 ? (
+          <div className="p-8 text-center text-muted-foreground">
+            Aucun membre du personnel
+          </div>
+        ) : (
+          <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50">
               <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">Nom</th>
@@ -131,6 +156,7 @@ const StaffPage = () => {
             ))}
           </tbody>
         </table>
+        )}
       </div>
 
       {toast && <Toast message={toast.message} type={toast.type} />}

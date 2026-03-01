@@ -3,6 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Check, Shield } from "lucide-react";
 import { Toast } from "@/components/Toast";
 
+const STORAGE_KEY = 'staff_members';
+
 interface Permission {
   id: string;
   label: string;
@@ -50,22 +52,38 @@ const StaffFormPage = () => {
   });
 
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Load data if editing
   useEffect(() => {
     if (isEditing) {
-      // Here you would load the actual staff member data from context/API
-      // For now, using dummy data
-      setFormData({
-        name: "Jean Dupont",
-        email: "jean.dupont@topgloves.com",
-        password: "",
-        role: "Gestionnaire",
-        permissions: ["dashboard", "articles", "articles.create", "articles.edit", "mouvements", "mouvements.create"],
-        active: true,
-      });
+      loadStaffMember();
     }
-  }, [isEditing]);
+  }, [isEditing, id]);
+
+  const loadStaffMember = () => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const staffList = JSON.parse(stored);
+        const member = staffList.find((s: any) => s.id === parseInt(id!));
+        
+        if (member) {
+          setFormData({
+            name: member.name,
+            email: member.email,
+            password: "",
+            role: member.role,
+            permissions: member.permissions || [],
+            active: member.active,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error loading staff member:', error);
+      setToast({ message: "Erreur lors du chargement des données", type: "error" });
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,17 +103,61 @@ const StaffFormPage = () => {
       return;
     }
 
-    // Here you would normally save to backend/context
-    console.log("Saving staff member:", formData);
+    setIsSubmitting(true);
 
-    setToast({ 
-      message: isEditing ? "Membre modifié avec succès" : "Membre ajouté avec succès", 
-      type: "success" 
-    });
-    
-    setTimeout(() => {
-      navigate("/staff");
-    }, 1000);
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      const staffList = stored ? JSON.parse(stored) : [];
+
+      if (isEditing) {
+        // Update existing member
+        const updatedList = staffList.map((s: any) => {
+          if (s.id === parseInt(id!)) {
+            return {
+              ...s,
+              name: formData.name,
+              email: formData.email,
+              ...(formData.password && { password: formData.password }),
+              role: formData.role,
+              permissions: formData.permissions,
+              active: formData.active,
+            };
+          }
+          return s;
+        });
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList));
+        setToast({ message: "Membre modifié avec succès", type: "success" });
+      } else {
+        // Create new member
+        const newId = staffList.length > 0 ? Math.max(...staffList.map((s: any) => s.id)) + 1 : 1;
+        const newMember = {
+          id: newId,
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          role: formData.role,
+          permissions: formData.permissions,
+          active: formData.active,
+        };
+
+        const updatedList = [...staffList, newMember];
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList));
+        setToast({ message: "Membre ajouté avec succès", type: "success" });
+      }
+
+      setTimeout(() => {
+        navigate("/staff");
+      }, 1000);
+    } catch (error: any) {
+      console.error('Error saving staff member:', error);
+      setToast({ 
+        message: "Erreur lors de l'enregistrement", 
+        type: "error" 
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const togglePermission = (permissionId: string) => {
@@ -173,6 +235,7 @@ const StaffFormPage = () => {
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 placeholder="Ex: jean.dupont@topgloves.com"
+                autoComplete="off"
                 required
               />
             </div>
@@ -188,6 +251,7 @@ const StaffFormPage = () => {
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               placeholder={isEditing ? "Laisser vide pour ne pas modifier" : "Minimum 6 caractères"}
+              autoComplete="new-password"
               required={!isEditing}
               minLength={6}
             />
@@ -317,9 +381,14 @@ const StaffFormPage = () => {
           </button>
           <button
             type="submit"
-            className="h-9 px-6 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+            disabled={isSubmitting}
+            className="h-9 px-6 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isEditing ? "Enregistrer les modifications" : "Créer le membre"}
+            {isSubmitting 
+              ? "Enregistrement..." 
+              : isEditing 
+                ? "Enregistrer les modifications" 
+                : "Créer le membre"}
           </button>
         </div>
       </form>
