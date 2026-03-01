@@ -220,7 +220,7 @@ const StaffFormPage = () => {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder="Ex: Jean Dupont"
+                placeholder="Ex: fethellah hadjbouziane"
                 required
               />
             </div>
@@ -234,7 +234,7 @@ const StaffFormPage = () => {
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder="Ex: jean.dupont@topgloves.com"
+                placeholder="Ex: fethellahhadjbouziane@topgloves.com"
                 autoComplete="off"
                 required
               />
