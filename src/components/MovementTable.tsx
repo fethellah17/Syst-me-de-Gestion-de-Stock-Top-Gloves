@@ -1,30 +1,19 @@
-import { Shield, Pencil, Trash2, ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, FileEdit, CheckCircle2, AlertCircle } from "lucide-react";
-
-interface Movement {
-  id: number;
-  date: string;
-  article: string;
-  ref: string;
-  type: "Entrée" | "Sortie" | "Transfert" | "Ajustement";
-  qte: number;
-  lotNumber?: string;          // Lot/Batch Number for traceability
-  lotDate?: string;             // Lot/Batch Production Date
-  emplacementSource?: string;
-  emplacementDestination: string;
-  operateur: string;
-  statut?: string;
-  controleur?: string;
-  typeAjustement?: "Surplus" | "Manquant";
-  validQuantity?: number;      // QC metadata
-  defectiveQuantity?: number;  // QC metadata
-  etatArticles?: "Conforme" | "Non-conforme";
-}
+import { Shield, Pencil, Trash2, ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, FileEdit, CheckCircle2, AlertCircle, FileText } from "lucide-react";
+import { 
+  generateInboundPDF, 
+  generateOutboundPDF, 
+  generateTransferPDF, 
+  generateAdjustmentPDF,
+  generateRejectionPDF 
+} from "@/lib/pdf-generator";
+import type { Mouvement } from "@/contexts/DataContext";
 
 interface MovementTableProps {
-  movements: Movement[];
+  movements: Mouvement[];
   onEdit?: (id: number) => void;
   onDelete?: (id: number) => void;
   onQualityControl?: (id: number) => void;
+  onReject?: (id: number) => void;
   showActions?: boolean;
   compact?: boolean;
 }
@@ -34,6 +23,7 @@ export const MovementTable = ({
   onEdit, 
   onDelete, 
   onQualityControl,
+  onReject,
   showActions = true,
   compact = false
 }: MovementTableProps) => {
@@ -53,7 +43,7 @@ export const MovementTable = ({
     }
   };
 
-  const getStatusBadge = (mouvement: Movement) => {
+  const getStatusBadge = (mouvement: Mouvement) => {
     if (mouvement.type !== "Sortie" && mouvement.type !== "Ajustement") return null;
     
     switch (mouvement.statut) {
@@ -77,14 +67,14 @@ export const MovementTable = ({
     }
   };
 
-  const getSourceLabel = (mouvement: Movement) => {
+  const getSourceLabel = (mouvement: Mouvement) => {
     if (mouvement.type === "Sortie" || mouvement.type === "Transfert" || mouvement.type === "Ajustement") {
       return mouvement.emplacementSource || "N/A";
     }
     return "—";
   };
 
-  const getDestinationLabel = (mouvement: Movement) => {
+  const getDestinationLabel = (mouvement: Mouvement) => {
     if (mouvement.type === "Entrée" || mouvement.type === "Transfert") {
       return mouvement.emplacementDestination;
     }
@@ -97,7 +87,7 @@ export const MovementTable = ({
     return "N/A";
   };
 
-  const getApprovedByLabel = (mouvement: Movement) => {
+  const getApprovedByLabel = (mouvement: Mouvement) => {
     if (mouvement.controleur) {
       return mouvement.controleur;
     }
@@ -267,6 +257,51 @@ export const MovementTable = ({
                           title="Passer le contrôle qualité"
                         >
                           <Shield className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Sortie" && m.statut === "Terminé" && m.status === "approved" && (
+                        <button
+                          onClick={() => generateOutboundPDF(m)}
+                          className="p-1.5 rounded-md hover:bg-green-100 transition-colors text-green-600 hover:text-green-800"
+                          title="Télécharger le Bon de Sortie (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Entrée" && (
+                        <button
+                          onClick={() => generateInboundPDF(m)}
+                          className="p-1.5 rounded-md hover:bg-blue-100 transition-colors text-blue-600 hover:text-blue-800"
+                          title="Télécharger le Bon d'Entrée (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Transfert" && (
+                        <button
+                          onClick={() => generateTransferPDF(m)}
+                          className="p-1.5 rounded-md hover:bg-purple-100 transition-colors text-purple-600 hover:text-purple-800"
+                          title="Télécharger le Bon de Transfert (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Ajustement" && (
+                        <button
+                          onClick={() => generateAdjustmentPDF(m)}
+                          className="p-1.5 rounded-md hover:bg-amber-100 transition-colors text-amber-600 hover:text-amber-800"
+                          title="Télécharger le Bon d'Ajustement (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.status === "rejected" && m.rejectionReason && (
+                        <button
+                          onClick={() => generateRejectionPDF(m)}
+                          className="p-1.5 rounded-md hover:bg-red-100 transition-colors text-red-600 hover:text-red-800"
+                          title="Télécharger le rapport de rejet (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
                         </button>
                       )}
                       {onEdit && (

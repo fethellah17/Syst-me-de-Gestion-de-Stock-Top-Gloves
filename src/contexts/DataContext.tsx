@@ -47,6 +47,7 @@ export interface Mouvement {
   emplacementSource?: string;
   emplacementDestination: string;
   operateur: string;
+  status?: "pending" | "approved" | "rejected";  // QC workflow status
   statut?: "En attente de validation Qualité" | "Terminé" | "Rejeté";
   controleur?: string;
   etatArticles?: "Conforme" | "Non-conforme";
@@ -54,6 +55,7 @@ export interface Mouvement {
   validQuantity?: number;      // QC metadata: quantity approved for use
   defectiveQuantity?: number;  // QC metadata: quantity marked as defective
   raison?: string;
+  rejectionReason?: string;    // QC rejection reason for PDF report
   motif?: string;
   typeAjustement?: "Surplus" | "Manquant";
 }
@@ -132,12 +134,12 @@ const initialLocations: Emplacement[] = [
 ];
 
 const initialMovements: Mouvement[] = [
-  { id: 1, date: "2026-02-24 14:32:20", article: "Gants Nitrile M", ref: "GN-M-001", type: "Entrée", qte: 500, lotNumber: "LOT-2026-02-001", lotDate: "2026-02-20", emplacementDestination: "Zone A-12", operateur: "Karim B." },
-  { id: 2, date: "2026-02-24 13:15:45", article: "Gants Latex S", ref: "GL-S-002", type: "Sortie", qte: 200, lotNumber: "LOT-2026-02-002", lotDate: "2026-02-18", emplacementDestination: "Département Production", operateur: "Sara M." },
-  { id: 3, date: "2026-02-26 09:30:15", article: "Gants Nitrile M", ref: "GN-M-001", type: "Sortie", qte: 50, lotNumber: "LOT-2026-02-003", lotDate: "2026-02-22", emplacementSource: "Zone A - Rack 12", emplacementDestination: "Département Production", operateur: "Jean D.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
-  { id: 4, date: "2026-02-26 10:45:30", article: "Gants Nitrile M", ref: "GN-M-001", type: "Sortie", qte: 50, lotNumber: "LOT-2026-02-004", lotDate: "2026-02-23", emplacementSource: "Zone A - Rack 12", emplacementDestination: "Département Production", operateur: "Pierre M.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
-  { id: 5, date: "2026-02-26 11:20:00", article: "Masques FFP2", ref: "MK-FFP2-006", type: "Sortie", qte: 100, lotNumber: "LOT-2026-02-005", lotDate: "2026-02-21", emplacementSource: "Zone D - Rack 05", emplacementDestination: "Département Production", operateur: "Sophie R.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
-  { id: 6, date: "2026-02-26 14:15:45", article: "Masques FFP2", ref: "MK-FFP2-006", type: "Sortie", qte: 150, lotNumber: "LOT-2026-02-006", lotDate: "2026-02-24", emplacementSource: "Zone D - Rack 05", emplacementDestination: "Département Production", operateur: "Luc B.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
+  { id: 1, date: "2026-03-02 14:32:20", article: "Gants Nitrile M", ref: "GN-M-001", type: "Entrée", qte: 500, lotNumber: "LOT-2026-03-001", lotDate: "2026-02-28", emplacementDestination: "Zone A-12", operateur: "Karim B." },
+  { id: 2, date: "2026-03-02 13:15:45", article: "Gants Latex S", ref: "GL-S-002", type: "Sortie", qte: 200, lotNumber: "LOT-2026-03-002", lotDate: "2026-02-27", emplacementDestination: "Département Production", operateur: "Sara M." },
+  { id: 3, date: "2026-03-02 09:30:15", article: "Gants Nitrile M", ref: "GN-M-001", type: "Sortie", qte: 50, lotNumber: "LOT-2026-03-003", lotDate: "2026-03-01", emplacementSource: "Zone A - Rack 12", emplacementDestination: "Département Production", operateur: "Jean D.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
+  { id: 4, date: "2026-03-01 10:45:30", article: "Gants Nitrile M", ref: "GN-M-001", type: "Sortie", qte: 50, lotNumber: "LOT-2026-03-004", lotDate: "2026-02-28", emplacementSource: "Zone A - Rack 12", emplacementDestination: "Département Production", operateur: "Pierre M.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
+  { id: 5, date: "2026-03-01 11:20:00", article: "Masques FFP2", ref: "MK-FFP2-006", type: "Sortie", qte: 100, lotNumber: "LOT-2026-03-005", lotDate: "2026-02-27", emplacementSource: "Zone D - Rack 05", emplacementDestination: "Département Production", operateur: "Sophie R.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
+  { id: 6, date: "2026-03-01 14:15:45", article: "Masques FFP2", ref: "MK-FFP2-006", type: "Sortie", qte: 150, lotNumber: "LOT-2026-03-006", lotDate: "2026-02-28", emplacementSource: "Zone D - Rack 05", emplacementDestination: "Département Production", operateur: "Luc B.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
 ];
 
 const initialHistory: InventoryRecord[] = [
@@ -198,11 +200,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Pour les Ajustements, mettre le statut "Terminé" immédiatement
     let mouvementAvecStatut = mouvement;
     if (mouvement.type === "Sortie") {
-      mouvementAvecStatut = { ...mouvement, statut: "En attente de validation Qualité" as const };
+      mouvementAvecStatut = { ...mouvement, statut: "En attente de validation Qualité" as const, status: "pending" as const };
     } else if (mouvement.type === "Ajustement") {
-      mouvementAvecStatut = { ...mouvement, statut: "Terminé" as const };
+      mouvementAvecStatut = { ...mouvement, statut: "Terminé" as const, status: "approved" as const };
     }
     
+    // Add new movement to the array (prepend for efficiency)
+    // Note: Sorting by date is handled in the UI layer (MouvementsPage, Dashboard)
+    // to ensure chronological consistency between mock and real data
     setMouvements(prev => [{ ...mouvementAvecStatut, id: newId }, ...prev]);
     
     // Update article stock based on movement type
@@ -391,6 +396,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ? { 
             ...m, 
             statut: "Terminé" as const,
+            status: "approved" as const,
             controleur,
             etatArticles,
             unitesDefectueuses: etatArticles === "Non-conforme" ? unitesDefectueuses : undefined,
@@ -440,8 +446,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ? { 
             ...m, 
             statut: "Rejeté" as const,
+            status: "rejected" as const,
             controleur,
-            raison
+            raison,
+            rejectionReason: raison
           }
         : m
     ));

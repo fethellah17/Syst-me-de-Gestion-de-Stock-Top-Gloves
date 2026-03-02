@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, Plus, Search, Pencil, Trash2, Shield, CheckCircle2, AlertCircle, MapPin, FileEdit, Calendar as CalendarIcon } from "lucide-react";
 import { useData } from "@/contexts/DataContext";
 import { Modal } from "@/components/Modal";
@@ -15,9 +15,11 @@ const MouvementsPage = () => {
   const [typeFilter, setTypeFilter] = useState<"all" | "Entrée" | "Sortie" | "Transfert" | "Ajustement">("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isQCModalOpen, setIsQCModalOpen] = useState(false);
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [qcMouvementId, setQCMouvementId] = useState<number | null>(null);
+  const [rejectMouvementId, setRejectMouvementId] = useState<number | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [formData, setFormData] = useState({
@@ -39,6 +41,10 @@ const MouvementsPage = () => {
     decision: "Approuver" as "Approuver" | "Rejeter",
     raison: "",
   });
+  const [rejectFormData, setRejectFormData] = useState({
+    controleur: "",
+    raison: "",
+  });
 
   // Destinations possibles pour les sorties
   const destinationsUtilisation = [
@@ -55,13 +61,20 @@ const MouvementsPage = () => {
   const articleLocations = selectedArticle ? getArticleLocations(selectedArticle.ref) : [];
   const sourceStockAvailable = formData.emplacementSource && selectedArticle ? getArticleStockByLocation(selectedArticle.ref, formData.emplacementSource) : 0;
 
-  const filtered = mouvements
+  // Data Unification: Single source of truth for all movements
+  // Merge and sort all movements by date (newest first)
+  const combinedMovements = useMemo(() => {
+    return [...mouvements].sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+  }, [mouvements]);
+
+  const filtered = combinedMovements
     .filter((m) => {
       const matchSearch = m.article.toLowerCase().includes(search.toLowerCase()) || m.ref.toLowerCase().includes(search.toLowerCase());
       const matchType = typeFilter === "all" || m.type === typeFilter;
       return matchSearch && matchType;
-    })
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    });
 
   const handleOpenModal = () => {
     setEditingId(null);
@@ -116,9 +129,45 @@ const MouvementsPage = () => {
     setIsQCModalOpen(true);
   };
 
+  const handleOpenRejectModal = (id: number) => {
+    const mouvement = mouvements.find(m => m.id === id);
+    if (!mouvement) return;
+    
+    setRejectMouvementId(id);
+    setRejectFormData({
+      controleur: "",
+      raison: "",
+    });
+    setIsRejectModalOpen(true);
+  };
+
+  const handleCloseRejectModal = () => {
+    setIsRejectModalOpen(false);
+    setRejectMouvementId(null);
+  };
+
   const handleCloseQCModal = () => {
     setIsQCModalOpen(false);
     setQCMouvementId(null);
+  };
+
+  const handleSubmitReject = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rejectFormData.controleur) {
+      setToast({ message: "Veuillez renseigner le nom du contrôleur", type: "error" });
+      return;
+    }
+
+    if (!rejectFormData.raison) {
+      setToast({ message: "Veuillez renseigner la raison du rejet", type: "error" });
+      return;
+    }
+
+    if (rejectMouvementId) {
+      rejectQualityControl(rejectMouvementId, rejectFormData.controleur, rejectFormData.raison);
+      setToast({ message: "✗ Sortie rejetée. Opération annulée.", type: "success" });
+      handleCloseRejectModal();
+    }
   };
 
   const handleSubmitQC = (e: React.FormEvent) => {
@@ -385,6 +434,7 @@ const MouvementsPage = () => {
           onEdit={handleEditMouvement}
           onDelete={handleDeleteClick}
           onQualityControl={handleOpenQCModal}
+          onReject={handleOpenRejectModal}
           showActions={true}
           compact={false}
         />
@@ -924,6 +974,94 @@ const MouvementsPage = () => {
               }`}
             >
               {qcFormData.decision === "Approuver" ? "Approuver la Sortie" : "Rejeter la Sortie"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Rejection Modal */}
+      <Modal isOpen={isRejectModalOpen} onClose={handleCloseRejectModal} title="Rejeter le Mouvement">
+        <form onSubmit={handleSubmitReject} className="space-y-4">
+          {/* Movement Information Display */}
+          {rejectMouvementId && (() => {
+            const mouvement = mouvements.find(m => m.id === rejectMouvementId);
+            const article = mouvement ? articles.find(a => a.ref === mouvement.ref) : null;
+
+            return article && mouvement ? (
+              <div className="p-3 bg-muted/50 rounded-md border border-border/50 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">Article:</span>
+                  <span className="text-sm font-semibold text-foreground">{article.nom} ({article.ref})</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">Quantité:</span>
+                  <span className="text-sm font-semibold text-foreground">{mouvement.qte.toLocaleString()} {article.unite}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">Opérateur:</span>
+                  <span className="text-sm font-semibold text-foreground">{mouvement.operateur}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-muted-foreground">Date:</span>
+                  <span className="text-sm font-mono text-foreground">{mouvement.date}</span>
+                </div>
+              </div>
+            ) : null;
+          })()}
+
+          <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-xs text-red-800 font-medium">
+              ⚠️ Attention: Le rejet annulera ce mouvement
+            </p>
+            <p className="text-xs text-red-600 mt-1">
+              Le stock ne sera pas modifié et un rapport PDF sera généré.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1">
+              Nom du Contrôleur <span className="text-destructive">*</span>
+            </label>
+            <input
+              type="text"
+              value={rejectFormData.controleur}
+              onChange={(e) => setRejectFormData({ ...rejectFormData, controleur: e.target.value })}
+              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder="Nom du contrôleur"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1">
+              Raison du Rejet <span className="text-destructive">*</span>
+            </label>
+            <textarea
+              value={rejectFormData.raison}
+              onChange={(e) => setRejectFormData({ ...rejectFormData, raison: e.target.value })}
+              className="w-full px-3 py-2 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder="Décrivez la raison du rejet (ex: Non-conformité qualité, documentation manquante, etc.)"
+              rows={4}
+              required
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Cette raison sera incluse dans le rapport PDF généré
+            </p>
+          </div>
+
+          <div className="flex gap-2 pt-4">
+            <button
+              type="button"
+              onClick={handleCloseRejectModal}
+              className="flex-1 h-9 rounded-md border text-sm font-medium text-foreground hover:bg-muted transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              className="flex-1 h-9 rounded-md bg-destructive text-destructive-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              Confirmer le Rejet
             </button>
           </div>
         </form>
