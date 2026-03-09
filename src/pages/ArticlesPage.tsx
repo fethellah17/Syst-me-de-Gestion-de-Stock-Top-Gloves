@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Package, Plus, Search, Edit, Trash2, TrendingDown, HelpCircle, MapPin, Flame } from "lucide-react";
 import { useData } from "@/contexts/DataContext";
 import { Modal } from "@/components/Modal";
@@ -7,6 +7,8 @@ import { getStockStatus, calculateAutonomy } from "@/lib/stock-utils";
 import { AutonomyBadge } from "@/components/AutonomyBadge";
 import { StockStatusBadge } from "@/components/StockStatusBadge";
 import { UnitBadge } from "@/components/UnitBadge";
+import { getUnitNames, getUnitSymbol } from "@/lib/units-storage";
+import { roundStockQuantity } from "@/lib/unit-conversion";
 
 const Tooltip = ({ text, children }: { text: string; children: React.ReactNode }) => {
   const [isVisible, setIsVisible] = useState(false);
@@ -38,14 +40,33 @@ const ArticlesPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [units, setUnits] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     ref: "",
     nom: "",
     categorie: "",
     seuil: 0,
-    unite: "paire",
+    unite: "", // Legacy
+    uniteEntree: "",
+    uniteSortie: "",
+    facteurConversion: 1,
     consommationJournaliere: 0,
   });
+
+  // Load units from localStorage
+  useEffect(() => {
+    const loadedUnits = getUnitNames();
+    setUnits(loadedUnits);
+    // Set default units if form is empty
+    if (!formData.uniteEntree && loadedUnits.length > 0) {
+      setFormData(prev => ({ 
+        ...prev, 
+        unite: loadedUnits[0],
+        uniteEntree: loadedUnits[0],
+        uniteSortie: loadedUnits[0]
+      }));
+    }
+  }, []);
 
   // ============================================================================
   // HISTORIQUE DES CONSOMMATIONS JOURNALIÈRES
@@ -105,23 +126,33 @@ const ArticlesPage = () => {
   );
 
   const handleOpenModal = (article?: typeof articles[0]) => {
+    const currentUnits = getUnitNames();
+    setUnits(currentUnits);
+    
     if (article) {
       setFormData({
         ref: article.ref,
         nom: article.nom,
         categorie: article.categorie,
         seuil: article.seuil,
-        unite: article.unite,
+        unite: article.uniteSortie, // Use exit unit for legacy field
+        uniteEntree: article.uniteEntree,
+        uniteSortie: article.uniteSortie,
+        facteurConversion: article.facteurConversion,
         consommationJournaliere: article.consommationJournaliere,
       });
       setEditingId(article.id);
     } else {
+      const defaultUnit = currentUnits.length > 0 ? currentUnits[0] : "";
       setFormData({
         ref: "",
         nom: "",
         categorie: "",
         seuil: 0,
-        unite: "paire",
+        unite: defaultUnit,
+        uniteEntree: defaultUnit,
+        uniteSortie: defaultUnit,
+        facteurConversion: 1,
         consommationJournaliere: 0,
       });
       setEditingId(null);
@@ -142,8 +173,47 @@ const ArticlesPage = () => {
     }
 
     if (editingId) {
-      updateArticle(editingId, formData);
-      setToast({ message: "Article modifié avec succès", type: "success" });
+      const existingArticle = articles.find(a => a.id === editingId);
+      
+      if (existingArticle) {
+        // Check if conversion factor has changed
+        const factorChanged = existingArticle.facteurConversion !== formData.facteurConversion;
+        
+        if (factorChanged && existingArticle.stock > 0) {
+          // CRITICAL: When factor changes, preserve entry unit quantity and recalculate exit unit stock
+          // Formula: Stock in Entry Units = Current Stock (Exit) / Old Factor
+          //          New Stock (Exit) = Stock in Entry Units × New Factor
+          
+          const stockInEntryUnits = existingArticle.stock / existingArticle.facteurConversion;
+          const newStockInExitUnits = stockInEntryUnits * formData.facteurConversion;
+          
+          // Apply rounding based on unit type
+          const roundedNewStock = roundStockQuantity(newStockInExitUnits, formData.uniteSortie);
+          
+          console.log(`[MODIFICATION FACTEUR] Article: ${existingArticle.nom}`);
+          console.log(`  Stock actuel: ${existingArticle.stock} ${existingArticle.uniteSortie}`);
+          console.log(`  Ancien facteur: ${existingArticle.facteurConversion}`);
+          console.log(`  Nouveau facteur: ${formData.facteurConversion}`);
+          console.log(`  Stock en unité d'entrée: ${stockInEntryUnits} ${formData.uniteEntree}`);
+          console.log(`  Nouveau stock calculé: ${newStockInExitUnits} ${formData.uniteSortie}`);
+          console.log(`  Nouveau stock arrondi: ${roundedNewStock} ${formData.uniteSortie}`);
+          
+          // Update article with new factor AND recalculated stock
+          updateArticle(editingId, {
+            ...formData,
+            stock: roundedNewStock
+          });
+          
+          setToast({ 
+            message: `Article modifié. Stock recalculé: ${roundedNewStock} ${formData.uniteSortie}`, 
+            type: "success" 
+          });
+        } else {
+          // No factor change, just update normally
+          updateArticle(editingId, formData);
+          setToast({ message: "Article modifié avec succès", type: "success" });
+        }
+      }
     } else {
       // Le stock est automatiquement initialisé à 0 lors de la création
       addArticle({ ...formData, stock: 0, consommationParInventaire: 0, locations: [] });
@@ -196,7 +266,14 @@ const ArticlesPage = () => {
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Réf</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Article</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Catégorie</th>
-                <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Unité</th>
+                <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  <Tooltip text="Unité d'Entrée / Unité de Sortie">
+                    <div className="flex items-center justify-center gap-1">
+                      <span>Unités</span>
+                      <HelpCircle className="w-3.5 h-3.5" />
+                    </div>
+                  </Tooltip>
+                </th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Emplacement</th>
                 <th className="text-right py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Stock</th>
                 <th className="text-right py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Seuil</th>
@@ -228,7 +305,21 @@ const ArticlesPage = () => {
                     </td>
                     <td className="py-3 px-4 text-muted-foreground">{a.categorie}</td>
                     <td className="py-3 px-4 text-center">
-                      <UnitBadge unit={a.unite} />
+                      <div className="flex flex-col gap-1 items-center">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-muted-foreground">Entrée:</span>
+                          <UnitBadge unit={a.uniteEntree} />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-muted-foreground">Sortie:</span>
+                          <UnitBadge unit={a.uniteSortie} />
+                        </div>
+                        {a.facteurConversion !== 1 && (
+                          <span className="text-[9px] text-gray-600 font-mono">
+                            1:{a.facteurConversion}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-muted-foreground">
                       <div className="flex flex-wrap gap-1">
@@ -244,7 +335,18 @@ const ArticlesPage = () => {
                         )}
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-right font-mono font-semibold text-foreground">{a.stock.toLocaleString()}</td>
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className="font-mono font-semibold text-foreground">
+                          {parseFloat(a.stock.toFixed(3)).toLocaleString()} <span className="text-xs text-muted-foreground">{getUnitSymbol(a.uniteSortie)}</span>
+                        </span>
+                        {a.facteurConversion !== 1 && (
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            ({parseFloat((a.stock / a.facteurConversion).toFixed(3))} {getUnitSymbol(a.uniteEntree)})
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="py-3 px-4 text-right font-mono text-muted-foreground">{a.seuil}</td>
                     <td className="py-3 px-4 text-center">
                       <AutonomyBadge autonomy={autonomy} />
@@ -410,16 +512,65 @@ const ArticlesPage = () => {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Unité</label>
+            <label className="block text-sm font-medium text-foreground mb-1">Unité d'Entrée (Achat)</label>
             <select
-              value={formData.unite}
-              onChange={(e) => setFormData({ ...formData, unite: e.target.value })}
+              value={formData.uniteEntree}
+              onChange={(e) => setFormData({ ...formData, uniteEntree: e.target.value, unite: formData.uniteSortie })}
               className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              <option value="paire">Paire</option>
-              <option value="unité">Unité</option>
-              <option value="boîte">Boîte</option>
+              {units.length === 0 ? (
+                <option value="">Aucune unité disponible</option>
+              ) : (
+                units.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {unit}
+                  </option>
+                ))
+              )}
             </select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Unité utilisée lors des entrées de stock (ex: Tonne, Carton, Boîte)
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1">Unité de Sortie (Consommation)</label>
+            <select
+              value={formData.uniteSortie}
+              onChange={(e) => setFormData({ ...formData, uniteSortie: e.target.value, unite: e.target.value })}
+              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              {units.length === 0 ? (
+                <option value="">Aucune unité disponible</option>
+              ) : (
+                units.map((unit) => (
+                  <option key={unit} value={unit}>
+                    {unit}
+                  </option>
+                ))
+              )}
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Unité utilisée lors des sorties de stock (ex: Kg, Paire, Unité)
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1">Facteur de Conversion</label>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="0.001"
+              step="0.001"
+              value={formData.facteurConversion}
+              onChange={(e) => setFormData({ ...formData, facteurConversion: Number(e.target.value) || 1 })}
+              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder="Ex: 1000"
+            />
+            <p className="text-xs text-info mt-1 font-medium">
+              1 {formData.uniteEntree} = {formData.facteurConversion} {formData.uniteSortie}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Nombre d'unités de sortie dans une unité d'entrée
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">Consommation Journalière Estimée (CJE)</label>

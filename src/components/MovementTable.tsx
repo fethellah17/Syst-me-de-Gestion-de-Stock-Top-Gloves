@@ -6,6 +6,7 @@ import {
   generateAdjustmentPDF,
   generateRejectionPDF 
 } from "@/lib/pdf-generator";
+import { UnitBadge } from "@/components/UnitBadge";
 import type { Mouvement } from "@/contexts/DataContext";
 
 interface MovementTableProps {
@@ -164,7 +165,8 @@ export const MovementTable = ({
             <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Type</th>
             <th className="text-left py-3 px-4 text-xs font-semibold text-primary uppercase tracking-wide">Numéro de Lot</th>
             <th className="text-left py-3 px-4 text-xs font-semibold text-primary uppercase tracking-wide">Date du Lot</th>
-            <th className="text-right py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Qté Total</th>
+            <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Quantité Saisie</th>
+            <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Impact Stock</th>
             <th className="text-right py-3 px-4 text-xs font-semibold text-success uppercase tracking-wide">Qté Valide</th>
             <th className="text-right py-3 px-4 text-xs font-semibold text-destructive uppercase tracking-wide">Qté Défect.</th>
             <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Source</th>
@@ -178,78 +180,116 @@ export const MovementTable = ({
         <tbody>
           {movements.length === 0 ? (
             <tr>
-              <td colSpan={showActions ? 14 : 13} className="py-8 text-center text-muted-foreground">
+              <td colSpan={showActions ? 15 : 14} className="py-8 text-center text-muted-foreground">
                 Aucun mouvement récent
               </td>
             </tr>
           ) : (
-            movements.map((m) => (
-              <tr key={m.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                <td className="py-3 px-4 font-mono text-xs text-muted-foreground">{m.date}</td>
-                <td className="py-3 px-4">
-                  <span className="font-medium text-foreground">{m.article}</span>
-                  <span className="block text-[10px] text-muted-foreground font-mono">{m.ref}</span>
-                </td>
-                <td className="py-3 px-4 text-center">
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                    m.type === "Entrée" ? "status-green" 
-                    : m.type === "Sortie" ? "status-yellow" 
-                    : m.type === "Ajustement" ? "bg-purple-100 text-purple-800"
-                    : "status-blue"
-                  }`}>
-                    {getMovementIcon(m.type)}
-                    {m.type === "Ajustement" 
-                      ? `Ajustement (${m.typeAjustement === "Surplus" ? "+" : "-"})`
-                      : m.type
-                    }
-                  </span>
-                </td>
-                <td className="py-3 px-4">
-                  <span className="font-mono text-xs font-semibold text-primary bg-primary/5 px-2 py-1 rounded border border-primary/20">
-                    {m.lotNumber || "N/A"}
-                  </span>
-                </td>
-                <td className="py-3 px-4">
-                  <span className="font-mono text-xs text-foreground">
-                    {m.lotDate ? new Date(m.lotDate).toLocaleDateString('fr-FR') : "N/A"}
-                  </span>
-                </td>
-                <td className="py-3 px-4 text-right font-mono font-semibold text-foreground">{m.qte.toLocaleString()}</td>
-                <td className="py-3 px-4 text-right font-mono">
-                  {m.validQuantity !== undefined ? (
-                    <span className="text-success font-semibold">{m.validQuantity.toLocaleString()}</span>
-                  ) : (
-                    <span className="text-muted-foreground/30">—</span>
-                  )}
-                </td>
-                <td className="py-3 px-4 text-right font-mono">
-                  {m.defectiveQuantity !== undefined && m.defectiveQuantity > 0 ? (
-                    <span className="text-destructive font-semibold">{m.defectiveQuantity.toLocaleString()}</span>
-                  ) : (
-                    <span className="text-muted-foreground/30">—</span>
-                  )}
-                </td>
-                <td className="py-3 px-4 text-muted-foreground text-xs">
-                  <span className="font-medium">{getSourceLabel(m)}</span>
-                </td>
-                <td className="py-3 px-4 text-muted-foreground text-xs">
-                  <span className="font-medium">{getDestinationLabel(m)}</span>
-                </td>
-                <td className="py-3 px-4 text-center">{getStatusBadge(m)}</td>
-                <td className="py-3 px-4 text-muted-foreground">{m.operateur}</td>
-                <td className="py-3 px-4 text-muted-foreground text-xs">
-                  <span className={`${
-                    getApprovedByLabel(m) === "En attente" ? "text-orange-600 font-medium" :
-                    getApprovedByLabel(m) === "Système" ? "text-blue-600 font-medium" :
-                    getApprovedByLabel(m) === "N/A" ? "text-muted-foreground/50" :
-                    "text-foreground font-medium"
-                  }`}>
-                    {getApprovedByLabel(m)}
-                  </span>
-                </td>
-                {showActions && (
+            movements.map((m) => {
+              // Determine if conversion happened
+              const hasConversion = m.qteOriginale !== undefined && m.qte !== m.qteOriginale;
+              
+              return (
+                <tr key={m.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                  <td className="py-3 px-4 font-mono text-xs text-muted-foreground">{m.date}</td>
+                  <td className="py-3 px-4">
+                    <span className="font-medium text-foreground">{m.article}</span>
+                    <span className="block text-[10px] text-muted-foreground font-mono">{m.ref}</span>
+                  </td>
                   <td className="py-3 px-4 text-center">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                      m.type === "Entrée" ? "status-green" 
+                      : m.type === "Sortie" ? "status-yellow" 
+                      : m.type === "Ajustement" ? "bg-purple-100 text-purple-800"
+                      : "status-blue"
+                    }`}>
+                      {getMovementIcon(m.type)}
+                      {m.type === "Ajustement" 
+                        ? `Ajustement (${m.typeAjustement === "Surplus" ? "+" : "-"})`
+                        : m.type
+                      }
+                    </span>
+                  </td>
+                  <td className="py-3 px-4">
+                    <span className="font-mono text-xs font-semibold text-primary bg-primary/5 px-2 py-1 rounded border border-primary/20">
+                      {m.lotNumber || "N/A"}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4">
+                    <span className="font-mono text-xs text-foreground">
+                      {m.lotDate ? new Date(m.lotDate).toLocaleDateString('fr-FR') : "N/A"}
+                    </span>
+                  </td>
+                  
+                  {/* Quantité Saisie - User Input with Unit Badge */}
+                  <td className="py-3 px-4">
                     <div className="flex items-center justify-center gap-2">
+                      <span className="font-mono font-semibold text-foreground text-sm">
+                        {m.qteOriginale !== undefined ? m.qteOriginale.toLocaleString('fr-FR') : m.qte.toLocaleString('fr-FR')}
+                      </span>
+                      {m.uniteUtilisee ? (
+                        <UnitBadge unit={m.uniteUtilisee} />
+                      ) : (
+                        <span className="text-muted-foreground/30 text-xs">—</span>
+                      )}
+                    </div>
+                  </td>
+                  
+                  {/* Impact Stock - Calculated Total with Arrow and Exit Unit Badge */}
+                  <td className="py-3 px-4">
+                    {hasConversion ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="text-muted-foreground text-xs">→</span>
+                        <span className="font-mono font-semibold text-primary text-sm">
+                          {m.qte.toLocaleString('fr-FR')}
+                        </span>
+                        {m.uniteSortie && <UnitBadge unit={m.uniteSortie} />}
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="font-mono text-muted-foreground text-xs">
+                          {m.qte.toLocaleString('fr-FR')}
+                        </span>
+                        {m.uniteSortie && <UnitBadge unit={m.uniteSortie} />}
+                      </div>
+                    )}
+                  </td>
+                  
+                  <td className="py-3 px-4 text-right font-mono">
+                    {m.validQuantity !== undefined ? (
+                      <span className="text-success font-semibold">{m.validQuantity.toLocaleString()}</span>
+                    ) : (
+                      <span className="text-muted-foreground/30">—</span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4 text-right font-mono">
+                    {m.defectiveQuantity !== undefined && m.defectiveQuantity > 0 ? (
+                      <span className="text-destructive font-semibold">{m.defectiveQuantity.toLocaleString()}</span>
+                    ) : (
+                      <span className="text-muted-foreground/30">—</span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4 text-muted-foreground text-xs">
+                    <span className="font-medium">{getSourceLabel(m)}</span>
+                  </td>
+                  <td className="py-3 px-4 text-muted-foreground text-xs">
+                    <span className="font-medium">{getDestinationLabel(m)}</span>
+                  </td>
+                  <td className="py-3 px-4 text-center">{getStatusBadge(m)}</td>
+                  <td className="py-3 px-4 text-muted-foreground">{m.operateur}</td>
+                  <td className="py-3 px-4 text-muted-foreground text-xs">
+                    <span className={`${
+                      getApprovedByLabel(m) === "En attente" ? "text-orange-600 font-medium" :
+                      getApprovedByLabel(m) === "Système" ? "text-blue-600 font-medium" :
+                      getApprovedByLabel(m) === "N/A" ? "text-muted-foreground/50" :
+                      "text-foreground font-medium"
+                    }`}>
+                      {getApprovedByLabel(m)}
+                    </span>
+                  </td>
+                  {showActions && (
+                    <td className="py-3 px-4 text-center">
+                      <div className="flex items-center justify-center gap-2">
                       {m.type === "Sortie" && m.statut === "En attente de validation Qualité" && onQualityControl && (
                         <button
                           onClick={() => onQualityControl(m.id)}
@@ -324,9 +364,10 @@ export const MovementTable = ({
                       )}
                     </div>
                   </td>
-                )}
-              </tr>
-            ))
+                  )}
+                </tr>
+              );
+            })
           )}
         </tbody>
       </table>

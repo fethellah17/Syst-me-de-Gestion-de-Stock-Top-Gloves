@@ -103,3 +103,5 @@ describe("Occupancy Calculation", () => {
     expect(calculateOccupancy("Zone B-03")).toBe(2500);
   });
 });
+
+

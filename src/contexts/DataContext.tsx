@@ -10,9 +10,12 @@ export interface Article {
   ref: string;
   nom: string;
   categorie: string;
-  stock: number;
+  stock: number; // Always stored in exit unit (smallest unit)
   seuil: number;
-  unite: string;
+  unite: string; // Legacy field - kept for backward compatibility
+  uniteEntree: string; // Entry unit (bulk unit, e.g., "Tonne")
+  uniteSortie: string; // Exit unit (consumption unit, e.g., "Kg")
+  facteurConversion: number; // How many exit units in one entry unit (e.g., 1000 Kg per Tonne)
   consommationParInventaire: number;
   consommationJournaliere: number;
   locations: ArticleLocation[];
@@ -41,8 +44,11 @@ export interface Mouvement {
   article: string;
   ref: string;
   type: "Entrée" | "Sortie" | "Transfert" | "Ajustement";
-  qte: number;
-  lotNumber: string;           // Lot/Batch Number for traceability (medical compliance)
+  qte: number;                  // Always stored in exit unit (smallest unit) for consistency
+  qteOriginale?: number;        // Original quantity as entered by user (for display)
+  uniteUtilisee?: string;       // Unit selected by user during operation (for display)
+  uniteSortie?: string;         // Exit unit (base unit) of the article (for display in Impact Stock)
+  lotNumber: string;            // Lot/Batch Number for traceability (medical compliance)
   lotDate?: string;             // Lot/Batch Production Date for traceability
   emplacementSource?: string;
   emplacementDestination: string;
@@ -52,10 +58,10 @@ export interface Mouvement {
   controleur?: string;
   etatArticles?: "Conforme" | "Non-conforme";
   unitesDefectueuses?: number;
-  validQuantity?: number;      // QC metadata: quantity approved for use
-  defectiveQuantity?: number;  // QC metadata: quantity marked as defective
+  validQuantity?: number;       // QC metadata: quantity approved for use
+  defectiveQuantity?: number;   // QC metadata: quantity marked as defective
   raison?: string;
-  rejectionReason?: string;    // QC rejection reason for PDF report
+  rejectionReason?: string;     // QC rejection reason for PDF report
   motif?: string;
   typeAjustement?: "Surplus" | "Manquant";
 }
@@ -104,15 +110,40 @@ interface DataContextType {
   recalculateAllOccupancies: () => void;
 }
 
+/**
+ * Round stock quantity based on unit type
+ * - Whole items (Pièce, Boîte, Unité, Paire, Carton): Round to integer
+ * - Weight/Volume (Kg, g, Litre, ml, Tonne): Round to 3 decimals
+ */
+const roundStockQuantity = (quantity: number, unit: string): number => {
+  const wholeItemUnits = ['pièce', 'boîte', 'unité', 'paire', 'carton', 'palette'];
+  const isWholeItem = wholeItemUnits.some(u => unit.toLowerCase().includes(u));
+  
+  if (isWholeItem) {
+    // Round to nearest integer for whole items
+    return Math.round(quantity);
+  } else {
+    // Round to 3 decimals for weight/volume, then remove trailing zeros
+    return parseFloat(quantity.toFixed(3));
+  }
+};
+
+/**
+ * Format stock for display - removes unnecessary trailing zeros
+ */
+const formatStockDisplay = (quantity: number): number => {
+  return parseFloat(quantity.toFixed(3));
+};
+
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 const initialArticles: Article[] = [
-  { id: 1, ref: "GN-M-001", nom: "Gants Nitrile M", categorie: "Gants Nitrile", stock: 2500, seuil: 500, unite: "paire", consommationParInventaire: -15, consommationJournaliere: 50, locations: [{ emplacementNom: "Zone A - Rack 12", quantite: 1500 }, { emplacementNom: "Zone B - Rack 03", quantite: 1000 }] },
-  { id: 2, ref: "GL-S-002", nom: "Gants Latex S", categorie: "Gants Latex", stock: 1800, seuil: 400, unite: "paire", consommationParInventaire: 12, consommationJournaliere: 35, locations: [{ emplacementNom: "Zone A - Rack 12", quantite: 1800 }] },
-  { id: 3, ref: "GV-L-003", nom: "Gants Vinyle L", categorie: "Gants Vinyle", stock: 3200, seuil: 600, unite: "paire", consommationParInventaire: 0, consommationJournaliere: 40, locations: [{ emplacementNom: "Zone A - Rack 08", quantite: 2000 }, { emplacementNom: "Zone C - Rack 01", quantite: 1200 }] },
-  { id: 4, ref: "GN-XL-004", nom: "Gants Nitrile XL", categorie: "Gants Nitrile", stock: 45, seuil: 200, unite: "paire", consommationParInventaire: -5, consommationJournaliere: 15, locations: [{ emplacementNom: "Zone B - Rack 03", quantite: 45 }] },
-  { id: 5, ref: "SG-PE-005", nom: "Sur-gants PE", categorie: "Sur-gants", stock: 120, seuil: 500, unite: "paire", consommationParInventaire: -2, consommationJournaliere: 8, locations: [{ emplacementNom: "Zone D - Rack 05", quantite: 120 }] },
-  { id: 6, ref: "MK-FFP2-006", nom: "Masques FFP2", categorie: "Masques", stock: 8000, seuil: 1000, unite: "unité", consommationParInventaire: -50, consommationJournaliere: 200, locations: [{ emplacementNom: "Zone D - Rack 05", quantite: 5000 }, { emplacementNom: "Zone E - Quarantaine", quantite: 3000 }] },
+  { id: 1, ref: "GN-M-001", nom: "Gants Nitrile M", categorie: "Gants Nitrile", stock: 2500, seuil: 500, unite: "Paire", uniteEntree: "Boîte", uniteSortie: "Paire", facteurConversion: 100, consommationParInventaire: -15, consommationJournaliere: 50, locations: [{ emplacementNom: "Zone A - Rack 12", quantite: 1500 }, { emplacementNom: "Zone B - Rack 03", quantite: 1000 }] },
+  { id: 2, ref: "GL-S-002", nom: "Gants Latex S", categorie: "Gants Latex", stock: 1800, seuil: 400, unite: "Paire", uniteEntree: "Boîte", uniteSortie: "Paire", facteurConversion: 100, consommationParInventaire: 12, consommationJournaliere: 35, locations: [{ emplacementNom: "Zone A - Rack 12", quantite: 1800 }] },
+  { id: 3, ref: "GV-L-003", nom: "Gants Vinyle L", categorie: "Gants Vinyle", stock: 3200, seuil: 600, unite: "Paire", uniteEntree: "Boîte", uniteSortie: "Paire", facteurConversion: 100, consommationParInventaire: 0, consommationJournaliere: 40, locations: [{ emplacementNom: "Zone A - Rack 08", quantite: 2000 }, { emplacementNom: "Zone C - Rack 01", quantite: 1200 }] },
+  { id: 4, ref: "GN-XL-004", nom: "Gants Nitrile XL", categorie: "Gants Nitrile", stock: 45, seuil: 200, unite: "Paire", uniteEntree: "Paire", uniteSortie: "Paire", facteurConversion: 1, consommationParInventaire: -5, consommationJournaliere: 15, locations: [{ emplacementNom: "Zone B - Rack 03", quantite: 45 }] },
+  { id: 5, ref: "SG-PE-005", nom: "Sur-gants PE", categorie: "Sur-gants", stock: 120, seuil: 500, unite: "Paire", uniteEntree: "Paire", uniteSortie: "Paire", facteurConversion: 1, consommationParInventaire: -2, consommationJournaliere: 8, locations: [{ emplacementNom: "Zone D - Rack 05", quantite: 120 }] },
+  { id: 6, ref: "MK-FFP2-006", nom: "Masques FFP2", categorie: "Masques", stock: 8000, seuil: 1000, unite: "Unité", uniteEntree: "Carton", uniteSortie: "Unité", facteurConversion: 1000, consommationParInventaire: -50, consommationJournaliere: 200, locations: [{ emplacementNom: "Zone D - Rack 05", quantite: 5000 }, { emplacementNom: "Zone E - Quarantaine", quantite: 3000 }] },
 ];
 
 const initialCategories: Categorie[] = [
@@ -134,12 +165,12 @@ const initialLocations: Emplacement[] = [
 ];
 
 const initialMovements: Mouvement[] = [
-  { id: 1, date: "2026-03-02 14:32:20", article: "Gants Nitrile M", ref: "GN-M-001", type: "Entrée", qte: 500, lotNumber: "LOT-2026-03-001", lotDate: "2026-02-28", emplacementDestination: "Zone A-12", operateur: "Karim B." },
-  { id: 2, date: "2026-03-02 13:15:45", article: "Gants Latex S", ref: "GL-S-002", type: "Sortie", qte: 200, lotNumber: "LOT-2026-03-002", lotDate: "2026-02-27", emplacementDestination: "Département Production", operateur: "Sara M." },
-  { id: 3, date: "2026-03-02 09:30:15", article: "Gants Nitrile M", ref: "GN-M-001", type: "Sortie", qte: 50, lotNumber: "LOT-2026-03-003", lotDate: "2026-03-01", emplacementSource: "Zone A - Rack 12", emplacementDestination: "Département Production", operateur: "Jean D.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
-  { id: 4, date: "2026-03-01 10:45:30", article: "Gants Nitrile M", ref: "GN-M-001", type: "Sortie", qte: 50, lotNumber: "LOT-2026-03-004", lotDate: "2026-02-28", emplacementSource: "Zone A - Rack 12", emplacementDestination: "Département Production", operateur: "Pierre M.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
-  { id: 5, date: "2026-03-01 11:20:00", article: "Masques FFP2", ref: "MK-FFP2-006", type: "Sortie", qte: 100, lotNumber: "LOT-2026-03-005", lotDate: "2026-02-27", emplacementSource: "Zone D - Rack 05", emplacementDestination: "Département Production", operateur: "Sophie R.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
-  { id: 6, date: "2026-03-01 14:15:45", article: "Masques FFP2", ref: "MK-FFP2-006", type: "Sortie", qte: 150, lotNumber: "LOT-2026-03-006", lotDate: "2026-02-28", emplacementSource: "Zone D - Rack 05", emplacementDestination: "Département Production", operateur: "Luc B.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
+  { id: 1, date: "2026-03-02 14:32:20", article: "Gants Nitrile M", ref: "GN-M-001", type: "Entrée", qte: 500, qteOriginale: 5, uniteUtilisee: "Boîte", uniteSortie: "Paire", lotNumber: "LOT-2026-03-001", lotDate: "2026-02-28", emplacementDestination: "Zone A-12", operateur: "Karim B." },
+  { id: 2, date: "2026-03-02 13:15:45", article: "Gants Latex S", ref: "GL-S-002", type: "Sortie", qte: 200, qteOriginale: 200, uniteUtilisee: "Paire", uniteSortie: "Paire", lotNumber: "LOT-2026-03-002", lotDate: "2026-02-27", emplacementDestination: "Département Production", operateur: "Sara M." },
+  { id: 3, date: "2026-03-02 09:30:15", article: "Gants Nitrile M", ref: "GN-M-001", type: "Sortie", qte: 50, qteOriginale: 50, uniteUtilisee: "Paire", uniteSortie: "Paire", lotNumber: "LOT-2026-03-003", lotDate: "2026-03-01", emplacementSource: "Zone A - Rack 12", emplacementDestination: "Département Production", operateur: "Jean D.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
+  { id: 4, date: "2026-03-01 10:45:30", article: "Gants Nitrile M", ref: "GN-M-001", type: "Sortie", qte: 50, qteOriginale: 50, uniteUtilisee: "Paire", uniteSortie: "Paire", lotNumber: "LOT-2026-03-004", lotDate: "2026-02-28", emplacementSource: "Zone A - Rack 12", emplacementDestination: "Département Production", operateur: "Pierre M.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
+  { id: 5, date: "2026-03-01 11:20:00", article: "Masques FFP2", ref: "MK-FFP2-006", type: "Sortie", qte: 100, qteOriginale: 100, uniteUtilisee: "Unité", uniteSortie: "Unité", lotNumber: "LOT-2026-03-005", lotDate: "2026-02-27", emplacementSource: "Zone D - Rack 05", emplacementDestination: "Département Production", operateur: "Sophie R.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
+  { id: 6, date: "2026-03-01 14:15:45", article: "Masques FFP2", ref: "MK-FFP2-006", type: "Sortie", qte: 150, qteOriginale: 150, uniteUtilisee: "Unité", uniteSortie: "Unité", lotNumber: "LOT-2026-03-006", lotDate: "2026-02-28", emplacementSource: "Zone D - Rack 05", emplacementDestination: "Département Production", operateur: "Luc B.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
 ];
 
 const initialHistory: InventoryRecord[] = [
@@ -214,17 +245,39 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const article = articles.find(a => a.ref === mouvement.ref);
     if (article) {
       if (mouvement.type === "Entrée") {
-        // Pour les Entrées: ajouter la quantité à l'emplacement destination
-        const newStock = article.stock + mouvement.qte;
+        // CRITICAL: Pour les Entrées, la quantité doit être convertie en unité de sortie
+        // Si l'utilisateur entre en unité d'entrée, multiplier par le facteur de conversion
+        // Le stock est TOUJOURS stocké en unité de sortie (plus petite unité)
         
-        // Mettre à jour les locations
+        // Calculate conversion with proper rounding
+        const rawQuantityInExitUnit = mouvement.qte * article.facteurConversion;
+        const quantityInExitUnit = roundStockQuantity(rawQuantityInExitUnit, article.uniteSortie);
+        
+        console.log(`[ENTRÉE] Article: ${article.nom}`);
+        console.log(`  Quantité saisie: ${mouvement.qte} ${article.uniteEntree}`);
+        console.log(`  Facteur conversion: ${article.facteurConversion}`);
+        console.log(`  Quantité brute: ${rawQuantityInExitUnit} ${article.uniteSortie}`);
+        console.log(`  Quantité arrondie: ${quantityInExitUnit} ${article.uniteSortie}`);
+        console.log(`  Stock avant: ${article.stock} ${article.uniteSortie}`);
+        
+        const rawNewStock = article.stock + quantityInExitUnit;
+        const newStock = roundStockQuantity(rawNewStock, article.uniteSortie);
+        
+        console.log(`  Stock après (brut): ${rawNewStock} ${article.uniteSortie}`);
+        console.log(`  Stock après (arrondi): ${newStock} ${article.uniteSortie}`);
+        
+        // Mettre à jour les locations (en unité de sortie)
         const updatedLocations = [...article.locations];
         const existingLocation = updatedLocations.find(l => l.emplacementNom === mouvement.emplacementDestination);
         
         if (existingLocation) {
-          existingLocation.quantite += mouvement.qte;
+          const rawLocationQty = existingLocation.quantite + quantityInExitUnit;
+          existingLocation.quantite = roundStockQuantity(rawLocationQty, article.uniteSortie);
         } else {
-          updatedLocations.push({ emplacementNom: mouvement.emplacementDestination, quantite: mouvement.qte });
+          updatedLocations.push({ 
+            emplacementNom: mouvement.emplacementDestination, 
+            quantite: quantityInExitUnit 
+          });
         }
         
         updateArticle(article.id, { stock: newStock, locations: updatedLocations });
@@ -236,20 +289,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .reduce((sum, a) => {
               const loc = a.locations.find(l => l.emplacementNom === mouvement.emplacementDestination);
               return sum + (loc?.quantite || 0);
-            }, 0) + mouvement.qte;
+            }, 0) + quantityInExitUnit;
           
-          updateEmplacement(destEmplacement.id, { occupe: newOccupancy });
+          updateEmplacement(destEmplacement.id, { occupe: Math.round(newOccupancy) });
         }
       } else if (mouvement.type === "Sortie") {
         // Pour les sorties, NE PAS déduire le stock immédiatement
         // Attendre l'approbation du contrôle qualité
         // Stock reste inchangé
+        // NOTE: La quantité de sortie est DÉJÀ en unité de sortie (pas de conversion)
+        console.log(`[SORTIE] Article: ${article.nom}`);
+        console.log(`  Quantité: ${mouvement.qte} ${article.uniteSortie}`);
+        console.log(`  En attente de validation qualité`);
       } else if (mouvement.type === "Ajustement") {
         // Pour les Ajustements: logique bi-directionnelle selon le typeAjustement
+        // NOTE: Les ajustements sont TOUJOURS en unité de sortie
         if (mouvement.typeAjustement === "Surplus") {
           // SURPLUS: Ajouter au stock (comme une Entrée)
           const emplacementCible = mouvement.emplacementSource || mouvement.emplacementDestination;
           if (emplacementCible) {
+            console.log(`[AJUSTEMENT SURPLUS] Article: ${article.nom}`);
+            console.log(`  Quantité: ${mouvement.qte} ${article.uniteSortie}`);
+            
             const newStock = article.stock + mouvement.qte;
             
             // Mettre à jour les locations
@@ -279,6 +340,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else if (mouvement.typeAjustement === "Manquant") {
           // MANQUANT: Retirer du stock (comme une Sortie)
           if (mouvement.emplacementSource) {
+            console.log(`[AJUSTEMENT MANQUANT] Article: ${article.nom}`);
+            console.log(`  Quantité: ${mouvement.qte} ${article.uniteSortie}`);
+            
             const updatedLocations = article.locations.map(loc => {
               if (loc.emplacementNom === mouvement.emplacementSource) {
                 return { ...loc, quantite: Math.max(0, loc.quantite - mouvement.qte) };

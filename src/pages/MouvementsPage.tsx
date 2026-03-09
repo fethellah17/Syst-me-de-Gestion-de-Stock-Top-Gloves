@@ -4,6 +4,7 @@ import { useData } from "@/contexts/DataContext";
 import { Modal } from "@/components/Modal";
 import { Toast } from "@/components/Toast";
 import { MovementTable } from "@/components/MovementTable";
+import { UnitBadge } from "@/components/UnitBadge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
@@ -26,6 +27,7 @@ const MouvementsPage = () => {
     articleId: "",
     type: "Entrée" as "Entrée" | "Sortie" | "Transfert" | "Ajustement",
     qte: 0,
+    selectedUnit: "", // Unit selected by user (can be entry or exit unit)
     lotNumber: "",
     lotDate: undefined as Date | undefined,
     operateur: "",
@@ -61,6 +63,54 @@ const MouvementsPage = () => {
   const articleLocations = selectedArticle ? getArticleLocations(selectedArticle.ref) : [];
   const sourceStockAvailable = formData.emplacementSource && selectedArticle ? getArticleStockByLocation(selectedArticle.ref, formData.emplacementSource) : 0;
 
+  // Unit conversion helpers
+  const roundQuantity = (qty: number, unit: string): number => {
+    const wholeItemUnits = ['pièce', 'boîte', 'unité', 'paire', 'carton', 'palette'];
+    const isWholeItem = wholeItemUnits.some(u => unit.toLowerCase().includes(u));
+    return isWholeItem ? Math.round(qty) : parseFloat(qty.toFixed(3));
+  };
+
+  // Calculate quantity in exit unit (smallest unit) based on selected unit
+  const calculateQuantityInExitUnit = (): number => {
+    if (!selectedArticle || !formData.qte || !formData.selectedUnit) return 0;
+    
+    if (formData.selectedUnit === selectedArticle.uniteEntree) {
+      // Convert from entry unit to exit unit
+      const rawQty = formData.qte * selectedArticle.facteurConversion;
+      return roundQuantity(rawQty, selectedArticle.uniteSortie);
+    } else {
+      // Already in exit unit
+      return roundQuantity(formData.qte, selectedArticle.uniteSortie);
+    }
+  };
+
+  const quantityInExitUnit = calculateQuantityInExitUnit();
+
+  // Check if stock is sufficient for Sortie/Transfert
+  const isStockSufficient = formData.type === "Sortie" || formData.type === "Transfert" || (formData.type === "Ajustement" && formData.typeAjustement === "Manquant")
+    ? quantityInExitUnit <= sourceStockAvailable
+    : true;
+
+  // Get conversion preview text
+  const getConversionPreview = (): string | null => {
+    if (!selectedArticle || !formData.qte || !formData.selectedUnit) return null;
+    
+    // If user selected entry unit, show conversion to exit unit
+    if (formData.selectedUnit === selectedArticle.uniteEntree) {
+      return `Équivaut à: ${quantityInExitUnit.toLocaleString('fr-FR')} ${selectedArticle.uniteSortie}`;
+    }
+    
+    // If user selected exit unit and entry unit exists, show conversion to entry unit
+    if (formData.selectedUnit === selectedArticle.uniteSortie && selectedArticle.facteurConversion > 1) {
+      const qtyInEntryUnit = roundQuantity(formData.qte / selectedArticle.facteurConversion, selectedArticle.uniteEntree);
+      return `Équivaut à: ${qtyInEntryUnit.toLocaleString('fr-FR')} ${selectedArticle.uniteEntree}`;
+    }
+    
+    return null;
+  };
+
+  const conversionPreview = getConversionPreview();
+
   // Data Unification: Single source of truth for all movements
   // Merge and sort all movements by date (newest first)
   const combinedMovements = useMemo(() => {
@@ -81,7 +131,8 @@ const MouvementsPage = () => {
     setFormData({ 
       articleId: "", 
       type: "Entrée", 
-      qte: 0, 
+      qte: 0,
+      selectedUnit: "",
       lotNumber: "",
       lotDate: undefined,
       operateur: "", 
@@ -103,6 +154,7 @@ const MouvementsPage = () => {
       articleId: article?.id.toString() || "",
       type: mouvement.type,
       qte: mouvement.qte,
+      selectedUnit: article?.uniteSortie || "",
       lotNumber: mouvement.lotNumber || "",
       lotDate: mouvement.lotDate ? new Date(mouvement.lotDate) : undefined,
       operateur: mouvement.operateur,
@@ -239,7 +291,7 @@ const MouvementsPage = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.articleId || !formData.qte || !formData.operateur || !formData.lotNumber || !formData.lotDate) {
+    if (!formData.articleId || !formData.qte || !formData.operateur || !formData.lotNumber || !formData.lotDate || !formData.selectedUnit) {
       setToast({ message: "Veuillez remplir tous les champs obligatoires (y compris le numéro et la date du lot)", type: "error" });
       return;
     }
@@ -259,9 +311,9 @@ const MouvementsPage = () => {
         setToast({ message: "Veuillez sélectionner une destination/utilisation", type: "error" });
         return;
       }
-      // Valider que la quantité ne dépasse pas le stock disponible dans l'emplacement source
-      if (formData.qte > sourceStockAvailable) {
-        setToast({ message: `La quantité dépasse le stock disponible dans cette zone. Disponible: ${sourceStockAvailable}`, type: "error" });
+      // Valider que la quantité (convertie) ne dépasse pas le stock disponible
+      if (!isStockSufficient) {
+        setToast({ message: `La quantité dépasse le stock disponible dans cette zone. Disponible: ${sourceStockAvailable.toLocaleString('fr-FR')} ${selectedArticle?.uniteSortie}`, type: "error" });
         return;
       }
     }
@@ -282,8 +334,8 @@ const MouvementsPage = () => {
       }
       // Pour les ajustements "Manquant", valider que la quantité ne dépasse pas le stock disponible
       if (formData.typeAjustement === "Manquant") {
-        if (formData.qte > sourceStockAvailable) {
-          setToast({ message: `La quantité dépasse le stock disponible dans cette zone. Disponible: ${sourceStockAvailable}`, type: "error" });
+        if (!isStockSufficient) {
+          setToast({ message: `La quantité dépasse le stock disponible dans cette zone. Disponible: ${sourceStockAvailable.toLocaleString('fr-FR')} ${selectedArticle.uniteSortie}`, type: "error" });
           return;
         }
       }
@@ -300,8 +352,14 @@ const MouvementsPage = () => {
         return;
       }
 
+      // Valider que la quantité (convertie) ne dépasse pas le stock disponible
+      if (!isStockSufficient) {
+        setToast({ message: `La quantité dépasse le stock disponible dans cette zone. Disponible: ${sourceStockAvailable.toLocaleString('fr-FR')} ${selectedArticle?.uniteSortie}`, type: "error" });
+        return;
+      }
+
       // Utiliser processTransfer pour valider et mettre à jour les emplacements
-      const transferResult = processTransfer(selectedArticle!.ref, formData.emplacementSource, formData.qte, formData.emplacementDestination);
+      const transferResult = processTransfer(selectedArticle!.ref, formData.emplacementSource, quantityInExitUnit, formData.emplacementDestination);
       if (!transferResult.success) {
         setToast({ message: transferResult.error || "Erreur lors du transfert", type: "error" });
         return;
@@ -330,7 +388,7 @@ const MouvementsPage = () => {
     if (editingId) {
       updateMouvement(editingId, {
         type: formData.type,
-        qte: formData.qte,
+        qte: quantityInExitUnit, // Always store in exit unit
         lotNumber: formData.lotNumber,
         lotDate: formData.lotDate ? format(formData.lotDate, "yyyy-MM-dd") : undefined,
         operateur: formData.operateur,
@@ -344,7 +402,10 @@ const MouvementsPage = () => {
         article: article.nom,
         ref: article.ref,
         type: formData.type,
-        qte: formData.qte,
+        qte: quantityInExitUnit, // Always store in exit unit (smallest unit)
+        qteOriginale: formData.qte, // Original quantity as entered by user
+        uniteUtilisee: formData.selectedUnit, // Unit selected by user
+        uniteSortie: article.uniteSortie, // Exit unit (base unit) for display
         lotNumber: formData.lotNumber,
         lotDate: formData.lotDate ? format(formData.lotDate, "yyyy-MM-dd") : undefined,
         emplacementSource: formData.emplacementSource || undefined,
@@ -363,7 +424,7 @@ const MouvementsPage = () => {
         ? `✓ Transfert effectué avec succès. Les capacités des zones ont été recalculées.`
         : formData.type === "Ajustement"
         ? `✓ Ajustement d'inventaire (${formData.typeAjustement}) effectué. Stock mis à jour immédiatement.`
-        : `Entrée de ${formData.qte} unités en ${formData.emplacementDestination}`;
+        : `Entrée de ${formData.qte} ${formData.selectedUnit} (${quantityInExitUnit} ${article.uniteSortie}) en ${formData.emplacementDestination}`;
       setToast({ message, type: "success" });
     }
     handleCloseModal();
@@ -446,7 +507,28 @@ const MouvementsPage = () => {
             <label className="block text-sm font-medium text-foreground mb-1">Article</label>
             <select
               value={formData.articleId}
-              onChange={(e) => setFormData({ ...formData, articleId: e.target.value })}
+              onChange={(e) => {
+                const articleId = e.target.value;
+                const article = articles.find(a => a.id === parseInt(articleId));
+                
+                // Auto-set default unit based on movement type
+                let defaultUnit = "";
+                if (article) {
+                  if (formData.type === "Entrée") {
+                    defaultUnit = article.uniteEntree; // Default to entry unit for Entrée
+                  } else {
+                    defaultUnit = article.uniteSortie; // Default to exit unit for Sortie/Transfert
+                  }
+                }
+                
+                setFormData({ 
+                  ...formData, 
+                  articleId,
+                  selectedUnit: defaultUnit,
+                  emplacementSource: "",
+                  emplacementDestination: formData.type === "Entrée" ? formData.emplacementDestination : ""
+                });
+              }}
               disabled={editingId !== null}
               className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -482,7 +564,24 @@ const MouvementsPage = () => {
                 <button
                   key={t}
                   type="button"
-                  onClick={() => setFormData({ ...formData, type: t, emplacementDestination: "", motif: "" })}
+                  onClick={() => {
+                    // Reset unit based on new movement type
+                    let newUnit = formData.selectedUnit;
+                    if (selectedArticle) {
+                      if (t === "Entrée") {
+                        newUnit = selectedArticle.uniteEntree; // Default to entry unit for Entrée
+                      } else {
+                        newUnit = selectedArticle.uniteSortie; // Default to exit unit for others
+                      }
+                    }
+                    setFormData({ 
+                      ...formData, 
+                      type: t, 
+                      selectedUnit: newUnit,
+                      emplacementDestination: "", 
+                      motif: "" 
+                    });
+                  }}
                   disabled={editingId !== null}
                   className={`h-9 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 ${
                     formData.type === t
@@ -501,16 +600,58 @@ const MouvementsPage = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Quantité</label>
-            <input
-              type="number"
-              inputMode="numeric"
-              value={formData.qte === 0 ? '' : formData.qte}
-              onChange={(e) => setFormData({ ...formData, qte: Number(e.target.value) || 0 })}
-              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="0"
-              min="1"
-            />
+            <label className="block text-sm font-medium text-foreground mb-1">Quantité et Unité</label>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                inputMode="decimal"
+                step="any"
+                value={formData.qte === 0 ? '' : formData.qte}
+                onChange={(e) => setFormData({ ...formData, qte: Number(e.target.value) || 0 })}
+                className="flex-1 h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                placeholder="0"
+                min="0"
+              />
+              
+              {/* Unit Dropdown */}
+              {selectedArticle && (
+                <select
+                  value={formData.selectedUnit}
+                  onChange={(e) => setFormData({ ...formData, selectedUnit: e.target.value })}
+                  className="w-32 h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                >
+                  <option value={selectedArticle.uniteEntree}>
+                    {selectedArticle.uniteEntree}
+                  </option>
+                  {selectedArticle.uniteSortie !== selectedArticle.uniteEntree && (
+                    <option value={selectedArticle.uniteSortie}>
+                      {selectedArticle.uniteSortie}
+                    </option>
+                  )}
+                </select>
+              )}
+            </div>
+            
+            {/* Live Conversion Preview */}
+            {conversionPreview && (
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">{conversionPreview}</span>
+                {selectedArticle && (
+                  <UnitBadge unit={formData.selectedUnit === selectedArticle.uniteEntree ? selectedArticle.uniteSortie : selectedArticle.uniteEntree} />
+                )}
+              </div>
+            )}
+            
+            {/* Stock Validation Error */}
+            {!isStockSufficient && formData.qte > 0 && formData.emplacementSource && (
+              <div className="mt-2 p-2 bg-destructive/10 border border-destructive/20 rounded-md flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0" />
+                <div className="text-xs text-destructive">
+                  <p className="font-semibold">Stock Insuffisant</p>
+                  <p>Maximum disponible: {sourceStockAvailable.toLocaleString('fr-FR')} {selectedArticle?.uniteSortie}</p>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -773,7 +914,8 @@ const MouvementsPage = () => {
             </button>
             <button
               type="submit"
-              className="flex-1 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+              disabled={!isStockSufficient}
+              className="flex-1 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {editingId ? "Mettre à jour" : "Enregistrer"}
             </button>
