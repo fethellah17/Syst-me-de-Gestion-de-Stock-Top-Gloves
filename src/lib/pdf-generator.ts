@@ -1,10 +1,55 @@
 import jsPDF from 'jspdf';
 import type { Mouvement } from '@/contexts/DataContext';
+import { getUnitSymbol } from './units-storage';
 
 // Standardized PDF Template - Monochrome Design
 // Logo: Square 20x20mm top-left (slightly smaller)
 // Company Name: "Top Gloves" directly below logo
 // Signature: Bottom-right
+
+/**
+ * EMERGENCY CLEAN - Remove ALL & symbols
+ * This is the simplest possible approach
+ */
+const emergencyClean = (text: string | number): string => {
+  return String(text).replace(/&/g, '');
+};
+
+/**
+ * Format quantity - simple and clean with nice formatting
+ */
+const formatQty = (qty: number): string => {
+  if (!qty) return '0';
+  const formatted = qty.toLocaleString('fr-FR', { 
+    minimumFractionDigits: 0, 
+    maximumFractionDigits: 2 
+  });
+  return emergencyClean(formatted);
+};
+
+/**
+ * Get unit symbol - simple string only
+ */
+const getUnit = (unitId: string | undefined): string => {
+  if (!unitId) return '';
+  const symbol = getUnitSymbol(unitId);
+  return emergencyClean(String(symbol));
+};
+
+/**
+ * ULTRA SIMPLE quantity display - NO conversion logic
+ * Just show what the user entered
+ */
+const getQuantityDisplay = (movement: any): { qty: string; unit: string } => {
+  // Use qteOriginale if it exists (what user typed), otherwise use qte
+  const displayQty = movement.qteOriginale !== undefined ? movement.qteOriginale : movement.qte;
+  const displayUnit = movement.uniteUtilisee || movement.uniteSortie;
+  
+  const qtyStr = String(displayQty);
+  const unitStr = displayUnit ? String(getUnit(displayUnit)) : '';
+  
+  return { qty: qtyStr, unit: unitStr };
+};
 
 /**
  * Load logo image and convert to Base64
@@ -17,7 +62,7 @@ const loadLogoAsBase64 = async (): Promise<string | null> => {
     // Try to load from public folder
     const response = await fetch('/logo.jpg');
     if (!response.ok) {
-      console.warn('⚠️ Logo file not found at /logo.jpg');
+      console.warn('?? Logo file not found at /logo.jpg');
       return null;
     }
     
@@ -29,7 +74,7 @@ const loadLogoAsBase64 = async (): Promise<string | null> => {
       reader.readAsDataURL(blob);
     });
   } catch (error) {
-    console.error('❌ Failed to load logo:', error);
+    console.error('? Failed to load logo:', error);
     return null;
   }
 };
@@ -47,9 +92,9 @@ const getLogoBase64 = async (): Promise<string | null> => {
   
   cachedLogoBase64 = await loadLogoAsBase64();
   if (cachedLogoBase64) {
-    console.log('✅ Logo loaded and cached successfully');
+    console.log('? Logo loaded and cached successfully');
   } else {
-    console.warn('⚠️ Logo could not be loaded - PDFs will be generated without logo');
+    console.warn('?? Logo could not be loaded - PDFs will be generated without logo');
   }
   
   return cachedLogoBase64;
@@ -60,7 +105,7 @@ const getLogoBase64 = async (): Promise<string | null> => {
  * Ensures consistent header layout across all PDF documents
  * 
  * @param doc - jsPDF document instance
- * @param title - Document title (e.g., "Bon d'Entrée", "Bon de Sortie")
+ * @param title - Document title (e.g., "Bon d'Entree", "Bon de Sortie")
  * @param logoBase64 - Optional Base64 encoded logo image
  * @returns Y position where content should start (after header)
  */
@@ -74,12 +119,12 @@ const renderHeader = (doc: jsPDF, title: string, logoBase64?: string | null): nu
   if (logoBase64) {
     try {
       doc.addImage(logoBase64, 'JPEG', logoX, logoY, logoSize, logoSize);
-      console.log('✅ Logo added to PDF');
+      console.log('? Logo added to PDF');
     } catch (error) {
-      console.error('❌ Failed to add logo to PDF:', error);
+      console.error('? Failed to add logo to PDF:', error);
     }
   } else {
-    console.warn('⚠️ No logo data available for PDF');
+    console.warn('?? No logo data available for PDF');
   }
   
   // Company Name - "Top Gloves" directly underneath logo
@@ -87,12 +132,12 @@ const renderHeader = (doc: jsPDF, title: string, logoBase64?: string | null): nu
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(0, 0, 0); // Black
-  doc.text("Top Gloves", logoX, companyNameY);
+  doc.text(emergencyClean("Top Gloves"), logoX, companyNameY);
   
   // Title - Aligned right
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.text(title, 200, 20, { align: "right" });
+  doc.text(emergencyClean(title), 200, 20, { align: "right" });
   
   // Report Date - Aligned right below title
   doc.setFontSize(9);
@@ -104,7 +149,7 @@ const renderHeader = (doc: jsPDF, title: string, logoBase64?: string | null): nu
     hour: "2-digit",
     minute: "2-digit"
   });
-  doc.text(`Date du rapport: ${reportDate}`, 200, 28, { align: "right" });
+  doc.text(emergencyClean("Date du rapport: " + reportDate), 200, 28, { align: "right" });
   
   // Separator Line - Black, positioned below company name
   const separatorY = companyNameY + 8;
@@ -141,125 +186,135 @@ const generatePDFTemplate = async (
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(0, 0, 0);
-  doc.text(signatureText, 120, 260, { align: "left" });
+  doc.text(emergencyClean(signatureText), 120, 260, { align: "left" });
   doc.line(120, 268, 200, 268);
 
   // Save PDF
-  const filename = `${title.replace(/\s+/g, '_')}_${movement.id}.pdf`;
+  const cleanTitle = emergencyClean(title).replace(/\s+/g, '_');
+  const cleanId = emergencyClean(movement.id);
+  const filename = cleanTitle + "_" + cleanId + ".pdf";
   doc.save(filename);
 };
 
-// 1. Bon d'Entrée (Inbound) - UPDATED with async/await
+// 1. Bon d'Entree (Inbound) - SIMPLIFIED with proper quantity display
 export const generateInboundPDF = async (movement: Mouvement) => {
+  console.log('=== GENERATING INBOUND PDF ===');
+  console.log('Movement:', movement);
+  
   const doc = new jsPDF();
 
   await generatePDFTemplate(
     doc,
-    "Bon d'Entrée",
+    "Bon d'Entree",
     movement,
-    "Signature du Réceptionnaire:",
+    "Signature du Receptionnaire:",
     (doc, yPos) => {
-      // Section Title
       doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(0, 0, 0);
-      doc.text("Détails de l'Entrée", 10, yPos);
+      doc.text(emergencyClean("Details de l'Entree"), 10, yPos);
       yPos += 10;
 
-      // Fields - All in black
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
 
-      doc.text(`ID du Mouvement: ${movement.id}`, 15, yPos);
+      // ID and Date
+      doc.text("ID du Mouvement: " + emergencyClean(movement.id), 15, yPos);
       yPos += 7;
 
-      doc.text(`Date d'Entrée: ${movement.date}`, 15, yPos);
+      doc.text("Date d'Entree: " + emergencyClean(movement.date), 15, yPos);
       yPos += 7;
 
-      doc.text(`Article: ${movement.article} (${movement.ref})`, 15, yPos);
+      doc.text("Article: " + emergencyClean(movement.article) + " (" + emergencyClean(movement.ref) + ")", 15, yPos);
       yPos += 7;
 
-      doc.text(`Quantité: ${movement.qte}`, 15, yPos);
+      // QUANTITY - ULTRA SIMPLE: Just one line
+      const { qty, unit } = getQuantityDisplay(movement);
+      doc.text("Quantite Saisie: " + qty + " " + unit, 15, yPos);
       yPos += 7;
 
-      doc.text(`Numéro de Lot: ${movement.lotNumber || 'N/A'}`, 15, yPos);
+      doc.text("Numero de Lot: " + emergencyClean(movement.lotNumber || 'N/A'), 15, yPos);
       yPos += 7;
 
-      doc.text(`Date de lot: ${movement.lotDate ? new Date(movement.lotDate).toLocaleDateString('fr-FR') : 'N/A'}`, 15, yPos);
+      const lotDate = movement.lotDate ? new Date(movement.lotDate).toLocaleDateString('fr-FR') : 'N/A';
+      doc.text("Date de lot: " + emergencyClean(lotDate), 15, yPos);
       yPos += 7;
 
-      // Source field (renamed from "Fournisseur / Source")
-      doc.text(`Source: ${movement.emplacementDestination || 'N/A'}`, 15, yPos);
+      doc.text("Source: " + emergencyClean(movement.emplacementDestination || 'N/A'), 15, yPos);
       yPos += 7;
 
-      doc.text(`Opérateur: ${movement.operateur}`, 15, yPos);
+      doc.text("Operateur: " + emergencyClean(movement.operateur), 15, yPos);
     }
   );
 };
 
-// 2. Bon de Sortie (Outbound) - Existing with QC metrics, now async
+// 2. Bon de Sortie (Outbound) - SIMPLIFIED with proper quantity display
 export const generateOutboundPDF = async (movement: Mouvement) => {
+  console.log('=== GENERATING OUTBOUND PDF ===');
+  console.log('Movement:', movement);
+  
   const doc = new jsPDF();
 
   await generatePDFTemplate(
     doc,
     "Bon de Sortie",
     movement,
-    "Signature du Contrôleur Qualité:",
+    "Signature du Controleur Qualite:",
     (doc, yPos) => {
-      // Section Title
       doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(0, 0, 0);
-      doc.text("Détails de la Sortie", 10, yPos);
+      doc.text(emergencyClean("Details de la Sortie"), 10, yPos);
       yPos += 10;
 
-      // Fields
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
 
-      doc.text(`ID du Mouvement: ${movement.id}`, 15, yPos);
+      // ID and Date
+      doc.text("ID du Mouvement: " + emergencyClean(movement.id), 15, yPos);
       yPos += 7;
 
-      doc.text(`Date de Sortie: ${movement.date}`, 15, yPos);
+      doc.text("Date de Sortie: " + emergencyClean(movement.date), 15, yPos);
       yPos += 7;
 
-      doc.text(`Article: ${movement.article} (${movement.ref})`, 15, yPos);
+      doc.text("Article: " + emergencyClean(movement.article) + " (" + emergencyClean(movement.ref) + ")", 15, yPos);
       yPos += 7;
 
-      doc.text(`Quantité: ${movement.qte}`, 15, yPos);
+      // QUANTITY - ULTRA SIMPLE: Just one line
+      const { qty, unit } = getQuantityDisplay(movement);
+      doc.text("Quantite Saisie: " + qty + " " + unit, 15, yPos);
       yPos += 7;
 
-      doc.text(`Numéro de Lot: ${movement.lotNumber || 'N/A'}`, 15, yPos);
+      doc.text("Numero de Lot: " + emergencyClean(movement.lotNumber || 'N/A'), 15, yPos);
       yPos += 7;
 
-      doc.text(`Date de lot: ${movement.lotDate ? new Date(movement.lotDate).toLocaleDateString('fr-FR') : 'N/A'}`, 15, yPos);
+      const lotDate = movement.lotDate ? new Date(movement.lotDate).toLocaleDateString('fr-FR') : 'N/A';
+      doc.text("Date de lot: " + emergencyClean(lotDate), 15, yPos);
       yPos += 7;
 
-      doc.text(`Emplacement Source: ${movement.emplacementSource || 'N/A'}`, 15, yPos);
+      doc.text("Emplacement Source: " + emergencyClean(movement.emplacementSource || 'N/A'), 15, yPos);
       yPos += 7;
 
-      doc.text(`Destination: ${movement.emplacementDestination}`, 15, yPos);
+      doc.text("Destination: " + emergencyClean(movement.emplacementDestination), 15, yPos);
       yPos += 7;
 
-      doc.text(`Opérateur: ${movement.operateur}`, 15, yPos);
+      doc.text("Operateur: " + emergencyClean(movement.operateur), 15, yPos);
       yPos += 7;
 
       if (movement.controleur) {
-        doc.text(`Contrôle qualité: ${movement.controleur}`, 15, yPos);
+        doc.text("Controle Qualite: " + emergencyClean(movement.controleur), 15, yPos);
         yPos += 7;
       }
 
-      doc.text(`Date d'Approbation: ${movement.date}`, 15, yPos);
+      doc.text("Date d'Approbation: " + emergencyClean(movement.date), 15, yPos);
       yPos += 10;
 
-      // Quality Control Metrics Section - Monochrome
+      // Quality Control Metrics - SIMPLIFIED
       doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
-      doc.text("Détails de la Quantité", 10, yPos);
+      doc.text(emergencyClean("Details de la Quantite"), 10, yPos);
       yPos += 10;
 
-      // White box with black border
       doc.setFillColor(255, 255, 255);
       doc.rect(10, yPos - 5, 190, 28, 'F');
       doc.setDrawColor(0, 0, 0);
@@ -268,34 +323,38 @@ export const generateOutboundPDF = async (movement: Mouvement) => {
 
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
-      doc.setTextColor(0, 0, 0); // All black
+      doc.setTextColor(0, 0, 0);
+
+      // Use the final stock unit for QC metrics
+      const qcQty = formatQty(movement.qte);
+      const qcUnit = getUnit(movement.uniteSortie);
 
       // Total Quantity
       doc.setFont("helvetica", "bold");
-      doc.text("Quantité Totale:", 15, yPos);
+      doc.text("Quantite Totale:", 15, yPos);
       doc.setFont("helvetica", "normal");
-      doc.text(`${movement.qte}`, 70, yPos);
+      doc.text(qcQty + " " + qcUnit, 70, yPos);
       yPos += 8;
 
-      // Valid Quantity - Black (no green)
-      const validQty = movement.validQuantity !== undefined ? movement.validQuantity : movement.qte;
+      // Valid Quantity
+      const validQty = formatQty(movement.validQuantity !== undefined ? movement.validQuantity : movement.qte);
       doc.setFont("helvetica", "bold");
-      doc.text("Quantité Valide:", 15, yPos);
+      doc.text("Quantite Valide:", 15, yPos);
       doc.setFont("helvetica", "normal");
-      doc.text(`${validQty}`, 70, yPos);
+      doc.text(validQty + " " + qcUnit, 70, yPos);
       yPos += 8;
 
-      // Defective Quantity - Black (no red)
-      const defectiveQty = movement.defectiveQuantity !== undefined ? movement.defectiveQuantity : 0;
+      // Defective Quantity
+      const defectiveQty = formatQty(movement.defectiveQuantity !== undefined ? movement.defectiveQuantity : 0);
       doc.setFont("helvetica", "bold");
-      doc.text("Quantité Défectueuse:", 15, yPos);
+      doc.text("Quantite Defectueuse:", 15, yPos);
       doc.setFont("helvetica", "normal");
-      doc.text(`${defectiveQty}`, 70, yPos);
+      doc.text(defectiveQty + " " + qcUnit, 70, yPos);
     }
   );
 };
 
-// 3. Bon de Transfert (Transfer) - UPDATED with async/await
+// 3. Bon de Transfert (Transfer) - SIMPLIFIED with proper quantity display
 export const generateTransferPDF = async (movement: Mouvement) => {
   const doc = new jsPDF();
 
@@ -305,50 +364,50 @@ export const generateTransferPDF = async (movement: Mouvement) => {
     movement,
     "Signature du Responsable Stock:",
     (doc, yPos) => {
-      // Section Title
       doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(0, 0, 0);
-      doc.text("Détails du Transfert", 10, yPos);
+      doc.text(emergencyClean("Details du Transfert"), 10, yPos);
       yPos += 10;
 
-      // Fields
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
 
-      doc.text(`ID du Mouvement: ${movement.id}`, 15, yPos);
+      // ID and Date
+      doc.text("ID du Mouvement: " + emergencyClean(movement.id), 15, yPos);
       yPos += 7;
 
-      doc.text(`Date de Transfert: ${movement.date}`, 15, yPos);
+      doc.text("Date de Transfert: " + emergencyClean(movement.date), 15, yPos);
       yPos += 7;
 
-      doc.text(`Article: ${movement.article} (${movement.ref})`, 15, yPos);
+      doc.text("Article: " + emergencyClean(movement.article) + " (" + emergencyClean(movement.ref) + ")", 15, yPos);
       yPos += 7;
 
-      doc.text(`Quantité: ${movement.qte}`, 15, yPos);
+      // QUANTITY - ULTRA SIMPLE: Just one line
+      const { qty, unit } = getQuantityDisplay(movement);
+      doc.text("Quantite Saisie: " + qty + " " + unit, 15, yPos);
       yPos += 7;
 
-      doc.text(`Numéro de Lot: ${movement.lotNumber || 'N/A'}`, 15, yPos);
+      doc.text("Numero de Lot: " + emergencyClean(movement.lotNumber || 'N/A'), 15, yPos);
       yPos += 7;
 
-      // Date de lot field
       if (movement.lotDate) {
-        doc.text(`Date de lot: ${movement.lotDate}`, 15, yPos);
+        doc.text("Date de lot: " + emergencyClean(movement.lotDate), 15, yPos);
         yPos += 7;
       }
 
-      doc.text(`Zone Origine: ${movement.emplacementSource || 'N/A'}`, 15, yPos);
+      doc.text("Zone Origine: " + emergencyClean(movement.emplacementSource || 'N/A'), 15, yPos);
       yPos += 7;
 
-      doc.text(`Zone Destination: ${movement.emplacementDestination || 'N/A'}`, 15, yPos);
+      doc.text("Zone Destination: " + emergencyClean(movement.emplacementDestination || 'N/A'), 15, yPos);
       yPos += 7;
 
-      doc.text(`Opérateur: ${movement.operateur}`, 15, yPos);
+      doc.text("Operateur: " + emergencyClean(movement.operateur), 15, yPos);
     }
   );
 };
 
-// 4. Bon d'Ajustement (Adjustment) - UPDATED with async/await
+// 4. Bon d'Ajustement (Adjustment) - SIMPLIFIED with proper quantity display
 export const generateAdjustmentPDF = async (movement: Mouvement) => {
   const doc = new jsPDF();
 
@@ -358,106 +417,121 @@ export const generateAdjustmentPDF = async (movement: Mouvement) => {
     movement,
     "Signature du Responsable Inventaire:",
     (doc, yPos) => {
-      // Section Title
       doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(0, 0, 0);
-      doc.text("Détails de l'Ajustement", 10, yPos);
+      doc.text(emergencyClean("Details de l'Ajustement"), 10, yPos);
       yPos += 10;
 
-      // Fields
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
 
-      doc.text(`ID du Mouvement: ${movement.id}`, 15, yPos);
+      // ID and Date
+      doc.text("ID du Mouvement: " + emergencyClean(movement.id), 15, yPos);
       yPos += 7;
 
-      doc.text(`Date d'Ajustement: ${movement.date}`, 15, yPos);
+      doc.text("Date d'Ajustement: " + emergencyClean(movement.date), 15, yPos);
       yPos += 7;
 
-      doc.text(`Article: ${movement.article} (${movement.ref})`, 15, yPos);
+      doc.text("Article: " + emergencyClean(movement.article) + " (" + emergencyClean(movement.ref) + ")", 15, yPos);
       yPos += 7;
 
-      doc.text(`Type: ${movement.typeAjustement || 'N/A'}`, 15, yPos);
+      doc.text("Type: " + emergencyClean(movement.typeAjustement || 'N/A'), 15, yPos);
       yPos += 7;
 
-      doc.text(`Quantité Ajustée: ${movement.qte}`, 15, yPos);
+      // QUANTITY - ULTRA SIMPLE: Just one line
+      const { qty, unit } = getQuantityDisplay(movement);
+      doc.text("Quantite Ajustee: " + qty + " " + unit, 15, yPos);
       yPos += 7;
 
-      doc.text(`Numéro de Lot: ${movement.lotNumber || 'N/A'}`, 15, yPos);
+      doc.text("Numero de Lot: " + emergencyClean(movement.lotNumber || 'N/A'), 15, yPos);
       yPos += 7;
 
-      // Date de lot field
       if (movement.lotDate) {
-        doc.text(`Date de lot: ${movement.lotDate}`, 15, yPos);
+        doc.text("Date de lot: " + emergencyClean(movement.lotDate), 15, yPos);
         yPos += 7;
       }
 
       if (movement.motif) {
-        doc.text(`Motif de l'ajustement: ${movement.motif}`, 15, yPos);
+        doc.text("Motif de l'ajustement: " + emergencyClean(movement.motif), 15, yPos);
         yPos += 7;
       }
 
-      doc.text(`Opérateur: ${movement.operateur}`, 15, yPos);
+      doc.text("Operateur: " + emergencyClean(movement.operateur), 15, yPos);
     }
   );
 };
 
-// 5. Bon de Rejet (Rejection Report) - Now uses centralized renderHeader() with Base64 logo
+// 5. Bon de Rejet (Rejection Report) - Now uses centralized renderHeader() with Base64 logo and dynamic units
 export const generateRejectionPDF = async (movement: Mouvement) => {
   const doc = new jsPDF();
   
-  // Load logo as Base64 (cached after first load)
   const logoBase64 = await getLogoBase64();
-  
-  // Render standardized header using centralized function
   const contentStartY = renderHeader(doc, "Bon de Rejet", logoBase64);
   
-  // === BODY CONTENT ===
   doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(0, 0, 0);
   
   let yPos = contentStartY;
-  doc.text(`ID du Mouvement: ${movement.id}`, 15, yPos);
+  
+  // Simple lines - NO complex logic
+  doc.text("ID du Mouvement: " + emergencyClean(movement.id), 15, yPos);
   yPos += 10;
-  doc.text(`Date: ${movement.date}`, 15, yPos);
+  
+  doc.text("Date: " + emergencyClean(movement.date), 15, yPos);
   yPos += 10;
-  doc.text(`Article: ${movement.article}`, 15, yPos);
+  
+  doc.text("Article: " + emergencyClean(movement.article), 15, yPos);
   yPos += 10;
-  doc.text(`Type: Sortie`, 15, yPos);
+  
+  doc.text("Type: Sortie", 15, yPos);
   yPos += 10;
-  doc.text(`Quantité: ${movement.qte}`, 15, yPos);
+  
+  // QUANTITY - ULTRA SIMPLE: Just one line
+  const { qty, unit } = getQuantityDisplay(movement);
+  doc.text("Quantite Saisie: " + qty + " " + unit, 15, yPos);
   yPos += 10;
-  doc.text(`Numéro de Lot: ${movement.lotNumber || 'N/A'}`, 15, yPos);
+  
+  doc.text("Numero de Lot: " + emergencyClean(movement.lotNumber || 'N/A'), 15, yPos);
   yPos += 10;
-  doc.text(`Date du Lot: ${movement.lotDate ? new Date(movement.lotDate).toLocaleDateString('fr-FR') : 'N/A'}`, 15, yPos);
+  
+  const lotDate = movement.lotDate ? new Date(movement.lotDate).toLocaleDateString('fr-FR') : 'N/A';
+  doc.text("Date du Lot: " + emergencyClean(lotDate), 15, yPos);
   yPos += 10;
-  doc.text(`Emplacement Source: ${movement.emplacementSource || 'N/A'}`, 15, yPos);
+  
+  doc.text("Emplacement Source: " + emergencyClean(movement.emplacementSource || 'N/A'), 15, yPos);
   yPos += 10;
-  doc.text(`Destination: Retour Fournisseur`, 15, yPos);
+  
+  doc.text("Destination: Retour Fournisseur", 15, yPos);
   yPos += 10;
-  doc.text(`Opérateur: ${movement.operateur}`, 15, yPos);
+  
+  doc.text("Operateur: " + emergencyClean(movement.operateur), 15, yPos);
   yPos += 10;
-  doc.text(`Contrôleur Qualité: ${movement.controleur || 'N/A'}`, 15, yPos);
+  
+  doc.text("Controleur Qualite: " + emergencyClean(movement.controleur || 'N/A'), 15, yPos);
   yPos += 15;
   
-  // Raison du Rejet (with word wrap)
+  // Raison du Rejet
   doc.setFont("helvetica", "bold");
-  doc.text(`Raison du Rejet:`, 15, yPos);
+  doc.text("Raison du Rejet:", 15, yPos);
   yPos += 10;
   doc.setFont("helvetica", "normal");
-  const rejectionText = movement.rejectionReason || "Non spécifiée";
+  const rejectionText = emergencyClean(movement.rejectionReason || "Non specifiee");
   const splitReason = doc.splitTextToSize(rejectionText, 180);
   doc.text(splitReason, 15, yPos);
   
-  // === SIGNATURE SECTION - BOTTOM RIGHT ===
+  // Signature
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(0, 0, 0);
-  doc.text("Signature du Contrôleur Qualité:", 120, 260, { align: "left" });
+  doc.text("Signature du Controleur Qualite:", 120, 260, { align: "left" });
   doc.line(120, 268, 200, 268);
   
   // Save PDF
-  doc.save(`Bon_Rejet_${movement.id}.pdf`);
+  const cleanId = emergencyClean(movement.id);
+  const filename = "Bon_Rejet_" + cleanId + ".pdf";
+  doc.save(filename);
 };
+
+
