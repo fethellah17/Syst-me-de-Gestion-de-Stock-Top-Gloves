@@ -51,6 +51,7 @@ export interface Mouvement {
   emplacementSource?: string;
   emplacementDestination: string;
   operateur: string;
+  commentaire?: string;         // Optional movement note/comment
   status?: "pending" | "approved" | "rejected";  // QC workflow status
   statut?: "En attente de validation Qualité" | "Terminé" | "Rejeté";
   controleur?: string;
@@ -103,6 +104,8 @@ interface DataContextType {
   
   addInventoryRecord: (record: Omit<InventoryRecord, "id">) => void;
   applyInventoryAdjustment: (articleId: number, emplacementNom: string, ecart: number) => void;
+  batchUpdateArticles: (updatedArticles: Article[]) => void;
+  batchAddInventoryRecords: (records: Array<Omit<InventoryRecord, "id">>) => void;
   
   calculateEmplacementOccupancy: (emplacementName: string) => number;
   getArticleLocations: (articleRef: string) => InventoryEntry[];
@@ -434,6 +437,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+  const batchUpdateArticles = (updatedArticles: Article[]) => {
+    setArticles(updatedArticles);
+  };
+
+  const batchAddInventoryRecords = (records: Array<Omit<InventoryRecord, "id">>) => {
+    const newRecords = records.map((record, index) => {
+      const newId = Math.max(...inventoryHistory.map(r => r.id), 0) + 1 + index;
+      return { ...record, id: newId };
+    });
+    setInventoryHistory([...inventoryHistory, ...newRecords]);
+  };
+
   const approveQualityControl = (id: number, controleur: string, etatArticles: "Conforme" | "Non-conforme", unitesDefectueuses: number = 0) => {
     const mouvement = mouvements.find(m => m.id === id);
     if (!mouvement || mouvement.type !== "Sortie") return;
@@ -638,6 +653,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       rejectQualityControl,
       addInventoryRecord,
       applyInventoryAdjustment,
+      batchUpdateArticles,
+      batchAddInventoryRecords,
       calculateEmplacementOccupancy,
       getArticleLocations,
       getArticleStockByLocation,

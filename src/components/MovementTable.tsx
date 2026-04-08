@@ -176,8 +176,10 @@ export const MovementTable = ({
 
   // Version complète pour la page Mouvements
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+    <>
+      {/* Desktop Table View */}
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full text-sm">
         <thead>
           <tr className="border-b bg-muted/50">
             <th className="text-left py-3 px-2 md:px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date</th>
@@ -194,13 +196,14 @@ export const MovementTable = ({
             <th className="text-center py-3 px-2 md:px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Statut</th>
             <th className="hidden md:table-cell text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Opérateur</th>
             <th className="hidden lg:table-cell text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Approuvé par</th>
+            <th className="hidden lg:table-cell text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Commentaire</th>
             {showActions && <th className="text-center py-3 px-2 md:px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>}
           </tr>
         </thead>
         <tbody>
           {movements.length === 0 ? (
             <tr>
-              <td colSpan={showActions ? 15 : 14} className="py-8 text-center text-muted-foreground">
+              <td colSpan={showActions ? 16 : 15} className="py-8 text-center text-muted-foreground">
                 Aucun mouvement récent
               </td>
             </tr>
@@ -325,6 +328,21 @@ export const MovementTable = ({
                       {getApprovedByLabel(m)}
                     </span>
                   </td>
+                  <td className="hidden lg:table-cell py-3 px-4 text-muted-foreground text-xs">
+                    {m.commentaire ? (
+                      <div className="relative group">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 text-xs font-medium cursor-help">
+                          <FileText className="w-3 h-3" />
+                          Note
+                        </span>
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded whitespace-normal max-w-xs opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 break-words">
+                          {m.commentaire}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground/30">—</span>
+                    )}
+                  </td>
                   {showActions && (
                     <td className="py-3 px-2 md:px-4 text-center">
                       <div className="flex items-center justify-center gap-1">
@@ -391,6 +409,163 @@ export const MovementTable = ({
           )}
         </tbody>
       </table>
-    </div>
+      </div>
+
+      {/* Mobile Card View */}
+      <div className="md:hidden space-y-3">
+        {movements.length === 0 ? (
+          <div className="py-8 text-center text-muted-foreground">
+            Aucun mouvement récent
+          </div>
+        ) : (
+          movements.map((m) => {
+            const hasConversion = m.qteOriginale !== undefined && m.qte !== m.qteOriginale;
+            
+            return (
+              <div key={m.id} className="border rounded-lg p-4 bg-card hover:bg-muted/50 transition-colors space-y-3">
+                {/* Header: Article Name + REF + Type Badge */}
+                <div className="flex items-start justify-between gap-3 pb-3 border-b">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-foreground text-base truncate">{m.article}</div>
+                    <div className="text-xs text-muted-foreground font-mono truncate">{m.ref}</div>
+                  </div>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap flex-shrink-0 ${
+                    m.type === "Entrée" ? "status-green" 
+                    : m.type === "Sortie" ? "status-yellow" 
+                    : m.type === "Ajustement" ? "bg-purple-100 text-purple-800"
+                    : "status-blue"
+                  }`}>
+                    {getMovementIcon(m.type)}
+                    {m.type === "Ajustement" 
+                      ? `${m.typeAjustement === "Surplus" ? "+" : "-"}`
+                      : m.type
+                    }
+                  </span>
+                </div>
+
+                {/* Line 1: Quantité Saisie AND Impact Stock */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1">
+                      <span className="text-xs text-muted-foreground font-medium">Quantité Saisie</span>
+                      <div className="text-sm font-semibold text-foreground">
+                        {m.qteOriginale !== undefined ? m.qteOriginale.toLocaleString('fr-FR') : m.qte.toLocaleString('fr-FR')}
+                        {m.uniteUtilisee && ` ${m.uniteUtilisee}`}
+                      </div>
+                    </div>
+                    {hasConversion && (
+                      <div className="flex-1">
+                        <span className="text-xs text-muted-foreground font-medium">Impact Stock</span>
+                        <div className="text-sm font-semibold text-primary">
+                          → {m.qte.toLocaleString('fr-FR')} {m.uniteSortie}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {!hasConversion && (
+                    <div>
+                      <span className="text-xs text-muted-foreground font-medium">Impact Stock</span>
+                      <div className="text-sm font-semibold text-foreground">
+                        {m.qte.toLocaleString('fr-FR')} {m.uniteSortie}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Line 2: Traceability - Lot Number and Date */}
+                <div className="space-y-2 pt-2 border-t">
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs text-muted-foreground font-medium min-w-fit">Lot:</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-mono font-semibold text-primary bg-primary/5 px-2 py-1 rounded border border-primary/20 truncate">
+                        {m.lotNumber || "N/A"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs text-muted-foreground font-medium min-w-fit">Date Lot:</span>
+                    <div className="text-xs font-mono text-foreground">
+                      {m.lotDate ? new Date(m.lotDate).toLocaleDateString('fr-FR') : "N/A"}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Line 3: Location - Source ⮕ Destination */}
+                {(m.emplacementSource || m.emplacementDestination) && (
+                  <div className="space-y-2 pt-2 border-t">
+                    {m.emplacementSource && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs text-muted-foreground font-medium min-w-fit">Source:</span>
+                        <div className="text-xs text-foreground font-medium truncate flex-1">
+                          {m.emplacementSource}
+                        </div>
+                      </div>
+                    )}
+                    {m.emplacementDestination && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs text-muted-foreground font-medium min-w-fit">Dest:</span>
+                        <div className="text-xs text-foreground font-medium truncate flex-1">
+                          {m.emplacementDestination}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Line 4: System - Date/Heure and Opérateur */}
+                <div className="space-y-2 pt-2 border-t">
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs text-muted-foreground font-medium min-w-fit">Date:</span>
+                    <div className="text-xs font-mono text-foreground">
+                      {m.date}
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs text-muted-foreground font-medium min-w-fit">Par:</span>
+                    <div className="text-xs text-foreground font-medium">
+                      {m.operateur}
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs text-muted-foreground font-medium min-w-fit">Statut:</span>
+                    <div className="text-xs">
+                      {getStatusBadge(m)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Line 5: Notes - Commentaire */}
+                {m.commentaire && (
+                  <div className="pt-2 border-t">
+                    <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded p-3 space-y-1">
+                      <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                        <FileText className="w-3 h-3" />
+                        Commentaire
+                      </span>
+                      <div className="text-xs text-foreground break-words">
+                        {m.commentaire}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Bottom: Copy Button */}
+                {showActions && onDuplicate && m.type !== "Ajustement" && (
+                  <div className="flex justify-end pt-2 border-t">
+                    <button
+                      onClick={() => onDuplicate(m)}
+                      className="p-2 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                      title="Dupliquer ce mouvement"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </>
   );
 };

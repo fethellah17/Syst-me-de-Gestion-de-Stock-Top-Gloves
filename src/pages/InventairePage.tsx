@@ -15,7 +15,7 @@ interface InventoryRow {
 }
 
 const InventairePage = () => {
-  const { articles, inventoryHistory, addInventoryRecord, addMouvement } = useData();
+  const { articles, inventoryHistory, batchUpdateArticles, batchAddInventoryRecords } = useData();
   
   // Flatten articles by emplacement: each Article-Emplacement pair becomes a row
   const flattenedRows: InventoryRow[] = articles.flatMap(article => {
@@ -87,7 +87,6 @@ const InventairePage = () => {
   };
 
   const handleValidateAll = () => {
-    let validatedCount = 0;
     const now = new Date();
     const dateStr = now.toLocaleString("fr-FR", {
       year: "numeric",
@@ -97,69 +96,125 @@ const InventairePage = () => {
       minute: "2-digit",
     }).replace(/(\d+)\/(\d+)\/(\d+),\s(\d+):(\d+)/, "$3-$2-$1 $4:$5");
 
-    // Loop through all rows
+    // ============================================================================
+    // STEP 1: COLLECTIVE UPDATE LOGIC
+    // ============================================================================
+    // Create a local copy of the articles array
+    let updatedArticles = [...articles];
+
+    // Create a local array for history records
+    let newHistoryRecords: Array<Omit<typeof inventoryHistory[0], "id">> = [];
+
+    // Track which articles were modified (to recalculate their total stock)
+    const modifiedArticleIds = new Set<number>();
+
+    // ============================================================================
+    // STEP 2: THE LOOP - Process every row where physical stock is entered
+    // ============================================================================
+    let validatedCount = 0;
+
     flattenedRows.forEach((row) => {
       // Skip if already verified
       if (verifiedRows.has(row.key)) {
         return;
       }
 
-      // Skip if no physical stock entered
+      // CRITICAL: Check for physical stock with explicit null/undefined check
+      // Do NOT use if (physique) as 0 will be treated as false and ignored
       const physique = physicalStock[row.key];
       if (physique === null || physique === undefined) {
         return;
       }
 
-      // Get article
-      const article = articles.find(a => a.id === row.articleId);
-      if (!article) return;
+      // Find the article in the local copy
+      const articleIndex = updatedArticles.findIndex(a => a.id === row.articleId);
+      if (articleIndex === -1) return;
+
+      const article = updatedArticles[articleIndex];
+
+      // Find the inventory zone for this emplacement
+      const zoneIndex = article.inventory.findIndex(z => z.zone === row.emplacement);
+      if (zoneIndex === -1) return;
 
       // Calculate écart
       const ecart = getEcart(row.stockTheorique, physique);
       if (ecart === null) return;
 
-      // Add to inventory history
-      addInventoryRecord({
+      // CRITICAL: Forced Numerical Conversion
+      // Ensure the physical quantity is explicitly converted to a number using Number()
+      // This ensures 0 is treated as a valid number, not as false
+      const numericPhysique = Number(physique);
+      updatedArticles[articleIndex].inventory[zoneIndex].quantity = numericPhysique;
+
+      // Track this article as modified
+      modifiedArticleIds.add(row.articleId);
+
+      // Create a history object and push it into the local array
+      newHistoryRecords.push({
         dateHeure: dateStr,
         article: row.nom,
         ref: row.ref,
         emplacement: row.emplacement,
-        stockTheorique: row.stockTheorique,
-        stockPhysique: physique,
-        ecart: ecart,
+        stockTheorique: Number(row.stockTheorique),
+        stockPhysique: numericPhysique,
+        ecart: Number(ecart),
         uniteSortie: article.uniteSortie,
       });
 
-      // Create Ajustement movement if écart is not zero
-      if (ecart !== 0) {
-        const typeAjustement = ecart > 0 ? "Surplus" : "Manquant";
-        const absEcart = Math.abs(ecart);
-        
-        addMouvement({
-          date: dateStr,
-          article: row.nom,
-          ref: row.ref,
-          type: "Ajustement",
-          qte: absEcart,
-          qteOriginale: absEcart,
-          uniteUtilisee: article.uniteSortie,
-          uniteSortie: article.uniteSortie,
-          lotNumber: `INV-${Date.now()}-${validatedCount}`,
-          emplacementSource: ecart < 0 ? row.emplacement : undefined,
-          emplacementDestination: ecart > 0 ? row.emplacement : "Ajustement Inventaire",
-          operateur: "Système (Inventaire)",
-          typeAjustement: typeAjustement,
-          motif: `Ajustement inventaire: Écart de ${ecart > 0 ? '+' : ''}${ecart} ${article.uniteSortie}`,
-        });
-      }
-
-      // Mark row as verified
-      setVerifiedRows(prev => new Set([...prev, row.key]));
       validatedCount++;
     });
 
-    // Show success message
+    // ============================================================================
+    // STEP 2.5: RECALCULATE TOTAL STOCK FOR ALL MODIFIED ARTICLES
+    // ============================================================================
+    // This ensures that if all zones are set to 0, the total stock becomes 0
+    modifiedArticleIds.forEach(articleId => {
+      const articleIndex = updatedArticles.findIndex(a => a.id === articleId);
+      if (articleIndex === -1) return;
+
+      const article = updatedArticles[articleIndex];
+
+      // CRITICAL: Recalculate total stock from scratch by summing all zones
+      // This formula ensures that 0 + 0 = 0 (not ignored)
+      // Use Number() to ensure strict numeric conversion
+      const newTotalStock = article.inventory.reduce(
+        (sum, zone) => sum + Number(zone.quantity),
+        0
+      );
+
+      // CRITICAL: Replace the old stock value completely
+      // DO NOT subtract or add - just set the new calculated value
+      updatedArticles[articleIndex].stock = newTotalStock;
+
+      console.log(
+        `[INVENTORY ZERO STOCK FIX] Article: ${article.nom} (ID: ${article.id}) | ` +
+        `Zones: ${article.inventory.map(z => `${z.zone}=${z.quantity}`).join(', ')} | ` +
+        `Recalculated Total Stock: ${newTotalStock}`
+      );
+    });
+
+    // ============================================================================
+    // STEP 3: SINGLE STATE UPDATE - After the loop is finished
+    // ============================================================================
     if (validatedCount > 0) {
+      // Update articles state ONCE with all changes
+      // This includes the recalculated total stock for all modified articles
+      batchUpdateArticles(updatedArticles);
+
+      // Update inventory history ONCE with all records
+      batchAddInventoryRecords(newHistoryRecords);
+
+      // Mark all validated rows as verified
+      const newVerifiedRows = new Set(verifiedRows);
+      flattenedRows.forEach(row => {
+        const physique = physicalStock[row.key];
+        if (physique !== null && physique !== undefined && !verifiedRows.has(row.key)) {
+          newVerifiedRows.add(row.key);
+        }
+      });
+      setVerifiedRows(newVerifiedRows);
+
+      console.log(`[INVENTORY VALIDATION COMPLETE] ${validatedCount} rows validated and saved`);
       showToast(`Tous les emplacements remplis ont été validés et ajustés avec succès ! (${validatedCount} emplacements)`, "success");
     } else {
       showToast("Aucun emplacement à valider. Veuillez remplir au moins un champ Stock Physique.", "error");

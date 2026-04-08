@@ -17,6 +17,7 @@ interface BulkMovementItem {
   emplacementDestination?: string;
   lotNumber: string;
   lotDate?: Date;
+  commentaire?: string;
   qc_status: "pending" | "approved" | "rejected";
 }
 
@@ -46,9 +47,9 @@ export const BulkMovementModal = ({
   const [movementType, setMovementType] = useState<MovementType>(initialData?.movementType || "Entrée");
   const [items, setItems] = useState<BulkMovementItem[]>(
     initialData?.items || [
-      { id: "1", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, qc_status: "pending" },
-      { id: "2", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, qc_status: "pending" },
-      { id: "3", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, qc_status: "pending" },
+      { id: "1", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
+      { id: "2", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
+      { id: "3", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
     ]
   );
   const [operateur, setOperateur] = useState("");
@@ -69,9 +70,9 @@ export const BulkMovementModal = ({
   const resetForm = () => {
     setMovementType("Entrée");
     setItems([
-      { id: "1", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, qc_status: "pending" },
-      { id: "2", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, qc_status: "pending" },
-      { id: "3", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, qc_status: "pending" },
+      { id: "1", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
+      { id: "2", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
+      { id: "3", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
     ]);
     setOperateur("");
     setErrors({});
@@ -105,9 +106,9 @@ export const BulkMovementModal = ({
     // Change type and reset articles to 3 empty rows
     setMovementType(newType);
     setItems([
-      { id: "1", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, qc_status: "pending" },
-      { id: "2", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, qc_status: "pending" },
-      { id: "3", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, qc_status: "pending" },
+      { id: "1", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
+      { id: "2", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
+      { id: "3", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
     ]);
     setErrors({});
   };
@@ -126,7 +127,7 @@ export const BulkMovementModal = ({
     const newId = (Math.max(...items.map(i => parseInt(i.id) || 0), 0) + 1).toString();
     setItems([
       ...items,
-      { id: newId, articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, qc_status: "pending" },
+      { id: newId, articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
     ]);
   };
 
@@ -172,11 +173,11 @@ export const BulkMovementModal = ({
         if (!item.emplacementSource) newErrors[`item-${item.id}-source`] = "Requis";
         if (!item.emplacementDestination) newErrors[`item-${item.id}-dest`] = "Requis";
         
-        // STRICT VALIDATION: Check if total quantity for this zone exceeds available stock
+        // HARD STOCK LOCK: Check if quantity exceeds available stock
         if (item.emplacementSource && item.articleId) {
           const validation = validateTotalQuantityForZone(item.articleId, item.emplacementSource);
           if (!validation.isValid) {
-            newErrors[`item-${item.id}-qty`] = `الكمية الإجمالية تتجاوز المتوفر في هذا المكان (${validation.totalUsed} > ${validation.available})`;
+            newErrors[`item-${item.id}-qty`] = `الكمية تتجاوز المخزون المتوفر`;
           }
         }
       } else if (movementType === "Transfert") {
@@ -186,11 +187,11 @@ export const BulkMovementModal = ({
           newErrors[`item-${item.id}-dest`] = "Doit être différent";
         }
         
-        // STRICT VALIDATION: Check if total quantity for source zone exceeds available stock
+        // HARD STOCK LOCK: Check if quantity exceeds available stock in source
         if (item.emplacementSource && item.articleId) {
           const validation = validateTotalQuantityForZone(item.articleId, item.emplacementSource);
           if (!validation.isValid) {
-            newErrors[`item-${item.id}-qty`] = `الكمية الإجمالية تتجاوز المتوفر في هذا المكان (${validation.totalUsed} > ${validation.available})`;
+            newErrors[`item-${item.id}-qty`] = `الكمية تتجاوز المخزون المتوفر`;
           }
         }
       }
@@ -414,6 +415,7 @@ export const BulkMovementModal = ({
                       </th>
                       <th className="text-left p-4 text-xs font-semibold">Numéro de Lot</th>
                       <th className="text-left p-4 text-xs font-semibold">Date d'expiration</th>
+                      <th className="text-left p-4 text-xs font-semibold">Commentaire</th>
                       <th className="text-center p-4 text-xs font-semibold w-20">Action</th>
                     </tr>
                   </thead>
@@ -603,6 +605,17 @@ export const BulkMovementModal = ({
                                 />
                               </PopoverContent>
                             </Popover>
+                          </td>
+
+                          {/* Commentaire */}
+                          <td className="p-4">
+                            <input
+                              type="text"
+                              value={item.commentaire || ""}
+                              onChange={(e) => updateItem(item.id, "commentaire", e.target.value)}
+                              className="w-full h-10 px-3 rounded border bg-background text-sm"
+                              placeholder="Optionnel"
+                            />
                           </td>
 
                           {/* Action */}
@@ -816,6 +829,18 @@ export const BulkMovementModal = ({
                             />
                           </PopoverContent>
                         </Popover>
+                      </div>
+
+                      {/* Commentaire */}
+                      <div>
+                        <label className="block text-xs font-semibold text-muted-foreground mb-2">Commentaire</label>
+                        <input
+                          type="text"
+                          value={item.commentaire || ""}
+                          onChange={(e) => updateItem(item.id, "commentaire", e.target.value)}
+                          className="w-full h-12 px-3 rounded border bg-background text-sm"
+                          placeholder="Optionnel"
+                        />
                       </div>
 
                       {/* Delete Button */}

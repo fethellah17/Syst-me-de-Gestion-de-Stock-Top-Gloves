@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, Plus, AlertCircle, MapPin, FileEdit } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, Plus } from "lucide-react";
 import { useData } from "@/contexts/DataContext";
 import { Modal } from "@/components/Modal";
 import { Toast } from "@/components/Toast";
@@ -41,6 +41,12 @@ const MouvementsPage = () => {
 
   const filtered = combinedMovements
     .filter((m) => {
+      // STRICT DATA SEPARATION: Exclude Ajustement type
+      // Ajustement records are isolated in the Inventaire page history
+      if (m.type === "Ajustement") {
+        return false;
+      }
+      
       // Filter by selected article (if any)
       const matchArticle = selectedArticleId === "" || m.ref === selectedArticleId;
       // Filter by movement type
@@ -146,14 +152,6 @@ const MouvementsPage = () => {
   };
 
   const handleDeleteClick = (id: number) => {
-    const mouvement = mouvements.find(m => m.id === id);
-    if (!mouvement) return;
-
-    if (mouvement.type === "Ajustement") {
-      setToast({ message: "Les ajustements d'inventaire ne peuvent pas être supprimés. Ils sont générés automatiquement.", type: "error" });
-      return;
-    }
-
     setDeleteConfirmId(id);
     setIsDeleteConfirmOpen(true);
   };
@@ -261,6 +259,7 @@ const MouvementsPage = () => {
           lotNumber: item.lotNumber,
           lotDate: item.lotDate ? format(item.lotDate, "yyyy-MM-dd") : "",
           emplacementDestination: item.emplacementDestination,
+          commentaire: item.commentaire || "",
           operateur: operateur,
         });
       } else if (movementType === "Sortie") {
@@ -277,6 +276,7 @@ const MouvementsPage = () => {
           lotDate: item.lotDate ? format(item.lotDate, "yyyy-MM-dd") : "",
           emplacementSource: item.emplacementSource,
           emplacementDestination: item.emplacementDestination,
+          commentaire: item.commentaire || "",
           operateur: operateur,
         });
       } else if (movementType === "Transfert") {
@@ -301,6 +301,7 @@ const MouvementsPage = () => {
             lotDate: item.lotDate ? format(item.lotDate, "yyyy-MM-dd") : "",
             emplacementSource: item.emplacementSource,
             emplacementDestination: item.emplacementDestination,
+            commentaire: item.commentaire || "",
             operateur: operateur,
           });
         }
@@ -432,15 +433,13 @@ const MouvementsPage = () => {
         return <ArrowUpFromLine className="w-3 h-3" />;
       case "Transfert":
         return <ArrowRightLeft className="w-3 h-3" />;
-      case "Ajustement":
-        return <FileEdit className="w-3 h-3" />;
       default:
         return null;
     }
   };
 
   return (
-    <div className="space-y-6 max-w-7xl">
+    <div className="space-y-6 max-w-7xl pb-24 md:pb-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-foreground">Mouvements</h2>
@@ -451,7 +450,7 @@ const MouvementsPage = () => {
             setDuplicateData(null);
             setIsBulkModalOpen(true);
           }}
-          className="h-9 px-4 bg-primary text-primary-foreground rounded-md text-sm font-medium flex items-center gap-2 hover:opacity-90 transition-opacity"
+          className="hidden md:flex h-9 px-4 bg-primary text-primary-foreground rounded-md text-sm font-medium items-center gap-2 hover:opacity-90 transition-opacity"
         >
           <Plus className="w-4 h-4" />
           Nouveau Mouvement
@@ -460,9 +459,9 @@ const MouvementsPage = () => {
 
       {/* Filters - Sticky Header */}
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b pb-4 mb-6">
-        <div className="flex flex-col md:flex-row gap-4 md:gap-6 md:items-end">
+        <div className="flex flex-col gap-4">
           {/* Article Selector */}
-          <div className="w-full md:w-2/5">
+          <div className="w-full">
             <label className="block text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Article</label>
             <select
               value={selectedArticleId}
@@ -479,14 +478,14 @@ const MouvementsPage = () => {
           </div>
 
           {/* Movement Type Tabs */}
-          <div className="w-full md:w-3/5">
+          <div className="w-full">
             <label className="block text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Type de Mouvement</label>
             <div className="flex rounded-md border overflow-x-auto md:overflow-visible">
               {(["all", "Entrée", "Sortie", "Transfert"] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTypeFilter(t)}
-                  className={`h-10 px-4 text-xs font-medium transition-colors whitespace-nowrap flex-1 md:flex-none ${
+                  className={`h-10 px-4 text-xs font-medium transition-colors whitespace-nowrap flex-1 ${
                     typeFilter === t ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted"
                   }`}
                 >
@@ -685,6 +684,18 @@ const MouvementsPage = () => {
       </Modal>
 
       {toast && <Toast message={toast.message} type={toast.type} />}
+
+      {/* Floating Action Button (FAB) - Mobile Only */}
+      <button
+        onClick={() => {
+          setDuplicateData(null);
+          setIsBulkModalOpen(true);
+        }}
+        className="md:hidden fixed bottom-6 right-6 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-110 transition-all flex items-center justify-center z-40"
+        title="Nouveau Mouvement"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
     </div>
   );
 };
