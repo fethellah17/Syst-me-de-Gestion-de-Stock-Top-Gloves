@@ -1,4 +1,4 @@
-import { Shield, FileText, ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, FileEdit, CheckCircle2, AlertCircle, Clock, Copy } from "lucide-react";
+import { FileText, ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, FileEdit, CheckCircle2, AlertCircle, Clock, Copy, CheckIcon, XIcon } from "lucide-react";
 import { 
   generateInboundPDF, 
   generateOutboundPDF, 
@@ -420,9 +420,10 @@ export const MovementTable = ({
         ) : (
           movements.map((m) => {
             const hasConversion = m.qteOriginale !== undefined && m.qte !== m.qteOriginale;
+            const hasQualityData = m.validQuantity !== undefined || (m.defectiveQuantity !== undefined && m.defectiveQuantity > 0);
             
             return (
-              <div key={m.id} className="border rounded-lg p-4 bg-card hover:bg-muted/50 transition-colors space-y-3">
+              <div key={m.id} className="border rounded-lg p-4 bg-card hover:bg-muted/50 transition-colors space-y-0">
                 {/* Header: Article Name + REF + Type Badge */}
                 <div className="flex items-start justify-between gap-3 pb-3 border-b">
                   <div className="flex-1 min-w-0">
@@ -443,8 +444,8 @@ export const MovementTable = ({
                   </span>
                 </div>
 
-                {/* Line 1: Quantité Saisie AND Impact Stock */}
-                <div className="space-y-2">
+                {/* Section 1: Quantities */}
+                <div className="space-y-2 py-3">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex-1">
                       <span className="text-xs text-muted-foreground font-medium">Quantité Saisie</span>
@@ -472,8 +473,10 @@ export const MovementTable = ({
                   )}
                 </div>
 
-                {/* Line 2: Traceability - Lot Number and Date */}
-                <div className="space-y-2 pt-2 border-t">
+                <div className="border-t" />
+
+                {/* Section 2: Traceability - Lot Number and Date */}
+                <div className="space-y-2 py-3">
                   <div className="flex items-start gap-2">
                     <span className="text-xs text-muted-foreground font-medium min-w-fit">Lot:</span>
                     <div className="flex-1 min-w-0">
@@ -490,30 +493,80 @@ export const MovementTable = ({
                   </div>
                 </div>
 
-                {/* Line 3: Location - Source ⮕ Destination */}
+                <div className="border-t" />
+
+                {/* Section 3: Location - Source ⮕ Destination */}
                 {(m.emplacementSource || m.emplacementDestination) && (
-                  <div className="space-y-2 pt-2 border-t">
-                    {m.emplacementSource && (
-                      <div className="flex items-start gap-2">
-                        <span className="text-xs text-muted-foreground font-medium min-w-fit">Source:</span>
-                        <div className="text-xs text-foreground font-medium truncate flex-1">
-                          {m.emplacementSource}
-                        </div>
+                  <>
+                    <div className="space-y-2 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground font-medium">Source & Destination</span>
                       </div>
-                    )}
-                    {m.emplacementDestination && (
-                      <div className="flex items-start gap-2">
-                        <span className="text-xs text-muted-foreground font-medium min-w-fit">Dest:</span>
-                        <div className="text-xs text-foreground font-medium truncate flex-1">
-                          {m.emplacementDestination}
-                        </div>
+                      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                        <span className="truncate flex-1">{getSourceLabel(m)}</span>
+                        <span className="text-muted-foreground flex-shrink-0">⮕</span>
+                        <span className="truncate flex-1">{getDestinationLabel(m)}</span>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                    <div className="border-t" />
+                  </>
                 )}
 
-                {/* Line 4: System - Date/Heure and Opérateur */}
-                <div className="space-y-2 pt-2 border-t">
+                {/* Section 4: Approval Information */}
+                <div className="space-y-2 py-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs text-muted-foreground font-medium min-w-fit">Approuvé par:</span>
+                    <div className={`text-xs font-medium ${
+                      getApprovedByLabel(m) === "En attente" ? "text-orange-600" :
+                      getApprovedByLabel(m) === "Système" ? "text-blue-600" :
+                      getApprovedByLabel(m) === "N/A" ? "text-muted-foreground/50" :
+                      "text-foreground"
+                    }`}>
+                      {getApprovedByLabel(m)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t" />
+
+                {/* Section 5: Quality Control Data */}
+                {hasQualityData && (
+                  <>
+                    <div className="space-y-2 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground font-medium">Contrôle Qualité</span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        {m.validQuantity !== undefined && (
+                          <div className="flex items-center gap-2">
+                            <CheckIcon className="w-4 h-4 text-green-600 flex-shrink-0" />
+                            <div>
+                              <div className="text-xs text-muted-foreground">Qté Valide</div>
+                              <div className="text-sm font-semibold text-green-600">
+                                {m.validQuantity.toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {m.defectiveQuantity !== undefined && m.defectiveQuantity > 0 && (
+                          <div className="flex items-center gap-2">
+                            <XIcon className="w-4 h-4 text-red-600 flex-shrink-0" />
+                            <div>
+                              <div className="text-xs text-muted-foreground">Qté Défect.</div>
+                              <div className="text-sm font-semibold text-red-600">
+                                {m.defectiveQuantity.toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="border-t" />
+                  </>
+                )}
+
+                {/* Section 6: System Info - Date/Heure and Opérateur */}
+                <div className="space-y-2 py-3">
                   <div className="flex items-start gap-2">
                     <span className="text-xs text-muted-foreground font-medium min-w-fit">Date:</span>
                     <div className="text-xs font-mono text-foreground">
@@ -521,7 +574,7 @@ export const MovementTable = ({
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
-                    <span className="text-xs text-muted-foreground font-medium min-w-fit">Par:</span>
+                    <span className="text-xs text-muted-foreground font-medium min-w-fit">Opérateur:</span>
                     <div className="text-xs text-foreground font-medium">
                       {m.operateur}
                     </div>
@@ -534,32 +587,87 @@ export const MovementTable = ({
                   </div>
                 </div>
 
-                {/* Line 5: Notes - Commentaire */}
+                {/* Section 7: Notes - Commentaire */}
                 {m.commentaire && (
-                  <div className="pt-2 border-t">
-                    <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded p-3 space-y-1">
-                      <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-                        <FileText className="w-3 h-3" />
-                        Commentaire
-                      </span>
-                      <div className="text-xs text-foreground break-words">
-                        {m.commentaire}
+                  <>
+                    <div className="border-t" />
+                    <div className="py-3">
+                      <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded p-3 space-y-1">
+                        <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                          <FileText className="w-3 h-3" />
+                          Commentaire
+                        </span>
+                        <div className="text-xs text-foreground break-words">
+                          {m.commentaire}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  </>
                 )}
 
-                {/* Bottom: Copy Button */}
-                {showActions && onDuplicate && m.type !== "Ajustement" && (
-                  <div className="flex justify-end pt-2 border-t">
-                    <button
-                      onClick={() => onDuplicate(m)}
-                      className="p-2 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-                      title="Dupliquer ce mouvement"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </button>
-                  </div>
+                {/* Bottom: Action Buttons */}
+                {showActions && (
+                  <>
+                    <div className="border-t" />
+                    <div className="flex items-center justify-end gap-2 pt-3">
+                      {/* PDF Download Button */}
+                      {m.type === "Sortie" && m.statut === "Terminé" && m.status === "approved" && (
+                        <button
+                          onClick={() => generateOutboundPDF(m)}
+                          className="p-2 rounded-md hover:bg-green-100 dark:hover:bg-green-900 transition-colors text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300"
+                          title="Télécharger le Bon de Sortie (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Entrée" && (
+                        <button
+                          onClick={() => generateInboundPDF(m)}
+                          className="p-2 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                          title="Télécharger le Bon d'Entrée (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Transfert" && (
+                        <button
+                          onClick={() => generateTransferPDF(m)}
+                          className="p-2 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900 transition-colors text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300"
+                          title="Télécharger le Bon de Transfert (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Ajustement" && (
+                        <button
+                          onClick={() => generateAdjustmentPDF(m)}
+                          className="p-2 rounded-md hover:bg-amber-100 dark:hover:bg-amber-900 transition-colors text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300"
+                          title="Télécharger le Bon d'Ajustement (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.status === "rejected" && m.rejectionReason && (
+                        <button
+                          onClick={() => generateRejectionPDF(m)}
+                          className="p-2 rounded-md hover:bg-red-100 dark:hover:bg-red-900 transition-colors text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                          title="Télécharger le rapport de rejet (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {/* Copy/Duplicate Button */}
+                      {onDuplicate && m.type !== "Ajustement" && (
+                        <button
+                          onClick={() => onDuplicate(m)}
+                          className="p-2 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                          title="Dupliquer ce mouvement"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
             );
