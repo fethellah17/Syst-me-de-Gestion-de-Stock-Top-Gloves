@@ -305,11 +305,14 @@ const ArticlesPage = () => {
               {filtered.map((a) => {
                 // CRITICAL: Calculate total stock directly from inventory array using numeric addition
                 // This ensures we get the true numeric sum, not string concatenation
+                // IMPORTANT: If inventory array exists (even with 0 values), use it as the source of truth
+                // DO NOT fall back to movement-based calculation if inventory is 0
+                const hasInventoryData = a.inventory && a.inventory.length > 0;
                 const totalStockFromInventory = a.inventory?.reduce((sum, item) => sum + Number(item.quantity), 0) || 0;
                 
-                // Fallback to movement-based calculation if inventory is empty
+                // Fallback to movement-based calculation ONLY if inventory array is completely empty
                 let totalQtyInEntryUnits = 0;
-                if (totalStockFromInventory === 0) {
+                if (!hasInventoryData) {
                   mouvements.forEach(mouvement => {
                     if (mouvement.ref === a.ref) {
                       if (mouvement.type === "Entrée") {
@@ -337,11 +340,12 @@ const ArticlesPage = () => {
                   });
                 }
                 
-                // Use inventory-based calculation if available, otherwise use movement-based
-                const stockInExitUnits = totalStockFromInventory > 0 ? Number(totalStockFromInventory) : Number(totalQtyInEntryUnits * a.facteurConversion);
-                const stockInEntryUnits = totalStockFromInventory > 0 ? Number(totalStockFromInventory / a.facteurConversion) : Number(totalQtyInEntryUnits);
+                // CRITICAL: If inventory data exists, use it (even if it's 0)
+                // Only use movement-based calculation if inventory array is completely empty
+                const stockInExitUnits = hasInventoryData ? Number(totalStockFromInventory) : Number(totalQtyInEntryUnits * a.facteurConversion);
+                const stockInEntryUnits = hasInventoryData ? Number(totalStockFromInventory / a.facteurConversion) : Number(totalQtyInEntryUnits);
                 
-                console.log(`[ARTICLES TABLE] ${a.nom}: Inventory=${totalStockFromInventory} ${a.uniteSortie}, Stock=${stockInExitUnits} ${a.uniteSortie}`);
+                console.log(`[ARTICLES TABLE] ${a.nom}: HasInventory=${hasInventoryData}, Inventory=${totalStockFromInventory} ${a.uniteSortie}, Stock=${stockInExitUnits} ${a.uniteSortie}`);
                 
                 const status = getStockStatus(stockInExitUnits, a.seuil, a.consommationJournaliere);
                 const autonomy = calculateAutonomy(stockInExitUnits, a.consommationJournaliere);
