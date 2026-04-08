@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, Plus, Search, AlertCircle, MapPin, FileEdit } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, Plus, AlertCircle, MapPin, FileEdit } from "lucide-react";
 import { useData } from "@/contexts/DataContext";
 import { Modal } from "@/components/Modal";
 import { Toast } from "@/components/Toast";
@@ -9,7 +9,7 @@ import { format } from "date-fns";
 
 const MouvementsPage = () => {
   const { mouvements, articles, emplacements, addMouvement, updateArticle, deleteMouvement, getArticleLocations, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies } = useData();
-  const [search, setSearch] = useState("");
+  const [selectedArticleId, setSelectedArticleId] = useState<string>("");
   const [typeFilter, setTypeFilter] = useState<"all" | "Entrée" | "Sortie" | "Transfert">("all");
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [isQCModalOpen, setIsQCModalOpen] = useState(false);
@@ -19,6 +19,7 @@ const MouvementsPage = () => {
   const [rejectMouvementId, setRejectMouvementId] = useState<number | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [duplicateData, setDuplicateData] = useState<any>(null);
   const [qcFormData, setQCFormData] = useState({
     etatArticles: "Conforme" as "Conforme" | "Non-conforme",
     unitesDefectueuses: 0,
@@ -40,9 +41,11 @@ const MouvementsPage = () => {
 
   const filtered = combinedMovements
     .filter((m) => {
-      const matchSearch = m.article.toLowerCase().includes(search.toLowerCase()) || m.ref.toLowerCase().includes(search.toLowerCase());
+      // Filter by selected article (if any)
+      const matchArticle = selectedArticleId === "" || m.ref === selectedArticleId;
+      // Filter by movement type
       const matchType = typeFilter === "all" || m.type === typeFilter;
-      return matchSearch && matchType;
+      return matchArticle && matchType;
     });
 
   const handleOpenQCModal = (id: number) => {
@@ -163,6 +166,43 @@ const MouvementsPage = () => {
       setDeleteConfirmId(null);
       recalculateAllOccupancies();
     }
+  };
+
+  const handleDuplicate = (mouvement: any) => {
+    // Find the article to get its details
+    const article = articles.find(a => a.ref === mouvement.ref);
+    if (!article) {
+      setToast({ message: "Article non trouvé", type: "error" });
+      return;
+    }
+
+    console.log(`[DUPLICATE] Mouvement:`, mouvement);
+    console.log(`[DUPLICATE] Article:`, article);
+
+    // Prepare the duplicate data for the modal
+    const duplicateItem = {
+      id: "1",
+      articleId: article.id.toString(),
+      quantity: mouvement.qteOriginale || mouvement.qte,
+      selectedUnit: mouvement.uniteUtilisee || article.uniteEntree,
+      emplacementSource: mouvement.emplacementSource || "",
+      emplacementDestination: mouvement.emplacementDestination || "",
+      lotNumber: mouvement.lotNumber || "",
+      lotDate: mouvement.lotDate ? new Date(mouvement.lotDate) : undefined,
+      qc_status: "pending" as const,
+    };
+
+    console.log(`[DUPLICATE] Item prepared:`, duplicateItem);
+
+    const duplicatePayload = {
+      movementType: mouvement.type,
+      items: [duplicateItem],
+    };
+
+    console.log(`[DUPLICATE] Payload:`, duplicatePayload);
+
+    setDuplicateData(duplicatePayload);
+    setIsBulkModalOpen(true);
   };
 
   // ============================================================================
@@ -407,7 +447,10 @@ const MouvementsPage = () => {
           <p className="text-sm text-muted-foreground">Gestion des entrées, sorties et transferts</p>
         </div>
         <button
-          onClick={() => setIsBulkModalOpen(true)}
+          onClick={() => {
+            setDuplicateData(null);
+            setIsBulkModalOpen(true);
+          }}
           className="h-9 px-4 bg-primary text-primary-foreground rounded-md text-sm font-medium flex items-center gap-2 hover:opacity-90 transition-opacity"
         >
           <Plus className="w-4 h-4" />
@@ -415,30 +458,43 @@ const MouvementsPage = () => {
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher..."
-            className="w-full h-9 pl-9 pr-3 rounded-md border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-        </div>
-        <div className="flex rounded-md border overflow-hidden">
-          {(["all", "Entrée", "Sortie", "Transfert"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTypeFilter(t)}
-              className={`h-9 px-3 text-xs font-medium transition-colors ${
-                typeFilter === t ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted"
-              }`}
+      {/* Filters - Sticky Header */}
+      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b pb-4 mb-6">
+        <div className="flex flex-col md:flex-row gap-4 md:gap-6 md:items-end">
+          {/* Article Selector */}
+          <div className="w-full md:w-2/5">
+            <label className="block text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Article</label>
+            <select
+              value={selectedArticleId}
+              onChange={(e) => setSelectedArticleId(e.target.value)}
+              className="w-full h-10 px-3 rounded-md border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
             >
-              {t === "all" ? "Tous" : t}
-            </button>
-          ))}
+              <option value="">Tous les articles</option>
+              {articles.map((article) => (
+                <option key={article.id} value={article.ref}>
+                  {article.nom} ({article.ref})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Movement Type Tabs */}
+          <div className="w-full md:w-3/5">
+            <label className="block text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Type de Mouvement</label>
+            <div className="flex rounded-md border overflow-x-auto md:overflow-visible">
+              {(["all", "Entrée", "Sortie", "Transfert"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTypeFilter(t)}
+                  className={`h-10 px-4 text-xs font-medium transition-colors whitespace-nowrap flex-1 md:flex-none ${
+                    typeFilter === t ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  {t === "all" ? "Tous" : t}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -447,8 +503,7 @@ const MouvementsPage = () => {
         <MovementTable 
           movements={filtered}
           articles={articles}
-          onEdit={() => {}}
-          onDelete={handleDeleteClick}
+          onDuplicate={handleDuplicate}
           onQualityControl={handleOpenQCModal}
           onReject={handleOpenRejectModal}
           showActions={true}
@@ -459,12 +514,16 @@ const MouvementsPage = () => {
       {/* Bulk Movement Modal */}
       <BulkMovementModal
         isOpen={isBulkModalOpen}
-        onClose={() => setIsBulkModalOpen(false)}
+        onClose={() => {
+          setIsBulkModalOpen(false);
+          setDuplicateData(null);
+        }}
         articles={articles}
         emplacements={emplacements}
         getArticleLocations={getArticleLocations}
         getArticleStockByLocation={() => 0}
         onSubmit={handleBulkMovementSubmit}
+        initialData={duplicateData}
       />
 
       {/* Quality Control Modal */}

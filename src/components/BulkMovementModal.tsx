@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Trash2, Calendar as CalendarIcon, AlertCircle } from "lucide-react";
 import { BulkMovementModalWrapper } from "@/components/BulkMovementModalWrapper";
 import { Calendar } from "@/components/ui/calendar";
@@ -29,6 +29,7 @@ interface BulkMovementModalProps {
   getArticleStockByLocation: (ref: string, location: string) => number;
   onSubmit: (items: BulkMovementItem[], movementType: MovementType, operateur: string) => void;
   editingId?: number | null;
+  initialData?: { movementType: MovementType; items: BulkMovementItem[] } | null;
 }
 
 export const BulkMovementModal = ({
@@ -40,15 +41,29 @@ export const BulkMovementModal = ({
   getArticleStockByLocation,
   onSubmit,
   editingId = null,
+  initialData = null,
 }: BulkMovementModalProps) => {
-  const [movementType, setMovementType] = useState<MovementType>("Entrée");
-  const [items, setItems] = useState<BulkMovementItem[]>([
-    { id: "1", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, qc_status: "pending" },
-    { id: "2", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, qc_status: "pending" },
-    { id: "3", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, qc_status: "pending" },
-  ]);
+  const [movementType, setMovementType] = useState<MovementType>(initialData?.movementType || "Entrée");
+  const [items, setItems] = useState<BulkMovementItem[]>(
+    initialData?.items || [
+      { id: "1", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, qc_status: "pending" },
+      { id: "2", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, qc_status: "pending" },
+      { id: "3", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, qc_status: "pending" },
+    ]
+  );
   const [operateur, setOperateur] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Update state when initialData changes (for duplicate feature)
+  useEffect(() => {
+    if (initialData && initialData.items && initialData.items.length > 0) {
+      setMovementType(initialData.movementType);
+      setItems(initialData.items);
+      setOperateur("");
+      setErrors({});
+      console.log(`[DUPLICATE MODAL] Initialized with ${initialData.items.length} item(s), Type: ${initialData.movementType}`);
+    }
+  }, [initialData]);
 
   // Reset form to initial state
   const resetForm = () => {
@@ -156,9 +171,13 @@ export const BulkMovementModal = ({
       } else if (movementType === "Sortie") {
         if (!item.emplacementSource) newErrors[`item-${item.id}-source`] = "Requis";
         if (!item.emplacementDestination) newErrors[`item-${item.id}-dest`] = "Requis";
-        // Check if quantity exceeds available stock
-        if (item.emplacementSource && isQuantityExceeded(item.articleId, item.emplacementSource, item.quantity)) {
-          newErrors[`item-${item.id}-qty`] = "Quantité insuffisante";
+        
+        // STRICT VALIDATION: Check if total quantity for this zone exceeds available stock
+        if (item.emplacementSource && item.articleId) {
+          const validation = validateTotalQuantityForZone(item.articleId, item.emplacementSource);
+          if (!validation.isValid) {
+            newErrors[`item-${item.id}-qty`] = `الكمية الإجمالية تتجاوز المتوفر في هذا المكان (${validation.totalUsed} > ${validation.available})`;
+          }
         }
       } else if (movementType === "Transfert") {
         if (!item.emplacementSource) newErrors[`item-${item.id}-source`] = "Requis";
@@ -166,9 +185,13 @@ export const BulkMovementModal = ({
         if (item.emplacementSource === item.emplacementDestination) {
           newErrors[`item-${item.id}-dest`] = "Doit être différent";
         }
-        // Check if quantity exceeds available stock
-        if (item.emplacementSource && isQuantityExceeded(item.articleId, item.emplacementSource, item.quantity)) {
-          newErrors[`item-${item.id}-qty`] = "Quantité insuffisante";
+        
+        // STRICT VALIDATION: Check if total quantity for source zone exceeds available stock
+        if (item.emplacementSource && item.articleId) {
+          const validation = validateTotalQuantityForZone(item.articleId, item.emplacementSource);
+          if (!validation.isValid) {
+            newErrors[`item-${item.id}-qty`] = `الكمية الإجمالية تتجاوز المتوفر في هذا المكان (${validation.totalUsed} > ${validation.available})`;
+          }
         }
       }
     });
@@ -214,6 +237,73 @@ export const BulkMovementModal = ({
     if (!articleId || !locationName || quantity <= 0) return false;
     const availableStock = getAvailableStock(articleId, locationName);
     return quantity > availableStock;
+  };
+
+  // STRICT LOCATION FILTERING: Get already-used locations for the same article
+  const getUsedLocationsForArticle = (articleId: string, currentItemId: string, isSource: boolean): string[] => {
+    if (!articleId) return [];
+    
+    const usedLocations: string[] = [];
+    items.forEach(item => {
+      // Skip current row
+      if (item.id === currentItemId) return;
+      
+      // Only check rows with the same article
+      if (item.articleId !== articleId) return;
+      
+      // For Sortie/Transfert: check source locations
+      if (isSource && item.emplacementSource) {
+        usedLocations.push(item.emplacementSource);
+      }
+      // For Entrée/Transfert: check destination locations
+      if (!isSource && item.emplacementDestination) {
+        usedLocations.push(item.emplacementDestination);
+      }
+    });
+    
+    return usedLocations;
+  };
+
+  // DYNAMIC STOCK DEDUCTION: Calculate real-time available stock after accounting for other rows
+  const getRealTimeAvailableStock = (articleId: string, locationName: string, currentItemId: string): number => {
+    if (!articleId || !locationName) return 0;
+    
+    const baseStock = getAvailableStock(articleId, locationName);
+    
+    // Sum quantities already entered for this location in OTHER rows (same article)
+    const alreadyUsed = items.reduce((sum, item) => {
+      // Skip current row
+      if (item.id === currentItemId) return sum;
+      
+      // Only count same article and same source location
+      if (item.articleId !== articleId || item.emplacementSource !== locationName) return sum;
+      
+      // Add the quantity already entered
+      return sum + Number(item.quantity || 0);
+    }, 0);
+    
+    const realTimeAvailable = Math.max(0, baseStock - alreadyUsed);
+    console.log(`[REAL-TIME STOCK] Article: ${getArticleById(articleId)?.nom} | Zone: ${locationName} | Base: ${baseStock} | Already Used: ${alreadyUsed} | Available: ${realTimeAvailable}`);
+    
+    return realTimeAvailable;
+  };
+
+  // VALIDATION: Check if total quantity for a zone exceeds available stock across all rows
+  const validateTotalQuantityForZone = (articleId: string, locationName: string): { isValid: boolean; totalUsed: number; available: number } => {
+    if (!articleId || !locationName) return { isValid: true, totalUsed: 0, available: 0 };
+    
+    const baseStock = getAvailableStock(articleId, locationName);
+    
+    // Sum ALL quantities for this article in this location across ALL rows
+    const totalUsed = items.reduce((sum, item) => {
+      if (item.articleId !== articleId || item.emplacementSource !== locationName) return sum;
+      return sum + Number(item.quantity || 0);
+    }, 0);
+    
+    const isValid = totalUsed <= baseStock;
+    console.log(`[ZONE VALIDATION] Article: ${getArticleById(articleId)?.nom} | Zone: ${locationName} | Total Used: ${totalUsed} | Available: ${baseStock} | Valid: ${isValid}`);
+    
+    return { isValid, totalUsed, available: baseStock };
   };
 
   const getAvailableSourceLocations = (articleId: string) => {
@@ -417,21 +507,41 @@ export const BulkMovementModal = ({
                                   disabled={!selectedArticle || availableSourceLocations.length === 0}
                                 >
                                   <option value="">Sélectionner...</option>
-                                  {availableSourceLocations.map((loc, idx) => (
-                                    <option key={idx} value={loc.zone}>
-                                      {loc.zone} ({loc.quantity} dispo)
-                                    </option>
-                                  ))}
+                                  {availableSourceLocations.map((loc, idx) => {
+                                    // STRICT FILTERING: Hide locations already used for this article
+                                    const usedLocations = getUsedLocationsForArticle(item.articleId, item.id, true);
+                                    const isAlreadyUsed = usedLocations.includes(loc.zone);
+                                    
+                                    // Show location if: not used OR it's the currently selected one
+                                    if (isAlreadyUsed && item.emplacementSource !== loc.zone) {
+                                      return null; // Hide this option
+                                    }
+                                    
+                                    return (
+                                      <option key={idx} value={loc.zone}>
+                                        {loc.zone} ({loc.quantity} dispo)
+                                      </option>
+                                    );
+                                  })}
                                 </select>
-                                {/* Live Stock Preview */}
+                                {/* Live Stock Preview with Dynamic Deduction */}
                                 {item.emplacementSource && selectedArticle && (
                                   (() => {
-                                    const availableStock = getAvailableStock(item.articleId, item.emplacementSource);
-                                    const isExceeded = isQuantityExceeded(item.articleId, item.emplacementSource, item.quantity);
+                                    const realTimeStock = getRealTimeAvailableStock(item.articleId, item.emplacementSource, item.id);
+                                    const validation = validateTotalQuantityForZone(item.articleId, item.emplacementSource);
+                                    const isExceeded = !validation.isValid;
                                     const stockColor = isExceeded ? "text-red-500" : "text-gray-500";
+                                    
                                     return (
-                                      <div className={`text-xs font-medium ${stockColor}`}>
-                                        Stock disponible: {availableStock.toLocaleString('fr-FR')} {selectedArticle.uniteSortie}
+                                      <div className="space-y-1">
+                                        <div className={`text-xs font-medium ${stockColor}`}>
+                                          Stock disponible: {realTimeStock.toLocaleString('fr-FR')} {selectedArticle.uniteSortie}
+                                        </div>
+                                        {isExceeded && (
+                                          <div className="text-xs font-semibold text-red-600 bg-red-50 p-2 rounded border border-red-200">
+                                            الكمية الإجمالية تتجاوز المتوفر في هذا المكان
+                                          </div>
+                                        )}
                                       </div>
                                     );
                                   })()
@@ -605,21 +715,41 @@ export const BulkMovementModal = ({
                               disabled={!selectedArticle || availableSourceLocations.length === 0}
                             >
                               <option value="">Sélectionner...</option>
-                              {availableSourceLocations.map((loc, idx) => (
-                                <option key={idx} value={loc.zone}>
-                                  {loc.zone} ({loc.quantity} dispo)
-                                </option>
-                              ))}
+                              {availableSourceLocations.map((loc, idx) => {
+                                // STRICT FILTERING: Hide locations already used for this article
+                                const usedLocations = getUsedLocationsForArticle(item.articleId, item.id, true);
+                                const isAlreadyUsed = usedLocations.includes(loc.zone);
+                                
+                                // Show location if: not used OR it's the currently selected one
+                                if (isAlreadyUsed && item.emplacementSource !== loc.zone) {
+                                  return null; // Hide this option
+                                }
+                                
+                                return (
+                                  <option key={idx} value={loc.zone}>
+                                    {loc.zone} ({loc.quantity} dispo)
+                                  </option>
+                                );
+                              })}
                             </select>
-                            {/* Live Stock Preview */}
+                            {/* Live Stock Preview with Dynamic Deduction */}
                             {item.emplacementSource && selectedArticle && (
                               (() => {
-                                const availableStock = getAvailableStock(item.articleId, item.emplacementSource);
-                                const isExceeded = isQuantityExceeded(item.articleId, item.emplacementSource, item.quantity);
+                                const realTimeStock = getRealTimeAvailableStock(item.articleId, item.emplacementSource, item.id);
+                                const validation = validateTotalQuantityForZone(item.articleId, item.emplacementSource);
+                                const isExceeded = !validation.isValid;
                                 const stockColor = isExceeded ? "text-red-500" : "text-gray-500";
+                                
                                 return (
-                                  <div className={`text-xs font-medium ${stockColor}`}>
-                                    Stock disponible: {availableStock.toLocaleString('fr-FR')} {selectedArticle.uniteSortie}
+                                  <div className="space-y-1">
+                                    <div className={`text-xs font-medium ${stockColor}`}>
+                                      Stock disponible: {realTimeStock.toLocaleString('fr-FR')} {selectedArticle.uniteSortie}
+                                    </div>
+                                    {isExceeded && (
+                                      <div className="text-xs font-semibold text-red-600 bg-red-50 p-2 rounded border border-red-200">
+                                        الكمية الإجمالية تتجاوز المتوفر في هذا المكان
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               })()

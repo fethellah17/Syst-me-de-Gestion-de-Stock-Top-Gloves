@@ -1,4 +1,4 @@
-import { Shield, Pencil, Trash2, ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, FileEdit, CheckCircle2, AlertCircle, FileText, Clock } from "lucide-react";
+import { Shield, FileText, ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, FileEdit, CheckCircle2, AlertCircle, Clock, Copy } from "lucide-react";
 import { 
   generateInboundPDF, 
   generateOutboundPDF, 
@@ -12,10 +12,9 @@ import type { Mouvement, Article } from "@/contexts/DataContext";
 interface MovementTableProps {
   movements: Mouvement[];
   articles?: Article[];
-  onEdit?: (id: number) => void;
-  onDelete?: (id: number) => void;
   onQualityControl?: (id: number) => void;
   onReject?: (id: number) => void;
+  onDuplicate?: (mouvement: Mouvement) => void;
   showActions?: boolean;
   compact?: boolean;
 }
@@ -23,10 +22,9 @@ interface MovementTableProps {
 export const MovementTable = ({ 
   movements, 
   articles = [],
-  onEdit, 
-  onDelete, 
   onQualityControl,
   onReject,
+  onDuplicate,
   showActions = true,
   compact = false
 }: MovementTableProps) => {
@@ -330,16 +328,6 @@ export const MovementTable = ({
                   {showActions && (
                     <td className="py-3 px-2 md:px-4 text-center">
                       <div className="flex items-center justify-center gap-1">
-                      {/* QC LOGIC TEMPORARILY DISABLED - Will be implemented later for both Entrée and Sortie */}
-                      {false && m.type === "Sortie" && m.statut === "En attente de validation Qualité" && onQualityControl && (
-                        <button
-                          onClick={() => onQualityControl(m.id)}
-                          className="p-1.5 rounded-md hover:bg-orange-100 transition-colors text-orange-600 hover:text-orange-800"
-                          title="Passer le contrôle qualité"
-                        >
-                          <Shield className="w-4 h-4" />
-                        </button>
-                      )}
                       {m.type === "Sortie" && m.statut === "Terminé" && m.status === "approved" && (
                         <button
                           onClick={() => generateOutboundPDF(m)}
@@ -385,22 +373,13 @@ export const MovementTable = ({
                           <FileText className="w-4 h-4" />
                         </button>
                       )}
-                      {onEdit && m.type !== "Ajustement" && (
+                      {onDuplicate && m.type !== "Ajustement" && (
                         <button
-                          onClick={() => onEdit(m.id)}
-                          className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-                          title="Modifier"
+                          onClick={() => onDuplicate(m)}
+                          className="p-1.5 rounded-md hover:bg-blue-100 transition-colors text-blue-600 hover:text-blue-800"
+                          title="Dupliquer ce mouvement"
                         >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                      )}
-                      {onDelete && m.type !== "Ajustement" && (
-                        <button
-                          onClick={() => onDelete(m.id)}
-                          className="p-1.5 rounded-md hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive"
-                          title="Supprimer"
-                        >
-                          <Trash2 className="w-4 h-4" />
+                          <Copy className="w-4 h-4" />
                         </button>
                       )}
                     </div>
