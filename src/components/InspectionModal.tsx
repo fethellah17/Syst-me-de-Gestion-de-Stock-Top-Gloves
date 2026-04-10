@@ -185,6 +185,7 @@ export const InspectionModal = ({
           verificationPoints: {},
           qteValide: 0,
           qteDefectueuse: mouvement?.qte || 0,
+          qteDefectueuseUnit: "sortie",
           noteControle: "",
           refusTotalMotif,
         });
@@ -217,6 +218,8 @@ export const InspectionModal = ({
   };
 
   // CRUCIAL: Button is ENABLED by default - NOT locked by checkboxes
+  // For Sortie: quantities must sum to total
+  // For Entrée: quantities must sum to total
   const isApproveDisabled = refusTotal 
     ? false 
     : (qteValide + qteDefectueuse !== mouvement?.qte);

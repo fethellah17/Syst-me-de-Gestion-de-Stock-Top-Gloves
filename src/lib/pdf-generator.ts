@@ -726,116 +726,339 @@ export const generateInboundPDF = async (movement: Mouvement, articles?: any[]) 
   doc.save(filename);
 };
 
-// 2. Bon de Sortie (Outbound) - SIMPLIFIED with proper quantity display
-export const generateOutboundPDF = async (movement: Mouvement) => {
+// 2. Bon de Sortie (Outbound) - PROFESSIONAL BLACK & WHITE matching Entrée standards
+export const generateOutboundPDF = async (movement: Mouvement, articles?: any[]) => {
   console.log('=== GENERATING OUTBOUND PDF ===');
   console.log('Movement:', movement);
   
   const doc = new jsPDF();
+  const logoBase64 = await getLogoBase64();
 
-  await generatePDFTemplate(
-    doc,
-    "Bon de Sortie",
-    movement,
-    "Signature du Controleur Qualite:",
-    (doc, yPos) => {
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(0, 0, 0);
-      doc.text(emergencyClean("Details de la Sortie"), 10, yPos);
-      yPos += 10;
+  // Determine QC outcome
+  const isTotalRefusal = movement.qcStatus === "Non-conforme" && movement.validQuantity === 0;
+  const isPartialAcceptance = movement.qcStatus === "Non-conforme" && movement.validQuantity !== undefined && movement.validQuantity > 0;
+  const isTotalAcceptance = movement.qcStatus === "Conforme" || (movement.validQuantity === movement.qte && movement.defectiveQuantity === 0);
 
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
+  // Dynamic title based on QC outcome
+  let titleText = "BON DE SORTIE";
+  if (isTotalRefusal) {
+    titleText = "AVIS DE REFUS DE SORTIE";
+  }
 
-      // ID and Date
-      doc.text("ID du Mouvement: " + emergencyClean(movement.id), 15, yPos);
-      yPos += 7;
+  const contentStartY = renderHeader(doc, titleText, logoBase64);
+  let yPos = contentStartY;
 
-      doc.text("Date de Sortie: " + emergencyClean(movement.date), 15, yPos);
-      yPos += 7;
+  // Movement Details Section - Simple Black & White
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.text("DETAILS DE LA SORTIE", 10, yPos);
+  yPos += 7;
 
-      doc.text("Article: " + emergencyClean(movement.article) + " (" + emergencyClean(movement.ref) + ")", 15, yPos);
-      yPos += 7;
+  // Separator line (1pt black)
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(10, yPos, 200, yPos);
+  yPos += 6;
 
-      // QUANTITY - ULTRA SIMPLE: Just one line
-      const { qty, unit } = getQuantityDisplay(movement);
-      doc.text("Quantite Saisie: " + qty + " " + unit, 15, yPos);
-      yPos += 7;
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
 
-      doc.text("Numero de Lot: " + emergencyClean(movement.lotNumber || 'N/A'), 15, yPos);
-      yPos += 7;
+  // Details in simple format (no boxes, just text)
+  doc.text("Article: " + emergencyClean(movement.article) + " (" + emergencyClean(movement.ref) + ")", 15, yPos);
+  yPos += 5;
 
-      const lotDate = movement.lotDate ? new Date(movement.lotDate).toLocaleDateString('fr-FR') : 'N/A';
-      doc.text("Date de lot: " + emergencyClean(lotDate), 15, yPos);
-      yPos += 7;
+  doc.text("Date de Sortie: " + emergencyClean(movement.date), 15, yPos);
+  yPos += 5;
 
-      doc.text("Emplacement Source: " + emergencyClean(movement.emplacementSource || 'N/A'), 15, yPos);
-      yPos += 7;
+  // SLA Monitoring: Show if treatment was delayed
+  if (movement.wasDelayed) {
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(220, 38, 38); // Red text for delayed
+    doc.text("Traitement: Retarde", 15, yPos);
+    doc.setTextColor(0, 0, 0); // Reset to black
+    doc.setFont("helvetica", "normal");
+    yPos += 5;
+  }
 
-      doc.text("Destination: " + emergencyClean(movement.emplacementDestination), 15, yPos);
-      yPos += 7;
+  doc.text("Numero de Lot: " + emergencyClean(movement.lotNumber || 'N/A'), 15, yPos);
+  yPos += 5;
 
-      doc.text("Operateur: " + emergencyClean(movement.operateur), 15, yPos);
-      yPos += 7;
+  const lotDate = movement.lotDate ? new Date(movement.lotDate).toLocaleDateString('fr-FR') : 'N/A';
+  doc.text("Date du Lot: " + emergencyClean(lotDate), 15, yPos);
+  yPos += 5;
 
-      if (movement.controleur) {
-        doc.text("Controle Qualite: " + emergencyClean(movement.controleur), 15, yPos);
-        yPos += 7;
-      }
+  doc.text("Zone Source: " + emergencyClean(movement.emplacementSource || 'N/A'), 15, yPos);
+  yPos += 5;
 
-      doc.text("Date d'Approbation: " + emergencyClean(movement.date), 15, yPos);
-      yPos += 10;
+  doc.text("Destination: " + emergencyClean(movement.emplacementDestination || 'N/A'), 15, yPos);
+  yPos += 5;
 
-      // Quality Control Metrics - SIMPLIFIED
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "bold");
-      doc.text(emergencyClean("Details de la Quantite"), 10, yPos);
-      yPos += 10;
+  doc.text("Operateur: " + emergencyClean(movement.operateur), 15, yPos);
+  yPos += 10;
 
-      doc.setFillColor(255, 255, 255);
-      doc.rect(10, yPos - 5, 190, 28, 'F');
-      doc.setDrawColor(0, 0, 0);
-      doc.setLineWidth(0.3);
-      doc.rect(10, yPos - 5, 190, 28, 'S');
+  // CASE A: Total Acceptance (100% Valide)
+  if (isTotalAcceptance) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("QUANTITES", 10, yPos);
+    yPos += 7;
 
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(0, 0, 0);
+    // Separator line
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.line(10, yPos, 200, yPos);
+    yPos += 6;
 
-      // Use the final stock unit for QC metrics
-      const qcQty = formatQty(movement.qte);
-      const qcUnit = getUnit(movement.uniteSortie);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
 
-      // Total Quantity
-      doc.setFont("helvetica", "bold");
-      doc.text("Quantite Totale:", 15, yPos);
-      doc.setFont("helvetica", "normal");
-      doc.text(qcQty + " " + qcUnit, 70, yPos);
-      yPos += 8;
+    // Get article to access unit information
+    const article = articles?.find(a => a.ref === movement.ref);
+    const exitUnit = article?.uniteSortie || movement.uniteSortie || "unité";
+    const exitUnitFull = getFullUnitName(exitUnit);
 
-      // Valid Quantity
-      const validQty = formatQty(movement.validQuantity !== undefined ? movement.validQuantity : movement.qte);
-      doc.setFont("helvetica", "bold");
-      doc.text("Quantite Valide:", 15, yPos);
-      doc.setFont("helvetica", "normal");
-      doc.text(validQty + " " + qcUnit, 70, yPos);
-      yPos += 8;
+    // For sortie, display in EXIT UNIT (warehouse unit)
+    renderQuantityLine(doc, "Quantite Demandee:", movement.qte, exitUnitFull, 15, yPos);
+    yPos += 5;
+    renderQuantityLine(doc, "Quantite Validee:", movement.qte, exitUnitFull, 15, yPos);
+    yPos += 5;
+    doc.text("(100% de la quantite demandee)", 15, yPos);
+    yPos += 8;
 
-      // Defective Quantity
-      const defectiveQty = formatQty(movement.defectiveQuantity !== undefined ? movement.defectiveQuantity : 0);
-      doc.setFont("helvetica", "bold");
-      doc.text("Quantite Defectueuse:", 15, yPos);
-      doc.setFont("helvetica", "normal");
-      doc.text(defectiveQty + " " + qcUnit, 70, yPos);
-      yPos += 10;
+    // Quality Score - Total Acceptance (100%)
+    const qualityScoreA = calculateQualityScore(movement.qte, movement.qte);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    
+    // Draw simple box around quality score
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.3);
+    doc.rect(15, yPos - 2, 100, 8, 'S');
+    
+    doc.text("Taux de Conformite: " + qualityScoreA.label, 17, yPos + 3);
+    yPos += 12;
 
-      // Observations / Control Notes (if any) - Only show if there are defects or notes
-      if (movement.defectiveQuantity && movement.defectiveQuantity > 0) {
-        yPos = renderObservationsSection(doc, movement.noteControle || "", 15, yPos);
-      }
-    }
-  );
+    // Observations / Control Notes (if any)
+    yPos = renderObservationsSection(doc, movement.noteControle || "", 15, yPos);
+  }
+  // CASE B: Partial Acceptance (With Defects)
+  else if (isPartialAcceptance) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("QUANTITES", 10, yPos);
+    yPos += 7;
+
+    // Separator line
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.line(10, yPos, 200, yPos);
+    yPos += 6;
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+
+    const validQty = movement.validQuantity !== undefined ? movement.validQuantity : movement.qte;
+    const defectiveQty = movement.defectiveQuantity !== undefined ? movement.defectiveQuantity : 0;
+
+    // Get article to access unit information
+    const article = articles?.find(a => a.ref === movement.ref);
+    const exitUnit = article?.uniteSortie || movement.uniteSortie || "unité";
+    const exitUnitFull = getFullUnitName(exitUnit);
+
+    // Display quantities with proper units (full names)
+    renderQuantityLine(doc, "Quantite Demandee:", movement.qte, exitUnitFull, 15, yPos);
+    yPos += 5;
+    
+    renderQuantityLine(doc, "Quantite Validee:", validQty, exitUnitFull, 15, yPos);
+    yPos += 5;
+    
+    renderQuantityLine(doc, "Quantite Endommagee:", defectiveQty, exitUnitFull, 15, yPos);
+    yPos += 8;
+
+    // Quality Score - Partial Acceptance
+    const qualityScoreB = calculateQualityScore(validQty, movement.qte);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    
+    // Draw simple box around quality score
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.3);
+    doc.rect(15, yPos - 2, 100, 8, 'S');
+    
+    doc.text("Taux de Conformite: " + qualityScoreB.label, 17, yPos + 3);
+    yPos += 12;
+
+    // Observations / Control Notes (if any)
+    yPos = renderObservationsSection(doc, movement.noteControle || "", 15, yPos);
+  }
+  // CASE C: Total Refusal (Refusé)
+  else if (isTotalRefusal) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("MOTIF DU REFUS", 10, yPos);
+    yPos += 7;
+
+    // Separator line
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.line(10, yPos, 200, yPos);
+    yPos += 6;
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    const refusalReason = movement.refusalReason || movement.noteControle || "Non specifiee";
+    const reasonLines = doc.splitTextToSize(emergencyClean(refusalReason), 180);
+    doc.text(reasonLines, 15, yPos);
+    yPos += reasonLines.length * 5 + 5;
+
+    // Show zero acceptance
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("Quantite Validee: 0 (REFUS TOTAL)", 15, yPos);
+    yPos += 8;
+
+    // Quality Score - Total Refusal (0%)
+    const qualityScoreC = calculateQualityScore(0, movement.qte);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    
+    // Draw simple box around quality score
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.3);
+    doc.rect(15, yPos - 2, 100, 8, 'S');
+    
+    doc.text("Taux de Conformite: " + qualityScoreC.label, 17, yPos + 3);
+    yPos += 10;
+  }
+
+  // POINTS DE CONTRÔLE (Verification Checklist) - Minimalist text-based display
+  if (movement.verificationPoints && Object.keys(movement.verificationPoints).length > 0) {
+    yPos += 8;
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text("POINTS DE CONTROLE", 10, yPos);
+    yPos += 7;
+
+    // Separator line
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.line(10, yPos, 200, yPos);
+    yPos += 6;
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    
+    const checklistLines = formatVerificationPoints(movement.verificationPoints, movement.type);
+    checklistLines.forEach(line => {
+      doc.text(emergencyClean(line), 15, yPos);
+      yPos += 5;
+    });
+    
+    yPos += 5;
+  }
+
+  // Professional Signature Section - Formal Layout
+  const minSignatureY = 180;
+  if (yPos < minSignatureY) {
+    yPos = minSignatureY;
+  }
+  
+  yPos += 8;
+  
+  // Separator line before signatures
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(10, yPos, 200, yPos);
+  yPos += 8;
+
+  // ============================================================================
+  // PROFESSIONAL SIDE-BY-SIDE SIGNATURE SECTION
+  // ============================================================================
+  
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(0, 0, 0);
+
+  // Column positions
+  const leftX = 15;
+  const rightX = 115;
+  const signatureHeight = 18;
+  const columnWidth = 70;
+
+  // ========== LEFT COLUMN: OPERATOR SIGNATURE ==========
+  
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text("Signature de l'Operateur:", leftX, yPos);
+  yPos += 6;
+  
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(leftX, yPos + signatureHeight, leftX + columnWidth, yPos + signatureHeight);
+  yPos += signatureHeight + 5;
+  
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.text("Nom: " + emergencyClean(movement.operateur), leftX, yPos);
+
+  // ========== RIGHT COLUMN: QC CONTROLLER SIGNATURE ==========
+  
+  let signatureYPos = yPos - signatureHeight - 5 - 6;
+  
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text("Signature du Controleur Qualite:", rightX, signatureYPos);
+  signatureYPos += 6;
+  
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(rightX, signatureYPos + signatureHeight, rightX + columnWidth, signatureYPos + signatureHeight);
+  signatureYPos += signatureHeight + 5;
+  
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.text("Nom: " + emergencyClean(movement.controleur || 'N/A'), rightX, signatureYPos);
+  
+  yPos += 10;
+
+  // Validation date at bottom
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  const validationDate = new Date().toLocaleDateString("fr-FR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+  doc.text("Date de Validation: " + emergencyClean(validationDate), 10, 285);
+
+  // Footer Timestamp
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(100, 100, 100);
+  const generationDate = new Date().toLocaleDateString("fr-FR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+  const footerText = `Document genere automatiquement par le Systeme de Gestion de Stock Top Gloves le ${generationDate}`;
+  doc.text(emergencyClean(footerText), 10, 292, { maxWidth: 190 });
+  doc.setTextColor(0, 0, 0);
+
+  // Save PDF
+  const isRefusal = isTotalRefusal;
+  const filename = generatePDFFilename("Bon_Sortie", movement.article, isRefusal);
+  doc.save(filename);
 };
 
 // 3. Bon de Transfert (Transfer) - SIMPLIFIED with proper quantity display

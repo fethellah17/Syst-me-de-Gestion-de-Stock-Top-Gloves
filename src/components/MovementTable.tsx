@@ -422,7 +422,7 @@ export const MovementTable = ({
                       )}
                       {m.type === "Sortie" && m.statut === "Terminé" && m.status === "approved" && (
                         <button
-                          onClick={() => generateOutboundPDF(m)}
+                          onClick={() => generateOutboundPDF(m, articles)}
                           className="p-1.5 rounded-md hover:bg-green-100 transition-colors text-green-600 hover:text-green-800"
                           title="Télécharger le Bon de Sortie (PDF)"
                         >

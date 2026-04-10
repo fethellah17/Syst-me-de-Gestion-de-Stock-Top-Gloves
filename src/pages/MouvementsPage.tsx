@@ -96,7 +96,7 @@ const MouvementsPage = () => {
 
   const handleOpenInspectionModal = (id: string) => {
     const mouvement = mouvements.find(m => m.id === id);
-    if (!mouvement || mouvement.type !== "Entrée") return;
+    if (!mouvement || (mouvement.type !== "Entrée" && mouvement.type !== "Sortie")) return;
     
     setInspectionMouvementId(id);
     setIsInspectionModalOpen(true);
@@ -144,8 +144,12 @@ const MouvementsPage = () => {
         data.verificationPoints
       );
 
+      const successMessage = mouvement.type === "Sortie"
+        ? `✓ Sortie approuvée. Stock mis à jour avec succès (Qté: ${data.qteValide} ${mouvement.uniteSortie})`
+        : `✓ Stock mis à jour avec succès (Qté: ${data.qteValide} ${mouvement.uniteSortie})`;
+
       setToast({
-        message: `✓ Stock mis à jour avec succès (Qté: ${data.qteValide} ${mouvement.uniteSortie})`,
+        message: successMessage,
         type: "success"
       });
     }
