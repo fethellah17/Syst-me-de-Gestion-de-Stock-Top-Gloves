@@ -1,4 +1,4 @@
-import { FileText, ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, FileEdit, CheckCircle2, AlertCircle, Clock, Copy, CheckIcon, XIcon, Eye } from "lucide-react";
+import { FileText, ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, FileEdit, CheckCircle2, AlertCircle, Clock, Copy, CheckIcon, XIcon, Eye, Timer } from "lucide-react";
 import { 
   generateInboundPDF, 
   generateOutboundPDF, 
@@ -66,13 +66,65 @@ export const MovementTable = ({
     return "";
   };
 
+  // Calculate if a movement is delayed (> 24 hours in "En attente" status)
+  const isMovementDelayed = (mouvement: Mouvement): boolean => {
+    if (mouvement.statut !== "En attente") return false;
+    
+    try {
+      const movementDate = new Date(mouvement.date);
+      const currentDate = new Date();
+      const hoursDifference = (currentDate.getTime() - movementDate.getTime()) / (1000 * 60 * 60);
+      
+      return hoursDifference > 24;
+    } catch {
+      return false;
+    }
+  };
+
+  // Get delay duration in hours for tooltip
+  const getDelayDuration = (mouvement: Mouvement): string => {
+    try {
+      const movementDate = new Date(mouvement.date);
+      const currentDate = new Date();
+      const hoursDifference = (currentDate.getTime() - movementDate.getTime()) / (1000 * 60 * 60);
+      
+      if (hoursDifference < 1) {
+        const minutes = Math.round(hoursDifference * 60);
+        return `${minutes} minute${minutes > 1 ? 's' : ''}`;
+      } else if (hoursDifference < 24) {
+        const hours = Math.round(hoursDifference);
+        return `${hours} heure${hours > 1 ? 's' : ''}`;
+      } else {
+        const days = Math.round(hoursDifference / 24);
+        return `${days} jour${days > 1 ? 's' : ''}`;
+      }
+    } catch {
+      return "N/A";
+    }
+  };
+
   const getStatusBadge = (mouvement: Mouvement) => {
+    const isDelayed = isMovementDelayed(mouvement);
+    const delayDuration = getDelayDuration(mouvement);
+    
     switch (mouvement.statut) {
       case "En attente":
-        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-100 text-yellow-800">
-          <Clock className="w-3 h-3" />
-          En attente
-        </span>;
+        return (
+          <div className="relative group inline-flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-100 text-yellow-800">
+              <Clock className="w-3 h-3" />
+              En attente
+            </span>
+            {isDelayed && (
+              <>
+                <Timer className="w-4 h-4 text-red-600 animate-pulse" strokeWidth={2} />
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-red-900 text-red-50 text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                  Attention: En attente depuis {delayDuration}
+                </div>
+              </>
+            )}
+          </div>
+        );
       case "En attente de validation Qualité":
         return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-100 text-orange-800">
           <AlertCircle className="w-3 h-3" />

@@ -67,6 +67,7 @@ export interface Mouvement {
   qcStatus?: "Conforme" | "Non-conforme";  // QC outcome status for PDF generation
   noteControle?: string;        // QC control notes/observations for PDF
   verificationPoints?: Record<string, boolean>;  // QC checklist verification points state
+  wasDelayed?: boolean;         // SLA tracking: was this movement delayed (> 24h in "En attente")?
 }
 
 export interface InventoryRecord {
@@ -433,6 +434,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const mouvement = mouvements.find(m => m.id === id);
     if (!mouvement) return;
 
+    // Calculate if movement was delayed (> 24 hours in "En attente" status)
+    const calculateWasDelayed = (): boolean => {
+      try {
+        const movementDate = new Date(mouvement.date);
+        const currentDate = new Date();
+        const hoursDifference = (currentDate.getTime() - movementDate.getTime()) / (1000 * 60 * 60);
+        return hoursDifference > 24;
+      } catch {
+        return false;
+      }
+    };
+
+    const wasDelayed = calculateWasDelayed();
+
     // ============================================================================
     // HANDLE REFUS TOTAL (Complete Rejection)
     // ============================================================================
@@ -441,6 +456,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log(`  Article: ${mouvement.article} (${mouvement.ref})`);
       console.log(`  Quantity Rejected: ${mouvement.qte} ${mouvement.uniteSortie}`);
       console.log(`  Reason: ${refusTotalMotif}`);
+      console.log(`  Control Notes: ${noteControle || 'N/A'}`);
 
       // Update mouvement status to "Refusé"
       setMouvements(mouvements.map(m =>
@@ -455,7 +471,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               defectiveQuantity: mouvement.qte,
               qcStatus: "Non-conforme",
               noteControle: noteControle || refusTotalMotif,
-              verificationPoints: verificationPoints || {}
+              verificationPoints: verificationPoints || {},
+              wasDelayed
             }
           : m
       ));
@@ -495,8 +512,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               validQuantity,
               defectiveQuantity,
               qcStatus: etatArticles,
-              noteControle: m.noteControle || "",
-              verificationPoints: verificationPoints || {}
+              noteControle: noteControle || m.noteControle || "",
+              verificationPoints: verificationPoints || {},
+              wasDelayed
             }
           : m
       ));
@@ -573,7 +591,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               unitesDefectueuses: etatArticles === "Non-conforme" ? unitesDefectueuses : undefined,
               validQuantity: validQty,
               defectiveQuantity: defectiveQty,
-              verificationPoints: verificationPoints || {}
+              qcStatus: etatArticles,
+              noteControle: noteControle || m.noteControle || "",
+              verificationPoints: verificationPoints || {},
+              wasDelayed
             }
           : m
       ));

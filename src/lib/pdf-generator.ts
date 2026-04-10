@@ -17,6 +17,33 @@ const emergencyClean = (text: string | number): string => {
 };
 
 /**
+ * Generate professional PDF filename with product name and date
+ * Format: Type_ProductName_Date.pdf
+ * Example: Bon_Entree_Gants-Nitrile-M_09-04-2026.pdf
+ */
+const generatePDFFilename = (documentType: string, productName: string, isRefusal: boolean = false): string => {
+  // Clean product name: remove special characters, replace spaces with hyphens
+  const cleanProductName = emergencyClean(productName)
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/[^a-zA-Z0-9\-]/g, '') // Remove special characters except hyphens
+    .substring(0, 50); // Limit length for filesystem compatibility
+
+  // Get current date in DD-MM-YYYY format
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('fr-FR').replace(/\//g, '-');
+
+  // Build filename based on document type
+  let filename = '';
+  if (isRefusal) {
+    filename = `Avis_Refus_Reception_${cleanProductName}_${dateStr}.pdf`;
+  } else {
+    filename = `${documentType}_${cleanProductName}_${dateStr}.pdf`;
+  }
+
+  return filename;
+};
+
+/**
  * Format quantity - simple and clean with nice formatting
  */
 const formatQty = (qty: number): string => {
@@ -60,12 +87,100 @@ const formatVerificationPoints = (verificationPoints?: Record<string, boolean>, 
 };
 
 /**
+ * Safely render observations/notes section in PDF
+ * Handles text wrapping and encoding properly
+ * Returns updated yPos for proper layout flow
+ */
+const renderObservationsSection = (doc: jsPDF, note: string, xPos: number, yPos: number): number => {
+  if (!note || note.trim().length === 0) {
+    return yPos; // Return unchanged yPos if no note
+  }
+
+  // Add fixed margin before section (ensures separation from previous section)
+  yPos += 8;
+
+  // Section title
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.text("OBSERVATIONS / NOTES DE CONTROLE", 10, yPos);
+  yPos += 7;
+
+  // Separator line
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(10, yPos, 200, yPos);
+  yPos += 6;
+
+  // Clean and render note text
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(0, 0, 0);
+  
+  const cleanNote = emergencyClean(note);
+  const noteLines = doc.splitTextToSize(cleanNote, 180);
+  doc.text(noteLines, xPos, yPos);
+  
+  // Calculate new yPos based on number of lines
+  // Each line is approximately 5mm, add extra margin after section
+  yPos += noteLines.length * 5 + 8;
+  
+  return yPos;
+};
+
+/**
+ * Safely render a quantity line in PDF
+ * Ensures proper text encoding and no overlapping
+ */
+const renderQuantityLine = (doc: jsPDF, label: string, quantity: number, unit: string, xPos: number, yPos: number): void => {
+  // Clean all components separately
+  const cleanLabel = emergencyClean(label);
+  const cleanQty = formatQty(quantity);
+  const cleanUnit = emergencyClean(unit);
+  
+  // Build the complete text
+  const fullText = `${cleanLabel} ${cleanQty} ${cleanUnit}`;
+  
+  // Render with proper font settings
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(0, 0, 0);
+  doc.text(fullText, xPos, yPos);
+};
+
+/**
  * Get unit symbol - simple string only
  */
 const getUnit = (unitId: string | undefined): string => {
   if (!unitId) return '';
   const symbol = getUnitSymbol(unitId);
   return emergencyClean(String(symbol));
+};
+
+/**
+ * Calculate Quality Health Score (Taux de Conformité)
+ * Formula: (Valid Quantity / Received Quantity) * 100
+ * @returns Object with score percentage and contextual label
+ */
+const calculateQualityScore = (validQuantity: number, receivedQuantity: number): { score: number; label: string; isPerfect: boolean; isRefused: boolean } => {
+  if (receivedQuantity === 0) {
+    return { score: 0, label: "N/A", isPerfect: false, isRefused: true };
+  }
+  
+  const score = (validQuantity / receivedQuantity) * 100;
+  const roundedScore = Math.round(score * 10) / 10; // Round to 1 decimal place
+  
+  const isPerfect = roundedScore === 100;
+  const isRefused = roundedScore === 0;
+  
+  let label = `${roundedScore.toLocaleString('fr-FR')}%`;
+  if (isPerfect) {
+    label += " (Réception Parfaite)";
+  } else if (isRefused) {
+    label += " (Refus Total)";
+  }
+  
+  return { score: roundedScore, label, isPerfect, isRefused };
 };
 
 /**
@@ -222,9 +337,7 @@ const generatePDFTemplate = async (
   doc.line(120, 268, 200, 268);
 
   // Save PDF
-  const cleanTitle = emergencyClean(title).replace(/\s+/g, '_');
-  const cleanId = emergencyClean(movement.id);
-  const filename = cleanTitle + "_" + cleanId + ".pdf";
+  const filename = generatePDFFilename(title, movement.article, false);
   doc.save(filename);
 };
 
@@ -273,6 +386,16 @@ export const generateInboundPDF = async (movement: Mouvement, articles?: any[]) 
   doc.text("Date de Reception: " + emergencyClean(movement.date), 15, yPos);
   yPos += 5;
 
+  // SLA Monitoring: Show if treatment was delayed
+  if (movement.wasDelayed) {
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(220, 38, 38); // Red text for delayed
+    doc.text("Traitement: Retarde", 15, yPos);
+    doc.setTextColor(0, 0, 0); // Reset to black
+    doc.setFont("helvetica", "normal");
+    yPos += 5;
+  }
+
   doc.text("Numero de Lot: " + emergencyClean(movement.lotNumber || 'N/A'), 15, yPos);
   yPos += 5;
 
@@ -319,12 +442,26 @@ export const generateInboundPDF = async (movement: Mouvement, articles?: any[]) 
     const qtyInEntryUnit = article ? (movement.qte / conversionFactor) : movement.qte;
 
     // Display with full unit name in ENTRY UNIT
-    doc.text("Quantite Recue:        " + formatQty(qtyInEntryUnit) + " " + entryUnitFull, 15, yPos);
+    renderQuantityLine(doc, "Quantite Recue:", qtyInEntryUnit, entryUnitFull, 15, yPos);
     yPos += 5;
-    doc.text("Quantite Acceptee:     " + formatQty(qtyInEntryUnit) + " " + entryUnitFull, 15, yPos);
+    renderQuantityLine(doc, "Quantite Acceptee:", qtyInEntryUnit, entryUnitFull, 15, yPos);
     yPos += 5;
     doc.text("(100% de la quantite recue)", 15, yPos);
     yPos += 8;
+
+    // Quality Score - Total Acceptance (100%)
+    const qualityScoreA = calculateQualityScore(qtyInEntryUnit, qtyInEntryUnit);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    
+    // Draw simple box around quality score
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.3);
+    doc.rect(15, yPos - 2, 100, 8, 'S');
+    
+    doc.text("Taux de Conformite: " + qualityScoreA.label, 17, yPos + 3);
+    yPos += 12;
 
     // Conversion factor display (discreet, informative)
     doc.setFontSize(8);
@@ -334,6 +471,10 @@ export const generateInboundPDF = async (movement: Mouvement, articles?: any[]) 
     doc.text(conversionText, 15, yPos);
     doc.setTextColor(0, 0, 0); // Reset to black
     yPos += 10;
+
+    // Observations / Control Notes (if any)
+    // Add fixed margin before observations section
+    yPos = renderObservationsSection(doc, movement.noteControle || "", 15, yPos);
   }
   // CASE B: Partial Acceptance (With Defects)
   else if (isPartialAcceptance) {
@@ -368,16 +509,30 @@ export const generateInboundPDF = async (movement: Mouvement, articles?: any[]) 
     // Display quantities with proper units (full names)
     // Quantité Reçue: in entry unit (original received quantity)
     const receivedInEntryUnit = article ? (movement.qte / conversionFactor) : movement.qte;
-    doc.text("Quantite Recue:        " + formatQty(receivedInEntryUnit) + " " + entryUnitFull, 15, yPos);
+    renderQuantityLine(doc, "Quantite Recue:", receivedInEntryUnit, entryUnitFull, 15, yPos);
     yPos += 5;
     
     // Quantité Acceptée: in exit unit (warehouse unit)
-    doc.text("Quantite Acceptee:     " + formatQty(validQty) + " " + exitUnitFull, 15, yPos);
+    renderQuantityLine(doc, "Quantite Acceptee:", validQty, exitUnitFull, 15, yPos);
     yPos += 5;
     
     // Quantité Défectueuse: in exit unit (warehouse unit)
-    doc.text("Quantite Defectueuse:  " + formatQty(defectiveQty) + " " + exitUnitFull, 15, yPos);
+    renderQuantityLine(doc, "Quantite Defectueuse:", defectiveQty, exitUnitFull, 15, yPos);
     yPos += 8;
+
+    // Quality Score - Partial Acceptance
+    const qualityScoreB = calculateQualityScore(validQty, movement.qte);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    
+    // Draw simple box around quality score
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.3);
+    doc.rect(15, yPos - 2, 100, 8, 'S');
+    
+    doc.text("Taux de Conformite: " + qualityScoreB.label, 17, yPos + 3);
+    yPos += 12;
 
     // Conversion factor display (discreet, informative)
     doc.setFontSize(8);
@@ -388,27 +543,9 @@ export const generateInboundPDF = async (movement: Mouvement, articles?: any[]) 
     doc.setTextColor(0, 0, 0); // Reset to black
     yPos += 6;
 
-    // Observations / Control Note
-    if (movement.noteControle) {
-      yPos += 2;
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(0, 0, 0);
-      doc.text("OBSERVATIONS", 10, yPos);
-      yPos += 7;
-
-      // Separator line
-      doc.setDrawColor(0, 0, 0);
-      doc.setLineWidth(0.5);
-      doc.line(10, yPos, 200, yPos);
-      yPos += 6;
-
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "normal");
-      const noteLines = doc.splitTextToSize(emergencyClean(movement.noteControle), 180);
-      doc.text(noteLines, 15, yPos);
-      yPos += noteLines.length * 5 + 5;
-    }
+    // Observations / Control Notes (if any)
+    // Add fixed margin before observations section
+    yPos = renderObservationsSection(doc, movement.noteControle || "", 15, yPos);
   }
   // CASE C: Total Refusal (Refusé)
   else if (isTotalRefusal) {
@@ -434,12 +571,28 @@ export const generateInboundPDF = async (movement: Mouvement, articles?: any[]) 
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
     doc.text("Quantite Acceptee: 0 (REFUS TOTAL)", 15, yPos);
+    yPos += 8;
+
+    // Quality Score - Total Refusal (0%)
+    const qualityScoreC = calculateQualityScore(0, movement.qte);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    
+    // Draw simple box around quality score
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.3);
+    doc.rect(15, yPos - 2, 100, 8, 'S');
+    
+    doc.text("Taux de Conformite: " + qualityScoreC.label, 17, yPos + 3);
     yPos += 10;
   }
 
   // POINTS DE CONTRÔLE (Verification Checklist) - Minimalist text-based display
+  // IMPORTANT: This section comes AFTER observations
   if (movement.verificationPoints && Object.keys(movement.verificationPoints).length > 0) {
-    yPos += 5;
+    // Add fixed margin before checklist section
+    yPos += 8;
     
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
@@ -462,16 +615,17 @@ export const generateInboundPDF = async (movement: Mouvement, articles?: any[]) 
       yPos += 5;
     });
     
-    yPos += 3;
+    yPos += 5; // Add margin after checklist
   }
 
   // Professional Signature Section - Formal Layout
-  yPos = 200;
+  // IMPORTANT: Position signatures dynamically, ensuring minimum space before them
+  const minSignatureY = 180; // Minimum Y position for signatures
+  if (yPos < minSignatureY) {
+    yPos = minSignatureY;
+  }
   
-  // Separator line before signatures
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.5);
-  doc.line(10, yPos, 200, yPos);
+  // Add fixed margin before signature section
   yPos += 8;
   
   // Separator line before signatures
@@ -480,42 +634,62 @@ export const generateInboundPDF = async (movement: Mouvement, articles?: any[]) 
   doc.line(10, yPos, 200, yPos);
   yPos += 8;
 
+  // ============================================================================
+  // PROFESSIONAL SIDE-BY-SIDE SIGNATURE SECTION
+  // ============================================================================
+  
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
+  doc.setTextColor(0, 0, 0);
 
-  // Left column: Operator
+  // Column positions
   const leftX = 15;
-  const rightX = 120;
-  const signatureHeight = 20; // 2cm space for signature
+  const rightX = 115;
+  const signatureHeight = 18; // Space for hand signature (2cm)
+  const columnWidth = 70; // Width of each signature block
 
-  // Operator signature block
-  doc.text("Signature de l'Operateur:", leftX, yPos);
-  yPos += 4;
+  // ========== LEFT COLUMN: OPERATOR SIGNATURE ==========
   
-  // Empty space for signature (20mm = ~7.5 lines)
-  doc.line(leftX, yPos + signatureHeight, leftX + 70, yPos + signatureHeight);
-  yPos += signatureHeight + 3;
-  
-  // Operator name
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.text("Nom: " + emergencyClean(movement.operateur), leftX, yPos);
-  yPos += 8;
-
-  // QC Controller signature block
+  // Title
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text("Signature du Controleur Qualite:", rightX, yPos - 8);
-  yPos -= 4;
+  doc.text("Signature de l'Operateur:", leftX, yPos);
+  yPos += 6;
   
-  // Empty space for signature
-  doc.line(rightX, yPos + signatureHeight, rightX + 70, yPos + signatureHeight);
-  yPos += signatureHeight + 3;
+  // Empty space for signature (horizontal line)
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(leftX, yPos + signatureHeight, leftX + columnWidth, yPos + signatureHeight);
+  yPos += signatureHeight + 5;
   
-  // QC Controller name
-  doc.setFont("helvetica", "normal");
+  // Printed name
   doc.setFontSize(8);
-  doc.text("Nom: " + emergencyClean(movement.controleur || 'N/A'), rightX, yPos);
+  doc.setFont("helvetica", "normal");
+  doc.text("Nom: " + emergencyClean(movement.operateur), leftX, yPos);
+
+  // ========== RIGHT COLUMN: QC CONTROLLER SIGNATURE ==========
+  
+  // Reset yPos to align with left column
+  let signatureYPos = yPos - signatureHeight - 5 - 6;
+  
+  // Title
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text("Signature du Controleur Qualite:", rightX, signatureYPos);
+  signatureYPos += 6;
+  
+  // Empty space for signature (horizontal line)
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(rightX, signatureYPos + signatureHeight, rightX + columnWidth, signatureYPos + signatureHeight);
+  signatureYPos += signatureHeight + 5;
+  
+  // Printed name
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.text("Nom: " + emergencyClean(movement.controleur || 'N/A'), rightX, signatureYPos);
+  
+  // Move yPos to bottom of signature section
   yPos += 10;
 
   // Validation date at bottom (small, neutral font)
@@ -530,10 +704,25 @@ export const generateInboundPDF = async (movement: Mouvement, articles?: any[]) 
   });
   doc.text("Date de Validation: " + emergencyClean(validationDate), 10, 285);
 
+  // Footer Timestamp - Discreet, professional
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(100, 100, 100); // Gray text for discreet appearance
+  const generationDate = new Date().toLocaleDateString("fr-FR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+  const footerText = `Document genere automatiquement par le Systeme de Gestion de Stock Top Gloves le ${generationDate}`;
+  doc.text(emergencyClean(footerText), 10, 292, { maxWidth: 190 });
+  doc.setTextColor(0, 0, 0); // Reset to black
+
   // Save PDF
-  const cleanTitle = isTotalRefusal ? "Avis_Refus_Reception" : "Bon_Entree";
-  const cleanId = emergencyClean(movement.id);
-  const filename = cleanTitle + "_" + cleanId + ".pdf";
+  const isRefusal = isTotalRefusal;
+  const filename = generatePDFFilename("Bon_Entree", movement.article, isRefusal);
   doc.save(filename);
 };
 
@@ -639,6 +828,12 @@ export const generateOutboundPDF = async (movement: Mouvement) => {
       doc.text("Quantite Defectueuse:", 15, yPos);
       doc.setFont("helvetica", "normal");
       doc.text(defectiveQty + " " + qcUnit, 70, yPos);
+      yPos += 10;
+
+      // Observations / Control Notes (if any) - Only show if there are defects or notes
+      if (movement.defectiveQuantity && movement.defectiveQuantity > 0) {
+        yPos = renderObservationsSection(doc, movement.noteControle || "", 15, yPos);
+      }
     }
   );
 };
@@ -818,8 +1013,7 @@ export const generateRejectionPDF = async (movement: Mouvement) => {
   doc.line(120, 268, 200, 268);
   
   // Save PDF
-  const cleanId = emergencyClean(movement.id);
-  const filename = "Bon_Rejet_" + cleanId + ".pdf";
+  const filename = generatePDFFilename("Bon_Rejet", movement.article, false);
   doc.save(filename);
 };
 
@@ -921,7 +1115,13 @@ export const generateInventoryPDF = async (record: {
   doc.line(140, yPos + 15, 200, yPos + 15);
 
   // Save the PDF
-  const filename = `Inventaire_${emergencyClean(record.ref)}_${emergencyClean(record.id)}.pdf`;
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('fr-FR').replace(/\//g, '-');
+  const cleanArticle = emergencyClean(record.article)
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9\-]/g, '')
+    .substring(0, 50);
+  const filename = `Inventaire_${cleanArticle}_${dateStr}.pdf`;
   doc.save(filename);
   console.log('✅ Inventory PDF generated:', filename);
 };
