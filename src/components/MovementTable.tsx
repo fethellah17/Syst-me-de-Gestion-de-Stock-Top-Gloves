@@ -1,4 +1,4 @@
-import { FileText, ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, FileEdit, CheckCircle2, AlertCircle, Clock, Copy, CheckIcon, XIcon, Eye, Timer } from "lucide-react";
+import { FileText, ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, FileEdit, CheckCircle2, AlertCircle, Clock, Copy, CheckIcon, XIcon, ClipboardCheck, Timer } from "lucide-react";
 import { 
   generateInboundPDF, 
   generateOutboundPDF, 
@@ -414,10 +414,10 @@ export const MovementTable = ({
                       {(m.type === "Entrée" || m.type === "Sortie") && m.statut === "En attente" && (
                         <button
                           onClick={() => onInspect?.(m.id)}
-                          className="p-1.5 rounded-md hover:bg-blue-100 transition-colors text-blue-600 hover:text-blue-800"
-                          title={`Inspecter cette ${m.type.toLowerCase()}`}
+                          className="p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300 hover:scale-110"
+                          title="Contrôle Qualité"
                         >
-                          <Eye className="w-4 h-4" />
+                          <ClipboardCheck className="w-5 h-5" />
                         </button>
                       )}
                       {m.type === "Sortie" && m.statut === "Terminé" && m.status === "approved" && (
@@ -695,10 +695,10 @@ export const MovementTable = ({
                       {m.type === "Entrée" && m.statut === "En attente" && (
                         <button
                           onClick={() => onInspect?.(m.id)}
-                          className="p-2 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-                          title="Inspecter cette entrée"
+                          className="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300 hover:scale-110"
+                          title="Contrôle Qualité"
                         >
-                          <Eye className="w-4 h-4" />
+                          <ClipboardCheck className="w-5 h-5" />
                         </button>
                       )}
                       {/* PDF Download Button */}
