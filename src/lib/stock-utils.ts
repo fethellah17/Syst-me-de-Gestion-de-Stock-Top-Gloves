@@ -13,6 +13,68 @@ export interface AutonomyInfo {
   isLow: boolean;
 }
 
+// Unit mapping: symbol -> full French name
+export const UNIT_FULL_NAMES: Record<string, string> = {
+  // Weight units
+  "T": "Tonnes",
+  "Tonne": "Tonnes",
+  "Tonnes": "Tonnes",
+  "Kg": "Kilogrammes",
+  "kg": "Kilogrammes",
+  "Kilogramme": "Kilogrammes",
+  "Kilogrammes": "Kilogrammes",
+  "g": "Grammes",
+  "Gramme": "Grammes",
+  "Grammes": "Grammes",
+  "mg": "Milligrammes",
+  "Milligramme": "Milligrammes",
+  "Milligrammes": "Milligrammes",
+  
+  // Volume units
+  "L": "Litres",
+  "Litre": "Litres",
+  "Litres": "Litres",
+  "mL": "Millilitres",
+  "ml": "Millilitres",
+  "Millilitre": "Millilitres",
+  "Millilitres": "Millilitres",
+  
+  // Count units
+  "pièce": "Pièces",
+  "Pièce": "Pièces",
+  "Pièces": "Pièces",
+  "unité": "Unités",
+  "Unité": "Unités",
+  "Unités": "Unités",
+  "boîte": "Boîtes",
+  "Boîte": "Boîtes",
+  "Boîtes": "Boîtes",
+  "carton": "Cartons",
+  "Carton": "Cartons",
+  "Cartons": "Cartons",
+  "palette": "Palettes",
+  "Palette": "Palettes",
+  "Palettes": "Palettes",
+  "paire": "Paires",
+  "Paire": "Paires",
+  "Paires": "Paires",
+  "Pa": "Paires",
+  "pa": "Paires",
+  
+  // Default
+  "": "Unités",
+};
+
+/**
+ * Convert unit symbol to full French name
+ * @param unit Unit symbol (e.g., "T", "Kg", "pièce")
+ * @returns Full French name (e.g., "Tonnes", "Kilogrammes", "Pièces")
+ */
+export const getFullUnitName = (unit: string): string => {
+  if (!unit) return "Unités";
+  return UNIT_FULL_NAMES[unit] || unit;
+};
+
 export const calculateAutonomy = (stock: number, dailyConsumption: number): AutonomyInfo => {
   if (dailyConsumption <= 0) {
     return { days: 0, hours: 0, label: "N/A", isLow: false };

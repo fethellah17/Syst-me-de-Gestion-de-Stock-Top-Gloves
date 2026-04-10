@@ -1,4 +1,4 @@
-import { FileText, ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, FileEdit, CheckCircle2, AlertCircle, Clock, Copy, CheckIcon, XIcon } from "lucide-react";
+import { FileText, ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, FileEdit, CheckCircle2, AlertCircle, Clock, Copy, CheckIcon, XIcon, Eye } from "lucide-react";
 import { 
   generateInboundPDF, 
   generateOutboundPDF, 
@@ -12,8 +12,9 @@ import type { Mouvement, Article } from "@/contexts/DataContext";
 interface MovementTableProps {
   movements: Mouvement[];
   articles?: Article[];
-  onQualityControl?: (id: number) => void;
-  onReject?: (id: number) => void;
+  onQualityControl?: (id: string) => void;
+  onReject?: (id: string) => void;
+  onInspect?: (id: string) => void;
   onDuplicate?: (mouvement: Mouvement) => void;
   showActions?: boolean;
   compact?: boolean;
@@ -24,6 +25,7 @@ export const MovementTable = ({
   articles = [],
   onQualityControl,
   onReject,
+  onInspect,
   onDuplicate,
   showActions = true,
   compact = false
@@ -65,9 +67,12 @@ export const MovementTable = ({
   };
 
   const getStatusBadge = (mouvement: Mouvement) => {
-    if (mouvement.type !== "Sortie" && mouvement.type !== "Ajustement") return null;
-    
     switch (mouvement.statut) {
+      case "En attente":
+        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-100 text-yellow-800">
+          <Clock className="w-3 h-3" />
+          En attente
+        </span>;
       case "En attente de validation Qualité":
         return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-100 text-orange-800">
           <AlertCircle className="w-3 h-3" />
@@ -261,7 +266,15 @@ export const MovementTable = ({
                   {/* Impact Stock - Calculated Total with Arrow and Exit Unit Badge */}
                   <td className="hidden lg:table-cell py-3 px-4">
                     <div className="flex items-center justify-center gap-2">
-                      {hasConversion ? (
+                      {m.statut === "En attente" && m.type === "Entrée" ? (
+                        <>
+                          <Clock className="w-3.5 h-3.5 text-yellow-500" />
+                          <span className="font-mono font-semibold text-yellow-600 text-sm">
+                            {m.qte.toLocaleString('fr-FR')}
+                          </span>
+                          {m.uniteSortie && <UnitBadge unit={m.uniteSortie} />}
+                        </>
+                      ) : hasConversion ? (
                         <>
                           <span className="text-muted-foreground text-xs">→</span>
                           <span className="font-mono font-semibold text-primary text-sm">
@@ -346,6 +359,15 @@ export const MovementTable = ({
                   {showActions && (
                     <td className="py-3 px-2 md:px-4 text-center">
                       <div className="flex items-center justify-center gap-1">
+                      {(m.type === "Entrée" || m.type === "Sortie") && m.statut === "En attente" && (
+                        <button
+                          onClick={() => onInspect?.(m.id)}
+                          className="p-1.5 rounded-md hover:bg-blue-100 transition-colors text-blue-600 hover:text-blue-800"
+                          title={`Inspecter cette ${m.type.toLowerCase()}`}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      )}
                       {m.type === "Sortie" && m.statut === "Terminé" && m.status === "approved" && (
                         <button
                           onClick={() => generateOutboundPDF(m)}
@@ -355,9 +377,9 @@ export const MovementTable = ({
                           <FileText className="w-4 h-4" />
                         </button>
                       )}
-                      {m.type === "Entrée" && (
+                      {m.type === "Entrée" && m.statut !== "En attente" && (
                         <button
-                          onClick={() => generateInboundPDF(m)}
+                          onClick={() => generateInboundPDF(m, articles)}
                           className="p-1.5 rounded-md hover:bg-blue-100 transition-colors text-blue-600 hover:text-blue-800"
                           title="Télécharger le Bon d'Entrée (PDF)"
                         >
@@ -466,8 +488,15 @@ export const MovementTable = ({
                   {!hasConversion && (
                     <div>
                       <span className="text-xs text-muted-foreground font-medium">Impact Stock</span>
-                      <div className="text-sm font-semibold text-foreground">
-                        {m.qte.toLocaleString('fr-FR')} {m.uniteSortie}
+                      <div className="text-sm font-semibold flex items-center gap-2">
+                        {m.statut === "En attente" && m.type === "Entrée" ? (
+                          <>
+                            <Clock className="w-4 h-4 text-yellow-500" />
+                            <span className="text-yellow-600">{m.qte.toLocaleString('fr-FR')} {m.uniteSortie}</span>
+                          </>
+                        ) : (
+                          <span className="text-foreground">{m.qte.toLocaleString('fr-FR')} {m.uniteSortie}</span>
+                        )}
                       </div>
                     </div>
                   )}
@@ -610,6 +639,16 @@ export const MovementTable = ({
                   <>
                     <div className="border-t" />
                     <div className="flex items-center justify-end gap-2 pt-3">
+                      {/* Inspecter Button for Pending Entrée */}
+                      {m.type === "Entrée" && m.statut === "En attente" && (
+                        <button
+                          onClick={() => onInspect?.(m.id)}
+                          className="p-2 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                          title="Inspecter cette entrée"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      )}
                       {/* PDF Download Button */}
                       {m.type === "Sortie" && m.statut === "Terminé" && m.status === "approved" && (
                         <button
@@ -620,9 +659,9 @@ export const MovementTable = ({
                           <FileText className="w-4 h-4" />
                         </button>
                       )}
-                      {m.type === "Entrée" && (
+                      {m.type === "Entrée" && m.statut !== "En attente" && (
                         <button
-                          onClick={() => generateInboundPDF(m)}
+                          onClick={() => generateInboundPDF(m, articles)}
                           className="p-2 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                           title="Télécharger le Bon d'Entrée (PDF)"
                         >

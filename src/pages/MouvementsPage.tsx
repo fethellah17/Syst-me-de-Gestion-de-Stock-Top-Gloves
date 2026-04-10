@@ -5,6 +5,7 @@ import { Modal } from "@/components/Modal";
 import { Toast } from "@/components/Toast";
 import { MovementTable } from "@/components/MovementTable";
 import { BulkMovementModal } from "@/components/BulkMovementModal";
+import { InspectionModal, type InspectionData } from "@/components/InspectionModal";
 import { format } from "date-fns";
 
 const MouvementsPage = () => {
@@ -15,9 +16,11 @@ const MouvementsPage = () => {
   const [isQCModalOpen, setIsQCModalOpen] = useState(false);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
-  const [qcMouvementId, setQCMouvementId] = useState<number | null>(null);
-  const [rejectMouvementId, setRejectMouvementId] = useState<number | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [isInspectionModalOpen, setIsInspectionModalOpen] = useState(false);
+  const [inspectionMouvementId, setInspectionMouvementId] = useState<string | null>(null);
+  const [qcMouvementId, setQCMouvementId] = useState<string | null>(null);
+  const [rejectMouvementId, setRejectMouvementId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [duplicateData, setDuplicateData] = useState<any>(null);
   const [qcFormData, setQCFormData] = useState({
@@ -54,7 +57,7 @@ const MouvementsPage = () => {
       return matchArticle && matchType;
     });
 
-  const handleOpenQCModal = (id: number) => {
+  const handleOpenQCModal = (id: string) => {
     const mouvement = mouvements.find(m => m.id === id);
     if (!mouvement) return;
     
@@ -69,7 +72,7 @@ const MouvementsPage = () => {
     setIsQCModalOpen(true);
   };
 
-  const handleOpenRejectModal = (id: number) => {
+  const handleOpenRejectModal = (id: string) => {
     const mouvement = mouvements.find(m => m.id === id);
     if (!mouvement) return;
     
@@ -89,6 +92,69 @@ const MouvementsPage = () => {
   const handleCloseQCModal = () => {
     setIsQCModalOpen(false);
     setQCMouvementId(null);
+  };
+
+  const handleOpenInspectionModal = (id: string) => {
+    const mouvement = mouvements.find(m => m.id === id);
+    if (!mouvement || mouvement.type !== "Entrée") return;
+    
+    setInspectionMouvementId(id);
+    setIsInspectionModalOpen(true);
+  };
+
+  const handleCloseInspectionModal = () => {
+    setIsInspectionModalOpen(false);
+    setInspectionMouvementId(null);
+  };
+
+  const handleInspectionApprove = (data: InspectionData) => {
+    if (!inspectionMouvementId) return;
+
+    const mouvement = mouvements.find(m => m.id === inspectionMouvementId);
+    if (!mouvement) return;
+
+    // Check if this is a total refusal
+    if (data.refusTotalMotif) {
+      // Total refusal
+      approveQualityControl(
+        inspectionMouvementId,
+        data.controleur,
+        "Non-conforme",
+        0,
+        0,
+        data.refusTotalMotif,
+        data.refusTotalMotif,
+        data.verificationPoints
+      );
+
+      setToast({
+        message: `✗ Mouvement refusé complètement (${mouvement.qte} ${mouvement.uniteSortie})`,
+        type: "success"
+      });
+    } else {
+      // Normal approval
+      approveQualityControl(
+        inspectionMouvementId,
+        data.controleur,
+        data.qteDefectueuse > 0 ? "Non-conforme" : "Conforme",
+        data.qteDefectueuse,
+        data.qteValide,
+        undefined,
+        data.noteControle,
+        data.verificationPoints
+      );
+
+      setToast({
+        message: `✓ Stock mis à jour avec succès (Qté: ${data.qteValide} ${mouvement.uniteSortie})`,
+        type: "success"
+      });
+    }
+
+    // Recalculate occupancies
+    recalculateAllOccupancies();
+
+    // Close modal
+    handleCloseInspectionModal();
   };
 
   const handleSubmitReject = (e: React.FormEvent) => {
@@ -151,7 +217,7 @@ const MouvementsPage = () => {
     }
   };
 
-  const handleDeleteClick = (id: number) => {
+  const handleDeleteClick = (id: string) => {
     setDeleteConfirmId(id);
     setIsDeleteConfirmOpen(true);
   };
@@ -309,117 +375,96 @@ const MouvementsPage = () => {
     });
 
     // Step 2: SMART MERGE - Update articles state with strict zone logic
-    // Group items by article ID
-    const itemsByArticle: Record<number, any[]> = {};
-    items.forEach(item => {
-      const articleId = parseInt(item.articleId);
-      if (!itemsByArticle[articleId]) {
-        itemsByArticle[articleId] = [];
-      }
-      itemsByArticle[articleId].push(item);
-    });
-
-    // Update each affected article
-    Object.entries(itemsByArticle).forEach(([articleIdStr, articleItems]) => {
-      const articleId = parseInt(articleIdStr);
-      const article = articles.find(a => a.id === articleId);
-      if (!article) return;
-
-      // Create a NEW copy of the inventory array
-      let updatedInventory = article.inventory.map(inv => ({
-        zone: inv.zone,
-        quantity: Number(inv.quantity)
-      }));
-
-      let totalStockChange = 0;
-
-      // Process each movement for this article
-      articleItems.forEach(item => {
-        const qty = Number(item.quantity) || 0;
-        if (qty <= 0) return;
-
-        const qtyInExitUnit = convertToExitUnit(qty, item.selectedUnit, article);
-
-        if (movementType === "Entrée") {
-          // ENTRÉE: Find destination zone and ADD quantity
-          const destZone = item.emplacementDestination;
-          const existingZoneIndex = updatedInventory.findIndex(inv => inv.zone === destZone);
-
-          if (existingZoneIndex >= 0) {
-            // Zone exists: ADD to it
-            updatedInventory[existingZoneIndex].quantity = Number(updatedInventory[existingZoneIndex].quantity) + Number(qtyInExitUnit);
-            console.log(`[SMART MERGE ENTRÉE] Zone ${destZone} exists: +${qtyInExitUnit} → ${updatedInventory[existingZoneIndex].quantity}`);
-          } else {
-            // Zone is new: PUSH it
-            updatedInventory.push({ zone: destZone, quantity: Number(qtyInExitUnit) });
-            console.log(`[SMART MERGE ENTRÉE] Zone ${destZone} is NEW: +${qtyInExitUnit}`);
-          }
-
-          totalStockChange += Number(qtyInExitUnit);
-        } else if (movementType === "Sortie") {
-          // SORTIE: Find source zone and SUBTRACT quantity
-          const sourceZone = item.emplacementSource;
-          const existingZoneIndex = updatedInventory.findIndex(inv => inv.zone === sourceZone);
-
-          if (existingZoneIndex >= 0) {
-            // Zone exists: SUBTRACT from it
-            const currentQty = Number(updatedInventory[existingZoneIndex].quantity);
-            const newQty = Math.max(0, currentQty - Number(qtyInExitUnit));
-            updatedInventory[existingZoneIndex].quantity = newQty;
-            console.log(`[SMART MERGE SORTIE] Zone ${sourceZone}: ${currentQty} - ${qtyInExitUnit} = ${newQty}`);
-          }
-
-          totalStockChange -= Number(qtyInExitUnit);
-        } else if (movementType === "Transfert") {
-          // TRANSFERT: SUBTRACT from source AND ADD to destination
-          const sourceZone = item.emplacementSource;
-          const destZone = item.emplacementDestination;
-
-          // Subtract from source
-          const sourceIndex = updatedInventory.findIndex(inv => inv.zone === sourceZone);
-          if (sourceIndex >= 0) {
-            const currentQty = Number(updatedInventory[sourceIndex].quantity);
-            const newQty = Math.max(0, currentQty - Number(qtyInExitUnit));
-            updatedInventory[sourceIndex].quantity = newQty;
-            console.log(`[SMART MERGE TRANSFERT] Source ${sourceZone}: ${currentQty} - ${qtyInExitUnit} = ${newQty}`);
-          }
-
-          // Add to destination
-          const destIndex = updatedInventory.findIndex(inv => inv.zone === destZone);
-          if (destIndex >= 0) {
-            updatedInventory[destIndex].quantity = Number(updatedInventory[destIndex].quantity) + Number(qtyInExitUnit);
-            console.log(`[SMART MERGE TRANSFERT] Dest ${destZone}: +${qtyInExitUnit} → ${updatedInventory[destIndex].quantity}`);
-          } else {
-            updatedInventory.push({ zone: destZone, quantity: Number(qtyInExitUnit) });
-            console.log(`[SMART MERGE TRANSFERT] Dest ${destZone} is NEW: +${qtyInExitUnit}`);
-          }
+    // CRITICAL: SKIP this step entirely for Entrée AND Sortie movements with "En attente" status
+    // Stock must NOT be updated for pending movements - it will be updated only upon QC approval
+    if (movementType !== "Entrée" && movementType !== "Sortie") {
+      // Group items by article ID
+      const itemsByArticle: Record<number, any[]> = {};
+      items.forEach(item => {
+        const articleId = parseInt(item.articleId);
+        if (!itemsByArticle[articleId]) {
+          itemsByArticle[articleId] = [];
         }
+        itemsByArticle[articleId].push(item);
       });
 
-      // Remove zones with 0 quantity
-      updatedInventory = updatedInventory.filter(l => Number(l.quantity) > 0);
+      // Update each affected article
+      Object.entries(itemsByArticle).forEach(([articleIdStr, articleItems]) => {
+        const articleId = parseInt(articleIdStr);
+        const article = articles.find(a => a.id === articleId);
+        if (!article) return;
 
-      // Calculate new total stock
-      const newTotalStock = Math.max(0, article.stock + totalStockChange);
+        // Create a NEW copy of the inventory array
+        let updatedInventory = article.inventory.map(inv => ({
+          zone: inv.zone,
+          quantity: Number(inv.quantity)
+        }));
 
-      console.log(`[SMART MERGE FINAL] ${article.nom}: Stock ${article.stock} → ${newTotalStock}, Zones: ${updatedInventory.map(z => `${z.zone}(${z.quantity})`).join(', ')}`);
+        let totalStockChange = 0;
 
-      // Update the article with the new inventory and stock
-      updateArticle(articleId, {
-        ...article,
-        stock: newTotalStock,
-        inventory: updatedInventory
+        // Process each movement for this article
+        articleItems.forEach(item => {
+          const qty = Number(item.quantity) || 0;
+          if (qty <= 0) return;
+
+          const qtyInExitUnit = convertToExitUnit(qty, item.selectedUnit, article);
+
+          // CRITICAL: Only Transfert reaches here (Sortie is blocked above)
+          if (movementType === "Transfert") {
+            // TRANSFERT: SUBTRACT from source AND ADD to destination
+            const sourceZone = item.emplacementSource;
+            const destZone = item.emplacementDestination;
+
+            // Subtract from source
+            const sourceIndex = updatedInventory.findIndex(inv => inv.zone === sourceZone);
+            if (sourceIndex >= 0) {
+              const currentQty = Number(updatedInventory[sourceIndex].quantity);
+              const newQty = Math.max(0, currentQty - Number(qtyInExitUnit));
+              updatedInventory[sourceIndex].quantity = newQty;
+              console.log(`[SMART MERGE TRANSFERT] Source ${sourceZone}: ${currentQty} - ${qtyInExitUnit} = ${newQty}`);
+            }
+
+            // Add to destination
+            const destIndex = updatedInventory.findIndex(inv => inv.zone === destZone);
+            if (destIndex >= 0) {
+              updatedInventory[destIndex].quantity = Number(updatedInventory[destIndex].quantity) + Number(qtyInExitUnit);
+              console.log(`[SMART MERGE TRANSFERT] Dest ${destZone}: +${qtyInExitUnit} → ${updatedInventory[destIndex].quantity}`);
+            } else {
+              updatedInventory.push({ zone: destZone, quantity: Number(qtyInExitUnit) });
+              console.log(`[SMART MERGE TRANSFERT] Dest ${destZone} is NEW: +${qtyInExitUnit}`);
+            }
+          }
+        });
+
+        // Remove zones with 0 quantity
+        updatedInventory = updatedInventory.filter(l => Number(l.quantity) > 0);
+
+        // Calculate new total stock
+        const newTotalStock = Math.max(0, article.stock + totalStockChange);
+
+        console.log(`[SMART MERGE FINAL] ${article.nom}: Stock ${article.stock} → ${newTotalStock}, Zones: ${updatedInventory.map(z => `${z.zone}(${z.quantity})`).join(', ')}`);
+
+        // Update the article with the new inventory and stock
+        updateArticle(articleId, {
+          ...article,
+          stock: newTotalStock,
+          inventory: updatedInventory
+        });
       });
-    });
+    } else {
+      // For Entrée and Sortie movements: ZERO stock updates
+      // Stock will be updated only upon QC approval
+      console.log(`[PENDING QC] Step 2 SKIPPED - Stock will NOT be updated until QC approval`);
+    }
 
     recalculateAllOccupancies();
 
     const totalItems = items.length;
     const message = movementType === "Sortie"
-      ? `✓ ${totalItems} sortie(s) effectuée(s) avec succès. Stock mis à jour.`
+      ? `✓ ${totalItems} sortie(s) enregistrée(s) en attente de validation qualité.`
       : movementType === "Transfert"
       ? `✓ ${totalItems} transfert(s) effectué(s) avec succès.`
-      : `✓ ${totalItems} entrée(s) enregistrée(s) avec succès. Stock mis à jour.`;
+      : `✓ ${totalItems} entrée(s) enregistrée(s) en attente de validation qualité.`;
     
     setToast({ message, type: "success" });
     setIsBulkModalOpen(false);
@@ -505,6 +550,7 @@ const MouvementsPage = () => {
           onDuplicate={handleDuplicate}
           onQualityControl={handleOpenQCModal}
           onReject={handleOpenRejectModal}
+          onInspect={handleOpenInspectionModal}
           showActions={true}
           compact={false}
         />
@@ -684,6 +730,18 @@ const MouvementsPage = () => {
       </Modal>
 
       {toast && <Toast message={toast.message} type={toast.type} />}
+
+      {/* Inspection Modal for Pending Entrée */}
+      <InspectionModal
+        isOpen={isInspectionModalOpen}
+        onClose={handleCloseInspectionModal}
+        mouvement={inspectionMouvementId ? mouvements.find(m => m.id === inspectionMouvementId) : null}
+        article={inspectionMouvementId ? (() => {
+          const mouvement = mouvements.find(m => m.id === inspectionMouvementId);
+          return mouvement ? articles.find(a => a.ref === mouvement.ref) : null;
+        })() : null}
+        onApprove={handleInspectionApprove}
+      />
 
       {/* Floating Action Button (FAB) - Mobile Only */}
       <button

@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import type { Mouvement } from '@/contexts/DataContext';
 import { getUnitSymbol } from './units-storage';
+import { getFullUnitName } from './stock-utils';
 
 // Standardized PDF Template - Monochrome Design
 // Logo: Square 20x20mm top-left (slightly smaller)
@@ -25,6 +26,37 @@ const formatQty = (qty: number): string => {
     maximumFractionDigits: 2 
   });
   return emergencyClean(formatted);
+};
+
+/**
+ * Format verification points for PDF display
+ * Shows checked items as [X] and unchecked as [ ]
+ */
+const formatVerificationPoints = (verificationPoints?: Record<string, boolean>, movementType?: string): string[] => {
+  if (!verificationPoints || Object.keys(verificationPoints).length === 0) {
+    return [];
+  }
+
+  const VERIFICATION_CHECKLISTS: Record<string, Array<{ key: string; label: string }>> = {
+    Entrée: [
+      { key: "aspect", label: "Aspect / Emballage Extérieur" },
+      { key: "quantite", label: "Conformité Quantité vs BL" },
+      { key: "documents", label: "Présence Documents (FDS/BL)" },
+    ],
+    Sortie: [
+      { key: "etat", label: "État de l'article (Condition check)" },
+      { key: "quantite", label: "Conformité Quantité vs Demande" },
+      { key: "emballage", label: "Emballage Expédition (Packaging for exit)" },
+    ],
+  };
+
+  const checklist = VERIFICATION_CHECKLISTS[movementType as keyof typeof VERIFICATION_CHECKLISTS] || VERIFICATION_CHECKLISTS.Entrée;
+  
+  return checklist.map(item => {
+    const isChecked = verificationPoints[item.key] || false;
+    const checkbox = isChecked ? "[X]" : "[ ]";
+    return `${checkbox} ${item.label}`;
+  });
 };
 
 /**
@@ -196,56 +228,313 @@ const generatePDFTemplate = async (
   doc.save(filename);
 };
 
-// 1. Bon d'Entree (Inbound) - SIMPLIFIED with proper quantity display
-export const generateInboundPDF = async (movement: Mouvement) => {
+// 1. Bon d'Entree (Inbound) - FORMAL BLACK & WHITE with Professional Signature Blocks
+export const generateInboundPDF = async (movement: Mouvement, articles?: any[]) => {
   console.log('=== GENERATING INBOUND PDF ===');
   console.log('Movement:', movement);
   
   const doc = new jsPDF();
+  const logoBase64 = await getLogoBase64();
 
-  await generatePDFTemplate(
-    doc,
-    "Bon d'Entree",
-    movement,
-    "Signature du Receptionnaire:",
-    (doc, yPos) => {
-      doc.setFontSize(12);
+  // Determine QC outcome
+  const isTotalRefusal = movement.qcStatus === "Non-conforme" && movement.validQuantity === 0;
+  const isPartialAcceptance = movement.qcStatus === "Non-conforme" && movement.validQuantity !== undefined && movement.validQuantity > 0;
+  const isTotalAcceptance = movement.qcStatus === "Conforme" || (movement.validQuantity === movement.qte && movement.defectiveQuantity === 0);
+
+  // Dynamic title based on QC outcome
+  let titleText = "BON D'ENTREE";
+  if (isTotalRefusal) {
+    titleText = "AVIS DE REFUS DE RECEPTION";
+  }
+
+  const contentStartY = renderHeader(doc, titleText, logoBase64);
+  let yPos = contentStartY;
+
+  // Movement Details Section - Simple Black & White
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.text("DETAILS DE LA RECEPTION", 10, yPos);
+  yPos += 7;
+
+  // Separator line (1pt black)
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(10, yPos, 200, yPos);
+  yPos += 6;
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+
+  // Details in simple format (no boxes, just text)
+  doc.text("Article: " + emergencyClean(movement.article) + " (" + emergencyClean(movement.ref) + ")", 15, yPos);
+  yPos += 5;
+
+  doc.text("Date de Reception: " + emergencyClean(movement.date), 15, yPos);
+  yPos += 5;
+
+  doc.text("Numero de Lot: " + emergencyClean(movement.lotNumber || 'N/A'), 15, yPos);
+  yPos += 5;
+
+  const lotDate = movement.lotDate ? new Date(movement.lotDate).toLocaleDateString('fr-FR') : 'N/A';
+  doc.text("Date du Lot: " + emergencyClean(lotDate), 15, yPos);
+  yPos += 5;
+
+  doc.text("Zone de Destination: " + emergencyClean(movement.emplacementDestination || 'N/A'), 15, yPos);
+  yPos += 5;
+
+  doc.text("Operateur: " + emergencyClean(movement.operateur), 15, yPos);
+  yPos += 10;
+
+  // CASE A: Total Acceptance (100% Valide)
+  if (isTotalAcceptance) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("QUANTITES", 10, yPos);
+    yPos += 7;
+
+    // Separator line
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.line(10, yPos, 200, yPos);
+    yPos += 6;
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+
+    const { qty, unit } = getQuantityDisplay(movement);
+    
+    // Get article to access unit information
+    const article = articles?.find(a => a.ref === movement.ref);
+    const exitUnit = article?.uniteSortie || movement.uniteSortie || "unité";
+    const entryUnit = article?.uniteEntree || "unité";
+    const conversionFactor = article?.facteurConversion || 1;
+
+    // Get full unit names
+    const exitUnitFull = getFullUnitName(exitUnit);
+    const entryUnitFull = getFullUnitName(entryUnit);
+
+    // For total acceptance, display in ENTRY UNIT (original reception unit)
+    // Calculate the quantity in entry unit
+    const qtyInEntryUnit = article ? (movement.qte / conversionFactor) : movement.qte;
+
+    // Display with full unit name in ENTRY UNIT
+    doc.text("Quantite Recue:        " + formatQty(qtyInEntryUnit) + " " + entryUnitFull, 15, yPos);
+    yPos += 5;
+    doc.text("Quantite Acceptee:     " + formatQty(qtyInEntryUnit) + " " + entryUnitFull, 15, yPos);
+    yPos += 5;
+    doc.text("(100% de la quantite recue)", 15, yPos);
+    yPos += 8;
+
+    // Conversion factor display (discreet, informative)
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 100, 100); // Gray text for discreet appearance
+    const conversionText = `Facteur de Conversion: 1 ${entryUnitFull} = ${conversionFactor} ${exitUnitFull}`;
+    doc.text(conversionText, 15, yPos);
+    doc.setTextColor(0, 0, 0); // Reset to black
+    yPos += 10;
+  }
+  // CASE B: Partial Acceptance (With Defects)
+  else if (isPartialAcceptance) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("QUANTITES", 10, yPos);
+    yPos += 7;
+
+    // Separator line
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.line(10, yPos, 200, yPos);
+    yPos += 6;
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+
+    const { qty: totalQty, unit: totalUnit } = getQuantityDisplay(movement);
+    const validQty = movement.validQuantity !== undefined ? movement.validQuantity : movement.qte;
+    const defectiveQty = movement.defectiveQuantity !== undefined ? movement.defectiveQuantity : 0;
+
+    // Get article to access unit information
+    const article = articles?.find(a => a.ref === movement.ref);
+    const exitUnit = article?.uniteSortie || movement.uniteSortie || "unité";
+    const entryUnit = article?.uniteEntree || "unité";
+    const conversionFactor = article?.facteurConversion || 1;
+
+    // Get full unit names
+    const exitUnitFull = getFullUnitName(exitUnit);
+    const entryUnitFull = getFullUnitName(entryUnit);
+
+    // Display quantities with proper units (full names)
+    // Quantité Reçue: in entry unit (original received quantity)
+    const receivedInEntryUnit = article ? (movement.qte / conversionFactor) : movement.qte;
+    doc.text("Quantite Recue:        " + formatQty(receivedInEntryUnit) + " " + entryUnitFull, 15, yPos);
+    yPos += 5;
+    
+    // Quantité Acceptée: in exit unit (warehouse unit)
+    doc.text("Quantite Acceptee:     " + formatQty(validQty) + " " + exitUnitFull, 15, yPos);
+    yPos += 5;
+    
+    // Quantité Défectueuse: in exit unit (warehouse unit)
+    doc.text("Quantite Defectueuse:  " + formatQty(defectiveQty) + " " + exitUnitFull, 15, yPos);
+    yPos += 8;
+
+    // Conversion factor display (discreet, informative)
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 100, 100); // Gray text for discreet appearance
+    const conversionText = `Facteur de Conversion: 1 ${entryUnitFull} = ${conversionFactor} ${exitUnitFull}`;
+    doc.text(conversionText, 15, yPos);
+    doc.setTextColor(0, 0, 0); // Reset to black
+    yPos += 6;
+
+    // Observations / Control Note
+    if (movement.noteControle) {
+      yPos += 2;
+      doc.setFontSize(10);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(0, 0, 0);
-      doc.text(emergencyClean("Details de l'Entree"), 10, yPos);
-      yPos += 10;
+      doc.text("OBSERVATIONS", 10, yPos);
+      yPos += 7;
 
-      doc.setFontSize(10);
+      // Separator line
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.5);
+      doc.line(10, yPos, 200, yPos);
+      yPos += 6;
+
+      doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
-
-      // ID and Date
-      doc.text("ID du Mouvement: " + emergencyClean(movement.id), 15, yPos);
-      yPos += 7;
-
-      doc.text("Date d'Entree: " + emergencyClean(movement.date), 15, yPos);
-      yPos += 7;
-
-      doc.text("Article: " + emergencyClean(movement.article) + " (" + emergencyClean(movement.ref) + ")", 15, yPos);
-      yPos += 7;
-
-      // QUANTITY - ULTRA SIMPLE: Just one line
-      const { qty, unit } = getQuantityDisplay(movement);
-      doc.text("Quantite Saisie: " + qty + " " + unit, 15, yPos);
-      yPos += 7;
-
-      doc.text("Numero de Lot: " + emergencyClean(movement.lotNumber || 'N/A'), 15, yPos);
-      yPos += 7;
-
-      const lotDate = movement.lotDate ? new Date(movement.lotDate).toLocaleDateString('fr-FR') : 'N/A';
-      doc.text("Date de lot: " + emergencyClean(lotDate), 15, yPos);
-      yPos += 7;
-
-      doc.text("Source: " + emergencyClean(movement.emplacementDestination || 'N/A'), 15, yPos);
-      yPos += 7;
-
-      doc.text("Operateur: " + emergencyClean(movement.operateur), 15, yPos);
+      const noteLines = doc.splitTextToSize(emergencyClean(movement.noteControle), 180);
+      doc.text(noteLines, 15, yPos);
+      yPos += noteLines.length * 5 + 5;
     }
-  );
+  }
+  // CASE C: Total Refusal (Refusé)
+  else if (isTotalRefusal) {
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("MOTIF DU REFUS", 10, yPos);
+    yPos += 7;
+
+    // Separator line
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.line(10, yPos, 200, yPos);
+    yPos += 6;
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    const refusalReason = movement.refusalReason || movement.noteControle || "Non specifiee";
+    const reasonLines = doc.splitTextToSize(emergencyClean(refusalReason), 180);
+    doc.text(reasonLines, 15, yPos);
+    yPos += reasonLines.length * 5 + 5;
+
+    // Show zero acceptance
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("Quantite Acceptee: 0 (REFUS TOTAL)", 15, yPos);
+    yPos += 10;
+  }
+
+  // POINTS DE CONTRÔLE (Verification Checklist) - Minimalist text-based display
+  if (movement.verificationPoints && Object.keys(movement.verificationPoints).length > 0) {
+    yPos += 5;
+    
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text("POINTS DE CONTROLE", 10, yPos);
+    yPos += 7;
+
+    // Separator line
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.line(10, yPos, 200, yPos);
+    yPos += 6;
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    
+    const checklistLines = formatVerificationPoints(movement.verificationPoints, movement.type);
+    checklistLines.forEach(line => {
+      doc.text(emergencyClean(line), 15, yPos);
+      yPos += 5;
+    });
+    
+    yPos += 3;
+  }
+
+  // Professional Signature Section - Formal Layout
+  yPos = 200;
+  
+  // Separator line before signatures
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(10, yPos, 200, yPos);
+  yPos += 8;
+  
+  // Separator line before signatures
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(10, yPos, 200, yPos);
+  yPos += 8;
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+
+  // Left column: Operator
+  const leftX = 15;
+  const rightX = 120;
+  const signatureHeight = 20; // 2cm space for signature
+
+  // Operator signature block
+  doc.text("Signature de l'Operateur:", leftX, yPos);
+  yPos += 4;
+  
+  // Empty space for signature (20mm = ~7.5 lines)
+  doc.line(leftX, yPos + signatureHeight, leftX + 70, yPos + signatureHeight);
+  yPos += signatureHeight + 3;
+  
+  // Operator name
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.text("Nom: " + emergencyClean(movement.operateur), leftX, yPos);
+  yPos += 8;
+
+  // QC Controller signature block
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text("Signature du Controleur Qualite:", rightX, yPos - 8);
+  yPos -= 4;
+  
+  // Empty space for signature
+  doc.line(rightX, yPos + signatureHeight, rightX + 70, yPos + signatureHeight);
+  yPos += signatureHeight + 3;
+  
+  // QC Controller name
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.text("Nom: " + emergencyClean(movement.controleur || 'N/A'), rightX, yPos);
+  yPos += 10;
+
+  // Validation date at bottom (small, neutral font)
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  const validationDate = new Date().toLocaleDateString("fr-FR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+  doc.text("Date de Validation: " + emergencyClean(validationDate), 10, 285);
+
+  // Save PDF
+  const cleanTitle = isTotalRefusal ? "Avis_Refus_Reception" : "Bon_Entree";
+  const cleanId = emergencyClean(movement.id);
+  const filename = cleanTitle + "_" + cleanId + ".pdf";
+  doc.save(filename);
 };
 
 // 2. Bon de Sortie (Outbound) - SIMPLIFIED with proper quantity display
