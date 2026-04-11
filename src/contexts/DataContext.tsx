@@ -68,6 +68,12 @@ export interface Mouvement {
   noteControle?: string;        // QC control notes/observations for PDF
   verificationPoints?: Record<string, boolean>;  // QC checklist verification points state
   wasDelayed?: boolean;         // SLA tracking: was this movement delayed (> 24h in "En attente")?
+  // SORTIE ONLY: Dual refusal modes
+  refusalType?: "administrative" | "defective"; // Type of refusal for Sortie
+  nomOperateur?: string;        // For administrative error refusal
+  motifErreur?: string;         // For administrative error refusal
+  nomControleur?: string;       // For defective items refusal
+  motifRejet?: string;          // For defective items refusal
 }
 
 export interface InventoryRecord {
@@ -104,7 +110,7 @@ interface DataContextType {
   addMouvement: (mouvement: Omit<Mouvement, "id">) => void;
   updateMouvement: (id: string, mouvement: Partial<Mouvement>) => void;
   deleteMouvement: (id: string) => void;
-  approveQualityControl: (id: string, controleur: string, etatArticles: "Conforme" | "Non-conforme", unitesDefectueuses?: number, qteValide?: number, refusTotalMotif?: string, noteControle?: string, verificationPoints?: Record<string, boolean>) => void;
+  approveQualityControl: (id: string, controleur: string, etatArticles: "Conforme" | "Non-conforme", unitesDefectueuses?: number, qteValide?: number, refusTotalMotif?: string, noteControle?: string, verificationPoints?: Record<string, boolean>, refusalType?: "administrative" | "defective", nomOperateur?: string, motifErreur?: string, nomControleur?: string, motifRejet?: string) => void;
   rejectQualityControl: (id: string, controleur: string, raison: string) => void;
   
   addInventoryRecord: (record: Omit<InventoryRecord, "id">) => void;
@@ -430,7 +436,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setInventoryHistory([...inventoryHistory, ...newRecords]);
   };
 
-  const approveQualityControl = (id: string, controleur: string, etatArticles: "Conforme" | "Non-conforme", unitesDefectueuses: number = 0, qteValide?: number, refusTotalMotif?: string, noteControle?: string, verificationPoints?: Record<string, boolean>) => {
+  const approveQualityControl = (id: string, controleur: string, etatArticles: "Conforme" | "Non-conforme", unitesDefectueuses: number = 0, qteValide?: number, refusTotalMotif?: string, noteControle?: string, verificationPoints?: Record<string, boolean>, refusalType?: "administrative" | "defective", nomOperateur?: string, motifErreur?: string, nomControleur?: string, motifRejet?: string) => {
     const mouvement = mouvements.find(m => m.id === id);
     if (!mouvement) return;
 
@@ -458,28 +464,117 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log(`  Reason: ${refusTotalMotif}`);
       console.log(`  Control Notes: ${noteControle || 'N/A'}`);
 
-      // Update mouvement status to "Refusé"
-      setMouvements(mouvements.map(m =>
-        m.id === id
-          ? {
-              ...m,
-              statut: "Refusé" as const,
-              status: "rejected" as const,
-              controleur,
-              refusalReason: refusTotalMotif,
-              validQuantity: 0,
-              defectiveQuantity: mouvement.qte,
-              qcStatus: "Non-conforme",
-              noteControle: noteControle || refusTotalMotif,
-              verificationPoints: verificationPoints || {},
-              wasDelayed
-            }
-          : m
-      ));
+      // SORTIE ONLY: Dual refusal modes
+      if (mouvement.type === "Sortie" && refusalType) {
+        console.log(`  Refusal Type: ${refusalType}`);
+        
+        if (refusalType === "administrative") {
+          console.log(`  Operator: ${nomOperateur}`);
+          console.log(`  Error Reason: ${motifErreur}`);
+          
+          // Administrative error: NO stock deduction (goods return to stock)
+          setMouvements(mouvements.map(m =>
+            m.id === id
+              ? {
+                  ...m,
+                  statut: "Refusé" as const,
+                  status: "rejected" as const,
+                  controleur: nomOperateur || controleur,
+                  refusalReason: motifErreur,
+                  refusalType: "administrative",
+                  nomOperateur,
+                  motifErreur,
+                  validQuantity: 0,
+                  defectiveQuantity: mouvement.qte,
+                  qcStatus: "Non-conforme",
+                  noteControle: motifErreur || "",
+                  verificationPoints: verificationPoints || {},
+                  wasDelayed
+                }
+              : m
+          ));
+          console.log(`[REFUS ADMINISTRATIF] NO stock update - goods return to stock`);
+        } else if (refusalType === "defective") {
+          console.log(`  Controller: ${nomControleur}`);
+          console.log(`  Rejection Reason: ${motifRejet}`);
+          
+          // Defective items: MUST deduct from stock (permanent loss)
+          setMouvements(mouvements.map(m =>
+            m.id === id
+              ? {
+                  ...m,
+                  statut: "Refusé" as const,
+                  status: "rejected" as const,
+                  controleur: nomControleur || controleur,
+                  refusalReason: motifRejet,
+                  refusalType: "defective",
+                  nomControleur,
+                  motifRejet,
+                  validQuantity: 0,
+                  defectiveQuantity: mouvement.qte,
+                  qcStatus: "Non-conforme",
+                  noteControle: motifRejet || "",
+                  verificationPoints: verificationPoints || {},
+                  wasDelayed
+                }
+              : m
+          ));
+          
+          // CRITICAL: Deduct ALL units from stock (permanent loss)
+          setArticles(prevArticles => {
+            return prevArticles.map(article => {
+              if (article.ref !== mouvement.ref) {
+                return article;
+              }
 
-      // CRITICAL: NO stock update for refusals
-      // The goods never enter or leave the warehouse
-      console.log(`[REFUS TOTAL] NO stock update - transaction rejected`);
+              if (!mouvement.emplacementSource) {
+                return article;
+              }
+
+              console.log(`[REFUS DÉFECTUEUX] Article: ${article.nom} | Zone: ${mouvement.emplacementSource} | Qty to deduct: ${mouvement.qte}`);
+
+              const updatedInventory = article.inventory.map(loc => {
+                if (loc.zone === mouvement.emplacementSource) {
+                  const currentQty = Number(loc.quantity);
+                  const newQty = Math.max(0, currentQty - mouvement.qte);
+                  console.log(`[REFUS DÉFECTUEUX] Zone: ${loc.zone} | Before: ${currentQty} | After: ${newQty}`);
+                  return { ...loc, quantity: newQty };
+                }
+                return loc;
+              }).filter(l => Number(l.quantity) > 0);
+
+              const newTotalStock = Math.max(0, article.stock - mouvement.qte);
+              console.log(`[REFUS DÉFECTUEUX] Article: ${article.nom} | Total stock: ${article.stock} → ${newTotalStock}`);
+
+              return {
+                ...article,
+                stock: newTotalStock,
+                inventory: updatedInventory
+              };
+            });
+          });
+        }
+      } else {
+        // ENTRÉE ONLY: Simple refusal logic (no stock impact)
+        setMouvements(mouvements.map(m =>
+          m.id === id
+            ? {
+                ...m,
+                statut: "Refusé" as const,
+                status: "rejected" as const,
+                controleur,
+                refusalReason: refusTotalMotif,
+                validQuantity: 0,
+                defectiveQuantity: mouvement.qte,
+                qcStatus: "Non-conforme",
+                noteControle: noteControle || refusTotalMotif,
+                verificationPoints: verificationPoints || {},
+                wasDelayed
+              }
+              : m
+        ));
+        console.log(`[REFUS TOTAL] NO stock update - transaction rejected`);
+      }
       return;
     }
 

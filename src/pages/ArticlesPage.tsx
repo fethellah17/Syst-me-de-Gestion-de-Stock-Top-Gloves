@@ -316,9 +316,15 @@ const ArticlesPage = () => {
                   mouvements.forEach(mouvement => {
                     if (mouvement.ref === a.ref) {
                       if (mouvement.type === "Entrée") {
-                        // Use original quantity entered by user (in entry units)
-                        const originalQty = mouvement.qteOriginale || mouvement.qte;
-                        totalQtyInEntryUnits += originalQty;
+                        // CRITICAL FIX: Only count Entrée movements that are CONFIRMED (Terminé)
+                        // "En attente" entries are NOT yet physically stored and should NOT be counted
+                        if (mouvement.statut === "Terminé" || mouvement.status === "approved") {
+                          const originalQty = mouvement.qteOriginale || mouvement.qte;
+                          totalQtyInEntryUnits += originalQty;
+                          console.log(`[CALC] ${a.nom} ENTRÉE CONFIRMÉE: +${originalQty} ${a.uniteEntree}`);
+                        } else {
+                          console.log(`[CALC] ${a.nom} ENTRÉE EN ATTENTE (IGNORÉE): ${mouvement.qte} ${a.uniteSortie}`);
+                        }
                       } else if (mouvement.type === "Sortie") {
                         // Only subtract if approved (qte is already in exit units, convert back to entry units)
                         if (mouvement.statut === "Terminé" || mouvement.status === "approved") {

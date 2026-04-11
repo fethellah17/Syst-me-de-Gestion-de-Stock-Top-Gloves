@@ -20,6 +20,11 @@ export interface InspectionData {
   qteDefectueuseUnit: "entree" | "sortie"; // Track which unit was used for input
   noteControle: string;
   refusTotalMotif?: string;
+  refusalType?: "administrative" | "defective"; // SORTIE ONLY: Type of refusal
+  nomOperateur?: string; // For administrative error
+  motifErreur?: string; // For administrative error
+  nomControleur?: string; // For defective items
+  motifRejet?: string; // For defective items
 }
 
 // Define checklists for each movement type
@@ -85,6 +90,11 @@ export const InspectionModal = ({
   const [noteControle, setNoteControle] = useState("");
   const [refusTotal, setRefusTotal] = useState(false);
   const [refusTotalMotif, setRefusTotalMotif] = useState("");
+  const [refusalType, setRefusalType] = useState<"administrative" | "defective" | null>(null);
+  const [nomOperateur, setNomOperateur] = useState("");
+  const [motifErreur, setMotifErreur] = useState("");
+  const [nomControleur, setNomControleur] = useState("");
+  const [motifRejet, setMotifRejet] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
 
   // Initialize quantities and verification points when mouvement changes
@@ -96,6 +106,11 @@ export const InspectionModal = ({
       setNoteControle("");
       setRefusTotal(false);
       setRefusTotalMotif("");
+      setRefusalType(null);
+      setNomOperateur("");
+      setMotifErreur("");
+      setNomControleur("");
+      setMotifRejet("");
       
       // Initialize verification points based on movement type
       const checklist = getChecklistForType(mouvement.type);
@@ -136,8 +151,34 @@ export const InspectionModal = ({
   const validateForm = (): boolean => {
     const newErrors: string[] = [];
 
-    // If refus total is selected, only validate controller name and motif
-    if (refusTotal) {
+    // SORTIE ONLY: If refus total is selected, validate dual refusal mode
+    if (mouvement?.type === "Sortie" && refusTotal) {
+      if (!refusalType) {
+        newErrors.push("Veuillez sélectionner le type de refus");
+      }
+      
+      if (refusalType === "administrative") {
+        if (!nomOperateur.trim()) {
+          newErrors.push("Veuillez renseigner le nom de l'opérateur");
+        }
+        if (!motifErreur.trim()) {
+          newErrors.push("Veuillez renseigner le motif de l'erreur");
+        }
+      } else if (refusalType === "defective") {
+        if (!nomControleur.trim()) {
+          newErrors.push("Veuillez renseigner le nom du contrôleur");
+        }
+        if (!motifRejet.trim()) {
+          newErrors.push("Veuillez renseigner le motif du rejet");
+        }
+      }
+      
+      setErrors(newErrors);
+      return newErrors.length === 0;
+    }
+
+    // ENTRÉE ONLY: Simple refusal logic (no stock impact)
+    if (mouvement?.type === "Entrée" && refusTotal) {
       if (!controleur.trim()) {
         newErrors.push("Veuillez renseigner le nom du contrôleur");
       }
@@ -178,8 +219,24 @@ export const InspectionModal = ({
 
   const handleApprove = () => {
     if (validateForm()) {
-      if (refusTotal) {
-        // Refus total: send with motif
+      // SORTIE ONLY: Dual refusal modes
+      if (mouvement?.type === "Sortie" && refusTotal && refusalType) {
+        onApprove({
+          controleur: refusalType === "administrative" ? nomOperateur : nomControleur,
+          verificationPoints: {},
+          qteValide: 0,
+          qteDefectueuse: mouvement?.qte || 0,
+          qteDefectueuseUnit: "sortie",
+          noteControle: "",
+          refusalType,
+          nomOperateur: refusalType === "administrative" ? nomOperateur : undefined,
+          motifErreur: refusalType === "administrative" ? motifErreur : undefined,
+          nomControleur: refusalType === "defective" ? nomControleur : undefined,
+          motifRejet: refusalType === "defective" ? motifRejet : undefined,
+        });
+      }
+      // ENTRÉE ONLY: Simple refusal logic
+      else if (mouvement?.type === "Entrée" && refusTotal) {
         onApprove({
           controleur,
           verificationPoints: {},
@@ -189,8 +246,9 @@ export const InspectionModal = ({
           noteControle: "",
           refusTotalMotif,
         });
-      } else {
-        // Normal approval
+      }
+      // Normal approval (both Entrée and Sortie)
+      else {
         onApprove({
           controleur,
           verificationPoints,
@@ -303,36 +361,158 @@ export const InspectionModal = ({
                 </div>
               </div>
 
-              {/* Controller Name */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Nom du Contrôleur <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={controleur}
-                  onChange={(e) => setControleur(e.target.value)}
-                  placeholder="Entrez votre nom"
-                  className="w-full h-10 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
+              {/* SORTIE ONLY: Dual Refusal Mode Selection */}
+              {mouvement.type === "Sortie" ? (
+                <>
+                  {/* Refusal Type Selection */}
+                  <div className="space-y-3">
+                    <h3 className="font-semibold text-foreground text-sm uppercase tracking-wide">
+                      Sélectionnez le Type de Refus
+                    </h3>
+                    
+                    {/* Option 1: Administrative Error */}
+                    <label className="flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-colors"
+                      style={{
+                        borderColor: refusalType === "administrative" ? "rgb(59, 130, 246)" : "rgb(226, 232, 240)",
+                        backgroundColor: refusalType === "administrative" ? "rgb(239, 246, 255)" : "transparent"
+                      }}>
+                      <input
+                        type="radio"
+                        name="refusalType"
+                        value="administrative"
+                        checked={refusalType === "administrative"}
+                        onChange={() => setRefusalType("administrative")}
+                        className="w-5 h-5 rounded-full border-2 mt-0.5 cursor-pointer"
+                      />
+                      <div className="flex-1">
+                        <div className="font-semibold text-foreground text-sm">
+                          Erreur Administrative / Retour en Stock
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Erreur de picking ou d'entrée. La marchandise est réintégrée au stock.
+                        </div>
+                      </div>
+                    </label>
 
-              {/* Refus Total Motif - Large mandatory text area */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Motif du Refus Total <span className="text-red-500">* (Obligatoire)</span>
-                </label>
-                <textarea
-                  value={refusTotalMotif}
-                  onChange={(e) => setRefusTotalMotif(e.target.value)}
-                  placeholder="Décrivez les raisons du refus complet de ce mouvement..."
-                  className="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                  rows={5}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Justification détaillée du refus total
-                </p>
-              </div>
+                    {/* Option 2: Defective Items */}
+                    <label className="flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-colors"
+                      style={{
+                        borderColor: refusalType === "defective" ? "rgb(220, 38, 38)" : "rgb(226, 232, 240)",
+                        backgroundColor: refusalType === "defective" ? "rgb(254, 242, 242)" : "transparent"
+                      }}>
+                      <input
+                        type="radio"
+                        name="refusalType"
+                        value="defective"
+                        checked={refusalType === "defective"}
+                        onChange={() => setRefusalType("defective")}
+                        className="w-5 h-5 rounded-full border-2 mt-0.5 cursor-pointer"
+                      />
+                      <div className="flex-1">
+                        <div className="font-semibold text-foreground text-sm">
+                          Article Défectueux / Rebut
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Dommage physique. La marchandise est déduite du stock.
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Conditional Fields Based on Refusal Type */}
+                  {refusalType === "administrative" && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-2">
+                          Nom de l'Opérateur <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={nomOperateur}
+                          onChange={(e) => setNomOperateur(e.target.value)}
+                          placeholder="Entrez le nom de l'opérateur"
+                          className="w-full h-10 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-2">
+                          Motif de l'Erreur <span className="text-red-500">*</span>
+                        </label>
+                        <textarea
+                          value={motifErreur}
+                          onChange={(e) => setMotifErreur(e.target.value)}
+                          placeholder="Décrivez l'erreur de préparation..."
+                          className="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                          rows={4}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {refusalType === "defective" && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-2">
+                          Nom du Contrôleur <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={nomControleur}
+                          onChange={(e) => setNomControleur(e.target.value)}
+                          placeholder="Entrez le nom du contrôleur"
+                          className="w-full h-10 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-2">
+                          Motif du Rejet <span className="text-red-500">*</span>
+                        </label>
+                        <textarea
+                          value={motifRejet}
+                          onChange={(e) => setMotifRejet(e.target.value)}
+                          placeholder="Décrivez les défauts détectés..."
+                          className="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                          rows={4}
+                        />
+                      </div>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* ENTRÉE ONLY: Simple refusal logic */}
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Nom du Contrôleur <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={controleur}
+                      onChange={(e) => setControleur(e.target.value)}
+                      placeholder="Entrez votre nom"
+                      className="w-full h-10 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Motif du Refus Total <span className="text-red-500">* (Obligatoire)</span>
+                    </label>
+                    <textarea
+                      value={refusTotalMotif}
+                      onChange={(e) => setRefusTotalMotif(e.target.value)}
+                      placeholder="Décrivez les raisons du refus complet de ce mouvement..."
+                      className="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      rows={5}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Justification détaillée du refus total
+                    </p>
+                  </div>
+                </>
+              )}
             </>
           ) : (
             <>
@@ -647,10 +827,20 @@ export const InspectionModal = ({
           </button>
           <button
             onClick={handleApprove}
-            disabled={isApproveDisabled || !controleur.trim() || (refusTotal && !refusTotalMotif.trim())}
+            disabled={
+              refusTotal
+                ? mouvement?.type === "Sortie"
+                  ? !refusalType || (refusalType === "administrative" && (!nomOperateur.trim() || !motifErreur.trim())) || (refusalType === "defective" && (!nomControleur.trim() || !motifRejet.trim()))
+                  : !controleur.trim() || !refusTotalMotif.trim()
+                : isApproveDisabled || !controleur.trim()
+            }
             className={`flex-1 h-10 rounded-md text-sm font-medium transition-colors ${
               refusTotal
-                ? isApproveDisabled || !controleur.trim() || !refusTotalMotif.trim()
+                ? mouvement?.type === "Sortie"
+                  ? !refusalType || (refusalType === "administrative" && (!nomOperateur.trim() || !motifErreur.trim())) || (refusalType === "defective" && (!nomControleur.trim() || !motifRejet.trim()))
+                    ? "bg-muted text-muted-foreground cursor-not-allowed"
+                    : "bg-red-600 text-white hover:bg-red-700"
+                  : !controleur.trim() || !refusTotalMotif.trim()
                   ? "bg-muted text-muted-foreground cursor-not-allowed"
                   : "bg-red-600 text-white hover:bg-red-700"
                 : isApproveDisabled || !controleur.trim()
@@ -658,7 +848,11 @@ export const InspectionModal = ({
                 : "bg-green-600 text-white hover:bg-green-700"
             }`}
           >
-            {refusTotal ? "Confirmer le Refus Total" : "Approuver la Réception"}
+            {refusTotal
+              ? mouvement?.type === "Sortie"
+                ? "Confirmer le Refus Total"
+                : "Confirmer le Refus Total"
+              : "Approuver la Réception"}
           </button>
         </div>
       </div>

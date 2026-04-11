@@ -4,7 +4,9 @@ import {
   generateOutboundPDF, 
   generateTransferPDF, 
   generateAdjustmentPDF,
-  generateRejectionPDF 
+  generateRejectionPDF,
+  generateAdministrativeErrorPDF,
+  generateDefectiveItemsPDF
 } from "@/lib/pdf-generator";
 import { UnitBadge } from "@/components/UnitBadge";
 import type { Mouvement, Article } from "@/contexts/DataContext";
@@ -429,6 +431,24 @@ export const MovementTable = ({
                           <FileText className="w-4 h-4" />
                         </button>
                       )}
+                      {m.type === "Sortie" && m.statut === "Refusé" && m.refusalType === "administrative" && (
+                        <button
+                          onClick={() => generateAdministrativeErrorPDF(m)}
+                          className="p-1.5 rounded-md hover:bg-orange-100 transition-colors text-orange-600 hover:text-orange-800"
+                          title="Télécharger la Note de Correction (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Sortie" && m.statut === "Refusé" && m.refusalType === "defective" && (
+                        <button
+                          onClick={() => generateDefectiveItemsPDF(m)}
+                          className="p-1.5 rounded-md hover:bg-red-100 transition-colors text-red-600 hover:text-red-800"
+                          title="Télécharger l'Avis de Rejet (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
                       {m.type === "Entrée" && m.statut !== "En attente" && (
                         <button
                           onClick={() => generateInboundPDF(m, articles)}
@@ -707,6 +727,24 @@ export const MovementTable = ({
                           onClick={() => generateOutboundPDF(m)}
                           className="p-2 rounded-md hover:bg-green-100 dark:hover:bg-green-900 transition-colors text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300"
                           title="Télécharger le Bon de Sortie (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Sortie" && m.statut === "Refusé" && m.refusalType === "administrative" && (
+                        <button
+                          onClick={() => generateAdministrativeErrorPDF(m)}
+                          className="p-2 rounded-md hover:bg-orange-100 dark:hover:bg-orange-900 transition-colors text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-300"
+                          title="Télécharger la Note de Correction (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Sortie" && m.statut === "Refusé" && m.refusalType === "defective" && (
+                        <button
+                          onClick={() => generateDefectiveItemsPDF(m)}
+                          className="p-2 rounded-md hover:bg-red-100 dark:hover:bg-red-900 transition-colors text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                          title="Télécharger l'Avis de Rejet (PDF)"
                         >
                           <FileText className="w-4 h-4" />
                         </button>

@@ -6,6 +6,7 @@ import { Toast } from "@/components/Toast";
 import { MovementTable } from "@/components/MovementTable";
 import { BulkMovementModal } from "@/components/BulkMovementModal";
 import { InspectionModal, type InspectionData } from "@/components/InspectionModal";
+import { generateAdministrativeErrorPDF, generateDefectiveItemsPDF } from "@/lib/pdf-generator";
 import { format } from "date-fns";
 
 const MouvementsPage = () => {
@@ -114,23 +115,67 @@ const MouvementsPage = () => {
     if (!mouvement) return;
 
     // Check if this is a total refusal
-    if (data.refusTotalMotif) {
-      // Total refusal
-      approveQualityControl(
-        inspectionMouvementId,
-        data.controleur,
-        "Non-conforme",
-        0,
-        0,
-        data.refusTotalMotif,
-        data.refusTotalMotif,
-        data.verificationPoints
-      );
+    if (data.refusTotalMotif || data.refusalType) {
+      // SORTIE ONLY: Dual refusal modes
+      if (mouvement.type === "Sortie" && data.refusalType) {
+        approveQualityControl(
+          inspectionMouvementId,
+          data.controleur,
+          "Non-conforme",
+          0,
+          0,
+          "refusal", // Placeholder to trigger refusal logic
+          "",
+          data.verificationPoints,
+          data.refusalType,
+          data.nomOperateur,
+          data.motifErreur,
+          data.nomControleur,
+          data.motifRejet
+        );
 
-      setToast({
-        message: `✗ Mouvement refusé complètement (${mouvement.qte} ${mouvement.uniteSortie})`,
-        type: "success"
-      });
+        // Trigger PDF generation based on refusal type
+        const updatedMouvement = {
+          ...mouvement,
+          nomOperateur: data.nomOperateur,
+          motifErreur: data.motifErreur,
+          nomControleur: data.nomControleur,
+          motifRejet: data.motifRejet,
+        };
+
+        if (data.refusalType === "administrative") {
+          generateAdministrativeErrorPDF(updatedMouvement);
+        } else if (data.refusalType === "defective") {
+          generateDefectiveItemsPDF(updatedMouvement);
+        }
+
+        const refusalTypeLabel = data.refusalType === "administrative" 
+          ? "Erreur Administrative" 
+          : "Article Défectueux";
+        
+        setToast({
+          message: `✗ Mouvement refusé - ${refusalTypeLabel} (${mouvement.qte} ${mouvement.uniteSortie})`,
+          type: "success"
+        });
+      }
+      // ENTRÉE ONLY: Simple refusal logic
+      else if (mouvement.type === "Entrée" && data.refusTotalMotif) {
+        approveQualityControl(
+          inspectionMouvementId,
+          data.controleur,
+          "Non-conforme",
+          0,
+          0,
+          data.refusTotalMotif,
+          data.refusTotalMotif,
+          data.verificationPoints
+        );
+
+        setToast({
+          message: `✗ Mouvement refusé complètement (${mouvement.qte} ${mouvement.uniteSortie})`,
+          type: "success"
+        });
+      }
     } else {
       // Normal approval
       approveQualityControl(

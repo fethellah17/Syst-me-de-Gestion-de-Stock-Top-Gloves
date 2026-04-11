@@ -1240,6 +1240,359 @@ export const generateRejectionPDF = async (movement: Mouvement) => {
   doc.save(filename);
 };
 
+// 5a. NOTE DE CORRECTION DE SORTIE (Administrative Error - No Stock Deduction)
+export const generateAdministrativeErrorPDF = async (movement: Mouvement) => {
+  console.log('=== GENERATING ADMINISTRATIVE ERROR PDF ===');
+  console.log('Movement:', movement);
+  
+  const doc = new jsPDF();
+  const logoBase64 = await getLogoBase64();
+
+  const contentStartY = renderHeader(doc, "NOTE DE CORRECTION DE PRÉPARATION", logoBase64);
+  let yPos = contentStartY;
+
+  // Movement Details Section
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.text("DETAILS DE LA CORRECTION", 10, yPos);
+  yPos += 7;
+
+  // Separator line
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(10, yPos, 200, yPos);
+  yPos += 6;
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+
+  doc.text("Article: " + emergencyClean(movement.article) + " (" + emergencyClean(movement.ref) + ")", 15, yPos);
+  yPos += 5;
+
+  doc.text("Date de Sortie: " + emergencyClean(movement.date), 15, yPos);
+  yPos += 5;
+
+  doc.text("Numero de Lot: " + emergencyClean(movement.lotNumber || 'N/A'), 15, yPos);
+  yPos += 5;
+
+  const lotDate = movement.lotDate ? new Date(movement.lotDate).toLocaleDateString('fr-FR') : 'N/A';
+  doc.text("Date du Lot: " + emergencyClean(lotDate), 15, yPos);
+  yPos += 5;
+
+  doc.text("Zone Source: " + emergencyClean(movement.emplacementSource || 'N/A'), 15, yPos);
+  yPos += 5;
+
+  doc.text("Destination: " + emergencyClean(movement.emplacementDestination || 'N/A'), 15, yPos);
+  yPos += 10;
+
+  // Quantity Section
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text("QUANTITES", 10, yPos);
+  yPos += 7;
+
+  // Separator line
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(10, yPos, 200, yPos);
+  yPos += 6;
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+
+  const { qty, unit } = getQuantityDisplay(movement);
+  renderQuantityLine(doc, "Quantite Concernee:", movement.qte, unit, 15, yPos);
+  yPos += 5;
+  doc.text("Statut : Annulation administrative - Articles reintegres au stock (Flux non-deduit).", 15, yPos);
+  yPos += 10;
+
+  // Error Details Section
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text("MOTIF DE L'ERREUR", 10, yPos);
+  yPos += 7;
+
+  // Separator line
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(10, yPos, 200, yPos);
+  yPos += 6;
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  const errorReason = movement.motifErreur || movement.noteControle || "Non specifiee";
+  const reasonLines = doc.splitTextToSize(emergencyClean(errorReason), 180);
+  doc.text(reasonLines, 15, yPos);
+  yPos += reasonLines.length * 5 + 8;
+
+  // Important Note
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.text("NOTE : Cette sortie a ete annulee. Les articles restent disponibles dans le depot.", 15, yPos);
+  yPos += 10;
+
+  // Professional Signature Section - SCENARIO A: Only Operator Signature
+  const minSignatureY = 180;
+  if (yPos < minSignatureY) {
+    yPos = minSignatureY;
+  }
+  
+  yPos += 8;
+  
+  // Separator line before signatures
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(10, yPos, 200, yPos);
+  yPos += 8;
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(0, 0, 0);
+
+  const leftX = 15;
+  const signatureHeight = 18;
+  const columnWidth = 70;
+
+  // LEFT COLUMN: OPERATOR SIGNATURE ONLY
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text("Signature de l'Operateur:", leftX, yPos);
+  yPos += 6;
+  
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(leftX, yPos + signatureHeight, leftX + columnWidth, yPos + signatureHeight);
+  yPos += signatureHeight + 5;
+  
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.text("Nom: " + emergencyClean(movement.nomOperateur || movement.operateur), leftX, yPos);
+
+  // Validation date at bottom
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  const validationDate = new Date().toLocaleDateString("fr-FR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+  doc.text("Date de Validation: " + emergencyClean(validationDate), 10, 285);
+
+  // Footer Timestamp
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(100, 100, 100);
+  const generationDate = new Date().toLocaleDateString("fr-FR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+  const footerText = `Document genere automatiquement par le Systeme de Gestion de Stock Top Gloves le ${generationDate}`;
+  doc.text(emergencyClean(footerText), 10, 292, { maxWidth: 190 });
+  doc.setTextColor(0, 0, 0);
+
+  // Save PDF with standardized filename
+  const cleanProductName = emergencyClean(movement.article)
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9\-]/g, '')
+    .substring(0, 50);
+  const filename = `Avis_Rejet_Sortie_${cleanProductName}.pdf`;
+  doc.save(filename);
+};
+
+// 5b. AVIS DE REJET DE SORTIE (Defective Items - Stock Deduction)
+export const generateDefectiveItemsPDF = async (movement: Mouvement) => {
+  console.log('=== GENERATING DEFECTIVE ITEMS PDF ===');
+  console.log('Movement:', movement);
+  
+  const doc = new jsPDF();
+  const logoBase64 = await getLogoBase64();
+
+  const contentStartY = renderHeader(doc, "AVIS DE REJET DE SORTIE (DÉFECTUEUX)", logoBase64);
+  let yPos = contentStartY;
+
+  // Movement Details Section
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.text("DETAILS DU REJET", 10, yPos);
+  yPos += 7;
+
+  // Separator line
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(10, yPos, 200, yPos);
+  yPos += 6;
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+
+  doc.text("Article: " + emergencyClean(movement.article) + " (" + emergencyClean(movement.ref) + ")", 15, yPos);
+  yPos += 5;
+
+  doc.text("Date de Sortie: " + emergencyClean(movement.date), 15, yPos);
+  yPos += 5;
+
+  doc.text("Numero de Lot: " + emergencyClean(movement.lotNumber || 'N/A'), 15, yPos);
+  yPos += 5;
+
+  const lotDate = movement.lotDate ? new Date(movement.lotDate).toLocaleDateString('fr-FR') : 'N/A';
+  doc.text("Date du Lot: " + emergencyClean(lotDate), 15, yPos);
+  yPos += 5;
+
+  doc.text("Zone Source: " + emergencyClean(movement.emplacementSource || 'N/A'), 15, yPos);
+  yPos += 5;
+
+  doc.text("Destination: " + emergencyClean(movement.emplacementDestination || 'N/A'), 15, yPos);
+  yPos += 10;
+
+  // Quantity Section
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text("QUANTITES", 10, yPos);
+  yPos += 7;
+
+  // Separator line
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(10, yPos, 200, yPos);
+  yPos += 6;
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+
+  const { qty, unit } = getQuantityDisplay(movement);
+  renderQuantityLine(doc, "Quantite Rejetee:", movement.qte, unit, 15, yPos);
+  yPos += 5;
+  doc.text("(Articles non-conformes deduits du stock physique)", 15, yPos);
+  yPos += 10;
+
+  // Defect Details Section
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text("MOTIF DU REJET", 10, yPos);
+  yPos += 7;
+
+  // Separator line
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(10, yPos, 200, yPos);
+  yPos += 6;
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  const defectReason = movement.motifRejet || movement.noteControle || "Non specifiee";
+  const reasonLines = doc.splitTextToSize(emergencyClean(defectReason), 180);
+  doc.text(reasonLines, 15, yPos);
+  yPos += reasonLines.length * 5 + 8;
+
+  // Important Note
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(220, 38, 38); // Red for emphasis
+  doc.text("NOTE : Articles non-conformes deduits du stock physique.", 15, yPos);
+  doc.setTextColor(0, 0, 0);
+  yPos += 10;
+
+  // Professional Signature Section - SCENARIO B: Both Operator and QC Controller
+  const minSignatureY = 180;
+  if (yPos < minSignatureY) {
+    yPos = minSignatureY;
+  }
+  
+  yPos += 8;
+  
+  // Separator line before signatures
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(10, yPos, 200, yPos);
+  yPos += 8;
+
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(0, 0, 0);
+
+  const leftX = 15;
+  const rightX = 115;
+  const signatureHeight = 18;
+  const columnWidth = 70;
+
+  // LEFT COLUMN: OPERATOR SIGNATURE
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text("Signature de l'Operateur:", leftX, yPos);
+  yPos += 6;
+  
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(leftX, yPos + signatureHeight, leftX + columnWidth, yPos + signatureHeight);
+  yPos += signatureHeight + 5;
+  
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.text("Nom: " + emergencyClean(movement.operateur), leftX, yPos);
+
+  // RIGHT COLUMN: QC CONTROLLER SIGNATURE
+  let signatureYPos = yPos - signatureHeight - 5 - 6;
+  
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+  doc.text("Signature du Controleur Qualite:", rightX, signatureYPos);
+  signatureYPos += 6;
+  
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.5);
+  doc.line(rightX, signatureYPos + signatureHeight, rightX + columnWidth, signatureYPos + signatureHeight);
+  signatureYPos += signatureHeight + 5;
+  
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.text("Nom: " + emergencyClean(movement.nomControleur || movement.controleur || 'N/A'), rightX, signatureYPos);
+
+  // Validation date at bottom
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  const validationDate = new Date().toLocaleDateString("fr-FR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+  doc.text("Date de Validation: " + emergencyClean(validationDate), 10, 285);
+
+  // Footer Timestamp
+  doc.setFontSize(7);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(100, 100, 100);
+  const generationDate = new Date().toLocaleDateString("fr-FR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+  const footerText = `Document genere automatiquement par le Systeme de Gestion de Stock Top Gloves le ${generationDate}`;
+  doc.text(emergencyClean(footerText), 10, 292, { maxWidth: 190 });
+  doc.setTextColor(0, 0, 0);
+
+  // Save PDF with standardized filename
+  const cleanProductName = emergencyClean(movement.article)
+    .replace(/\s+/g, '-')
+    .replace(/[^a-zA-Z0-9\-]/g, '')
+    .substring(0, 50);
+  const filename = `Avis_Rejet_Sortie_${cleanProductName}.pdf`;
+  doc.save(filename);
+};
+
 
 
 // 6. Bon d'Inventaire (Inventory Receipt) - Shows inventory adjustment details
