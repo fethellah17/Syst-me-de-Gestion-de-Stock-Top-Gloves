@@ -18,6 +18,7 @@ import StaffPage from "@/pages/StaffPage";
 import StaffFormPage from "@/pages/StaffFormPage";
 import UnitesPage from "@/pages/UnitesPage";
 import DestinationsPage from "@/pages/DestinationsPage";
+import FournisseursPage from "@/pages/FournisseursPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,6 +43,7 @@ const AppRoutes = () => (
     <Route path="/categories" element={<ProtectedRoute><CategoriesPage /></ProtectedRoute>} />
     <Route path="/emplacements" element={<ProtectedRoute><EmplacementsPage /></ProtectedRoute>} />
     <Route path="/destinations" element={<ProtectedRoute><DestinationsPage /></ProtectedRoute>} />
+    <Route path="/fournisseurs" element={<ProtectedRoute><FournisseursPage /></ProtectedRoute>} />
     <Route path="/mouvements" element={<ProtectedRoute><MouvementsPage /></ProtectedRoute>} />
     <Route path="/inventaire" element={<ProtectedRoute><InventairePage /></ProtectedRoute>} />
     <Route path="/unites" element={<ProtectedRoute><UnitesPage /></ProtectedRoute>} />

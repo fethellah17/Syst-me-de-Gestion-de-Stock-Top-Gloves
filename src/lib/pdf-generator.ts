@@ -9,11 +9,24 @@ import { getFullUnitName } from './stock-utils';
 // Signature: Bottom-right
 
 /**
- * EMERGENCY CLEAN - Remove ALL & symbols
- * This is the simplest possible approach
+ * EMERGENCY CLEAN - Remove ALL problematic characters
+ * Handles HTML entities, ampersands, and other encoding issues
+ * This is the simplest possible approach to prevent distorted text
  */
 const emergencyClean = (text: string | number): string => {
-  return String(text).replace(/&/g, '');
+  let result = String(text);
+  
+  // Remove all ampersands (handles &Q&u&a&n&t&i&t&e pattern)
+  result = result.replace(/&/g, '');
+  
+  // Remove HTML entities like &#123; or &amp;
+  result = result.replace(/&#\d+;/g, '');
+  result = result.replace(/&[a-zA-Z]+;/g, '');
+  
+  // Ensure no double spaces
+  result = result.replace(/\s+/g, ' ').trim();
+  
+  return result;
 };
 
 /**
@@ -117,8 +130,9 @@ const renderObservationsSection = (doc: jsPDF, note: string, xPos: number, yPos:
   doc.setFont("helvetica", "normal");
   doc.setTextColor(0, 0, 0);
   
-  const cleanNote = emergencyClean(note);
+  const cleanNote = emergencyClean(String(note));
   const noteLines = doc.splitTextToSize(cleanNote, 180);
+  // CRITICAL: Pass array from splitTextToSize, not the original note
   doc.text(noteLines, xPos, yPos);
   
   // Calculate new yPos based on number of lines
@@ -131,20 +145,22 @@ const renderObservationsSection = (doc: jsPDF, note: string, xPos: number, yPos:
 /**
  * Safely render a quantity line in PDF
  * Ensures proper text encoding and no overlapping
+ * CRITICAL: Ensure text is passed as a single string, never as an array
  */
 const renderQuantityLine = (doc: jsPDF, label: string, quantity: number, unit: string, xPos: number, yPos: number): void => {
   // Clean all components separately
-  const cleanLabel = emergencyClean(label);
+  const cleanLabel = emergencyClean(String(label));
   const cleanQty = formatQty(quantity);
-  const cleanUnit = emergencyClean(unit);
+  const cleanUnit = emergencyClean(String(unit));
   
-  // Build the complete text
-  const fullText = `${cleanLabel} ${cleanQty} ${cleanUnit}`;
+  // Build the complete text as a single string (CRITICAL: not an array)
+  const fullText = String(`${cleanLabel} ${cleanQty} ${cleanUnit}`);
   
   // Render with proper font settings
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(0, 0, 0);
+  // CRITICAL: Pass as string, not array - jsPDF will split arrays with separators
   doc.text(fullText, xPos, yPos);
 };
 
@@ -160,6 +176,9 @@ const getUnit = (unitId: string | undefined): string => {
 /**
  * Calculate Quality Health Score (Taux de Conformité)
  * Formula: (Valid Quantity / Received Quantity) * 100
+ * PRECISION FIX: Uses 2 decimal places to ensure accuracy
+ * - Shows 99.90% instead of 100% when there's even minimal damage
+ * - Only shows "(Réception Parfaite)" when defective quantity is exactly 0
  * @returns Object with score percentage and contextual label
  */
 const calculateQualityScore = (validQuantity: number, receivedQuantity: number): { score: number; label: string; isPerfect: boolean; isRefused: boolean } => {
@@ -168,19 +187,28 @@ const calculateQualityScore = (validQuantity: number, receivedQuantity: number):
   }
   
   const score = (validQuantity / receivedQuantity) * 100;
-  const roundedScore = Math.round(score * 10) / 10; // Round to 1 decimal place
+  // CRITICAL: Use toFixed(2) for precise 2 decimal places, then convert back to number
+  const preciseScore = parseFloat(score.toFixed(2));
   
-  const isPerfect = roundedScore === 100;
-  const isRefused = roundedScore === 0;
+  // isPerfect ONLY if score is EXACTLY 100.00 (no defects at all)
+  const isPerfect = preciseScore === 100.00;
+  // isRefused ONLY if score is EXACTLY 0.00 (all rejected)
+  const isRefused = preciseScore === 0.00;
   
-  let label = `${roundedScore.toLocaleString('fr-FR')}%`;
+  // Format with 2 decimal places for display
+  const formattedScore = preciseScore.toLocaleString('fr-FR', { 
+    minimumFractionDigits: 2, 
+    maximumFractionDigits: 2 
+  });
+  
+  let label = `${formattedScore}%`;
   if (isPerfect) {
     label += " (Réception Parfaite)";
   } else if (isRefused) {
     label += " (Refus Total)";
   }
   
-  return { score: roundedScore, label, isPerfect, isRefused };
+  return { score: preciseScore, label, isPerfect, isRefused };
 };
 
 /**
@@ -403,6 +431,11 @@ export const generateInboundPDF = async (movement: Mouvement, articles?: any[]) 
   doc.text("Date du Lot: " + emergencyClean(lotDate), 15, yPos);
   yPos += 5;
 
+  if (movement.fournisseur) {
+    doc.text("Fournisseur: " + emergencyClean(movement.fournisseur), 15, yPos);
+    yPos += 5;
+  }
+
   doc.text("Zone de Destination: " + emergencyClean(movement.emplacementDestination || 'N/A'), 15, yPos);
   yPos += 5;
 
@@ -460,7 +493,7 @@ export const generateInboundPDF = async (movement: Mouvement, articles?: any[]) 
     doc.setLineWidth(0.3);
     doc.rect(15, yPos - 2, 100, 8, 'S');
     
-    doc.text("Taux de Conformite: " + qualityScoreA.label, 17, yPos + 3);
+    doc.text(emergencyClean("Taux de Conformite: " + qualityScoreA.label), 17, yPos + 3);
     yPos += 12;
 
     // Conversion factor display (discreet, informative)
@@ -531,7 +564,7 @@ export const generateInboundPDF = async (movement: Mouvement, articles?: any[]) 
     doc.setLineWidth(0.3);
     doc.rect(15, yPos - 2, 100, 8, 'S');
     
-    doc.text("Taux de Conformite: " + qualityScoreB.label, 17, yPos + 3);
+    doc.text(emergencyClean("Taux de Conformite: " + qualityScoreB.label), 17, yPos + 3);
     yPos += 12;
 
     // Conversion factor display (discreet, informative)
@@ -570,7 +603,7 @@ export const generateInboundPDF = async (movement: Mouvement, articles?: any[]) 
     // Show zero acceptance
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
-    doc.text("Quantite Acceptee: 0 (REFUS TOTAL)", 15, yPos);
+    doc.text(emergencyClean("Quantite Acceptee: 0 (REFUS TOTAL)"), 15, yPos);
     yPos += 8;
 
     // Quality Score - Total Refusal (0%)
@@ -584,7 +617,7 @@ export const generateInboundPDF = async (movement: Mouvement, articles?: any[]) 
     doc.setLineWidth(0.3);
     doc.rect(15, yPos - 2, 100, 8, 'S');
     
-    doc.text("Taux de Conformite: " + qualityScoreC.label, 17, yPos + 3);
+    doc.text(emergencyClean("Taux de Conformite: " + qualityScoreC.label), 17, yPos + 3);
     yPos += 10;
   }
 
@@ -837,7 +870,7 @@ export const generateOutboundPDF = async (movement: Mouvement, articles?: any[])
     doc.setLineWidth(0.3);
     doc.rect(15, yPos - 2, 100, 8, 'S');
     
-    doc.text("Taux de Conformite: " + qualityScoreA.label, 17, yPos + 3);
+    doc.text(emergencyClean("Taux de Conformite: " + qualityScoreA.label), 17, yPos + 3);
     yPos += 12;
 
     // Observations / Control Notes (if any)
@@ -888,7 +921,7 @@ export const generateOutboundPDF = async (movement: Mouvement, articles?: any[])
     doc.setLineWidth(0.3);
     doc.rect(15, yPos - 2, 100, 8, 'S');
     
-    doc.text("Taux de Conformite: " + qualityScoreB.label, 17, yPos + 3);
+    doc.text(emergencyClean("Taux de Conformite: " + qualityScoreB.label), 17, yPos + 3);
     yPos += 12;
 
     // Observations / Control Notes (if any)
@@ -917,7 +950,7 @@ export const generateOutboundPDF = async (movement: Mouvement, articles?: any[])
     // Show zero acceptance
     doc.setFontSize(9);
     doc.setFont("helvetica", "bold");
-    doc.text("Quantite Validee: 0 (REFUS TOTAL)", 15, yPos);
+    doc.text(emergencyClean("Quantite Validee: 0 (REFUS TOTAL)"), 15, yPos);
     yPos += 8;
 
     // Quality Score - Total Refusal (0%)
@@ -931,7 +964,7 @@ export const generateOutboundPDF = async (movement: Mouvement, articles?: any[])
     doc.setLineWidth(0.3);
     doc.rect(15, yPos - 2, 100, 8, 'S');
     
-    doc.text("Taux de Conformite: " + qualityScoreC.label, 17, yPos + 3);
+    doc.text(emergencyClean("Taux de Conformite: " + qualityScoreC.label), 17, yPos + 3);
     yPos += 10;
   }
 
@@ -1092,7 +1125,7 @@ export const generateTransferPDF = async (movement: Mouvement) => {
 
       // QUANTITY - ULTRA SIMPLE: Just one line
       const { qty, unit } = getQuantityDisplay(movement);
-      doc.text("Quantite Saisie: " + qty + " " + unit, 15, yPos);
+      doc.text(emergencyClean(`Quantite Saisie: ${qty} ${unit}`), 15, yPos);
       yPos += 7;
 
       doc.text("Numero de Lot: " + emergencyClean(movement.lotNumber || 'N/A'), 15, yPos);
@@ -1148,7 +1181,7 @@ export const generateAdjustmentPDF = async (movement: Mouvement) => {
 
       // QUANTITY - ULTRA SIMPLE: Just one line
       const { qty, unit } = getQuantityDisplay(movement);
-      doc.text("Quantite Ajustee: " + qty + " " + unit, 15, yPos);
+      doc.text(emergencyClean(`Quantite Ajustee: ${qty} ${unit}`), 15, yPos);
       yPos += 7;
 
       doc.text("Numero de Lot: " + emergencyClean(movement.lotNumber || 'N/A'), 15, yPos);
@@ -1197,7 +1230,7 @@ export const generateRejectionPDF = async (movement: Mouvement) => {
   
   // QUANTITY - ULTRA SIMPLE: Just one line
   const { qty, unit } = getQuantityDisplay(movement);
-  doc.text("Quantite Saisie: " + qty + " " + unit, 15, yPos);
+  doc.text(emergencyClean(`Quantite Saisie: ${qty} ${unit}`), 15, yPos);
   yPos += 10;
   
   doc.text("Numero de Lot: " + emergencyClean(movement.lotNumber || 'N/A'), 15, yPos);

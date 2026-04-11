@@ -10,7 +10,7 @@ import { generateAdministrativeErrorPDF, generateDefectiveItemsPDF } from "@/lib
 import { format } from "date-fns";
 
 const MouvementsPage = () => {
-  const { mouvements, articles, emplacements, destinations, addMouvement, updateArticle, deleteMouvement, getArticleLocations, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination } = useData();
+  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination } = useData();
   const [selectedArticleId, setSelectedArticleId] = useState<string>("");
   const [typeFilter, setTypeFilter] = useState<"all" | "Entrée" | "Sortie" | "Transfert">("all");
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
@@ -377,6 +377,7 @@ const MouvementsPage = () => {
           uniteSortie: article.uniteSortie,
           lotNumber: item.lotNumber,
           lotDate: item.lotDate ? format(item.lotDate, "yyyy-MM-dd") : "",
+          fournisseur: item.fournisseur,
           emplacementDestination: item.emplacementDestination,
           commentaire: item.commentaire || "",
           operateur: operateur,
@@ -619,6 +620,7 @@ const MouvementsPage = () => {
         articles={articles}
         emplacements={emplacements}
         destinations={destinations}
+        suppliers={suppliers}
         getArticleLocations={getArticleLocations}
         getArticleStockByLocation={() => 0}
         onSubmit={handleBulkMovementSubmit}

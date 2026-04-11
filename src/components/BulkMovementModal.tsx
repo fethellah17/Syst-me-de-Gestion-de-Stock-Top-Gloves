@@ -16,6 +16,7 @@ interface BulkMovementItem {
   selectedUnit: string;
   emplacementSource?: string;
   emplacementDestination?: string;
+  fournisseur?: string;
   lotNumber: string;
   lotDate?: Date;
   commentaire?: string;
@@ -28,6 +29,7 @@ interface BulkMovementModalProps {
   articles: any[];
   emplacements: any[];
   destinations: any[];
+  suppliers?: any[];
   getArticleLocations: (ref: string) => any[];
   getArticleStockByLocation: (ref: string, location: string) => number;
   onSubmit: (items: BulkMovementItem[], movementType: MovementType, operateur: string) => void;
@@ -42,6 +44,7 @@ export const BulkMovementModal = ({
   articles,
   emplacements,
   destinations,
+  suppliers = [],
   getArticleLocations,
   getArticleStockByLocation,
   onSubmit,
@@ -52,9 +55,9 @@ export const BulkMovementModal = ({
   const [movementType, setMovementType] = useState<MovementType>(initialData?.movementType || "Entrée");
   const [items, setItems] = useState<BulkMovementItem[]>(
     initialData?.items || [
-      { id: "1", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
-      { id: "2", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
-      { id: "3", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
+      { id: "1", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", fournisseur: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
+      { id: "2", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", fournisseur: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
+      { id: "3", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", fournisseur: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
     ]
   );
   const [operateur, setOperateur] = useState("");
@@ -75,9 +78,9 @@ export const BulkMovementModal = ({
   const resetForm = () => {
     setMovementType("Entrée");
     setItems([
-      { id: "1", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
-      { id: "2", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
-      { id: "3", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
+      { id: "1", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", fournisseur: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
+      { id: "2", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", fournisseur: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
+      { id: "3", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", fournisseur: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
     ]);
     setOperateur("");
     setErrors({});
@@ -111,9 +114,9 @@ export const BulkMovementModal = ({
     // Change type and reset articles to 3 empty rows
     setMovementType(newType);
     setItems([
-      { id: "1", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
-      { id: "2", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
-      { id: "3", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
+      { id: "1", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", fournisseur: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
+      { id: "2", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", fournisseur: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
+      { id: "3", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", fournisseur: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
     ]);
     setErrors({});
   };
@@ -126,7 +129,7 @@ export const BulkMovementModal = ({
     const newId = (Math.max(...items.map(i => parseInt(i.id) || 0), 0) + 1).toString();
     setItems([
       ...items,
-      { id: newId, articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
+      { id: newId, articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", fournisseur: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
     ]);
   };
 
@@ -168,6 +171,7 @@ export const BulkMovementModal = ({
 
       if (movementType === "Entrée") {
         if (!item.emplacementDestination) newErrors[`item-${item.id}-dest`] = "Requis";
+        if (!item.fournisseur) newErrors[`item-${item.id}-supplier`] = "Requis";
       } else if (movementType === "Sortie") {
         if (!item.emplacementSource) newErrors[`item-${item.id}-source`] = "Requis";
         if (!item.emplacementDestination) newErrors[`item-${item.id}-dest`] = "Requis";
@@ -409,6 +413,9 @@ export const BulkMovementModal = ({
                       {movementType === "Sortie" || movementType === "Transfert" ? (
                         <th className="text-left p-4 text-xs font-semibold">Source</th>
                       ) : null}
+                      {movementType === "Entrée" ? (
+                        <th className="text-left p-4 text-xs font-semibold">Fournisseur</th>
+                      ) : null}
                       <th className="text-left p-4 text-xs font-semibold">
                         {movementType === "Sortie" ? "Destination (Client/Service)" : "Destination"}
                       </th>
@@ -548,6 +555,22 @@ export const BulkMovementModal = ({
                                   })()
                                 )}
                               </div>
+                            </td>
+                          )}
+
+                          {/* Supplier (Entrée only) */}
+                          {movementType === "Entrée" && (
+                            <td className="p-4">
+                              <select
+                                value={item.fournisseur || ""}
+                                onChange={(e) => updateItem(item.id, "fournisseur", e.target.value)}
+                                className={`w-full h-10 px-3 rounded border text-sm ${errors[`item-${item.id}-supplier`] ? "border-destructive" : ""}`}
+                              >
+                                <option value="">Sélectionner...</option>
+                                {suppliers.map(s => (
+                                  <option key={s.id} value={s.nom}>{s.nom}</option>
+                                ))}
+                              </select>
                             </td>
                           )}
 
@@ -779,6 +802,23 @@ export const BulkMovementModal = ({
                               })()
                             )}
                           </div>
+                        </div>
+                      )}
+
+                      {/* Supplier (Entrée only) */}
+                      {movementType === "Entrée" && (
+                        <div>
+                          <label className="block text-xs font-semibold text-muted-foreground mb-2">Fournisseur</label>
+                          <select
+                            value={item.fournisseur || ""}
+                            onChange={(e) => updateItem(item.id, "fournisseur", e.target.value)}
+                            className={`w-full h-12 px-3 rounded border text-sm ${errors[`item-${item.id}-supplier`] ? "border-destructive" : ""}`}
+                          >
+                            <option value="">Sélectionner...</option>
+                            {suppliers.map(s => (
+                              <option key={s.id} value={s.nom}>{s.nom}</option>
+                            ))}
+                          </select>
                         </div>
                       )}
 

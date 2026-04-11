@@ -35,7 +35,7 @@ const Tooltip = ({ text, children }: { text: string; children: React.ReactNode }
 
 
 const ArticlesPage = () => {
-  const { articles, addArticle, updateArticle, deleteArticle, categories, getArticleLocations, mouvements } = useData();
+  const { articles, addArticle, updateArticle, deleteArticle, categories, suppliers, mouvements } = useData();
   const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -277,6 +277,7 @@ const ArticlesPage = () => {
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Réf</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Article</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Catégorie</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Fournisseurs</th>
                 <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   <Tooltip text="Unité d'Entrée / Unité de Sortie">
                     <div className="flex items-center justify-center gap-1">
@@ -365,6 +366,42 @@ const ArticlesPage = () => {
                       </div>
                     </td>
                     <td className="py-3 px-4 text-muted-foreground">{a.categorie}</td>
+                    <td className="py-3 px-4 text-sm">
+                      {a.supplierIds && a.supplierIds.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 items-center">
+                          {a.supplierIds
+                            .slice(0, 2)
+                            .map(id => {
+                              const supplier = suppliers.find(s => s.id === id);
+                              return supplier ? (
+                                <span
+                                  key={supplier.id}
+                                  className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 truncate max-w-[120px]"
+                                  title={supplier.nom}
+                                >
+                                  {supplier.nom}
+                                </span>
+                              ) : null;
+                            })}
+                          {a.supplierIds.length > 2 && (
+                            <div className="relative group">
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 cursor-help">
+                                +{a.supplierIds.length - 2} more
+                              </span>
+                              <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block bg-gray-900 text-white text-xs rounded-md py-2 px-3 whitespace-nowrap z-10 shadow-lg">
+                                {a.supplierIds
+                                  .slice(2)
+                                  .map(id => suppliers.find(s => s.id === id)?.nom)
+                                  .filter(Boolean)
+                                  .join(", ")}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground italic">Aucun</span>
+                      )}
+                    </td>
                     <td className="py-3 px-4 text-center">
                       <div className="flex flex-col gap-1 items-center">
                         <div className="flex items-center gap-1">

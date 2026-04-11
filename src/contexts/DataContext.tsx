@@ -19,6 +19,7 @@ export interface Article {
   consommationParInventaire: number;
   consommationJournaliere: number;
   inventory: InventoryEntry[];
+  supplierIds?: number[]; // Many-to-Many: IDs of suppliers for this article
 }
 
 export interface Categorie {
@@ -41,6 +42,13 @@ export interface Destination {
   nom: string;
 }
 
+export interface Supplier {
+  id: number;
+  nom: string;
+  contact1: string;
+  contact2?: string;
+}
+
 export interface Mouvement {
   id: string;                   // Changed to string for UUID support
   date: string;
@@ -53,6 +61,7 @@ export interface Mouvement {
   uniteSortie?: string;         // Exit unit (base unit) of the article (for display in Impact Stock)
   lotNumber: string;            // Lot/Batch Number for traceability (medical compliance)
   lotDate?: string;             // Lot/Batch Production Date for traceability
+  fournisseur?: string;         // Supplier name (for Entrée only)
   emplacementSource?: string;
   emplacementDestination: string;
   destination?: string;         // Destination for Sortie movements (e.g., "Client X", "Département Production")
@@ -99,6 +108,7 @@ interface DataContextType {
   categories: Categorie[];
   emplacements: Emplacement[];
   destinations: Destination[];
+  suppliers: Supplier[];
   mouvements: Mouvement[];
   inventoryHistory: InventoryRecord[];
   
@@ -117,6 +127,10 @@ interface DataContextType {
   addDestination: (destination: Omit<Destination, "id">) => void;
   updateDestination: (id: number, destination: Partial<Destination>) => void;
   deleteDestination: (id: number) => void;
+  
+  addSupplier: (supplier: Omit<Supplier, "id">) => void;
+  updateSupplier: (id: number, supplier: Partial<Supplier>) => void;
+  deleteSupplier: (id: number) => void;
   
   addMouvement: (mouvement: Omit<Mouvement, "id">) => void;
   updateMouvement: (id: string, mouvement: Partial<Mouvement>) => void;
@@ -165,12 +179,12 @@ const formatStockDisplay = (quantity: number): number => {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 const initialArticles: Article[] = [
-  { id: 1, ref: "GN-M-001", nom: "Gants Nitrile M", categorie: "Gants Nitrile", stock: 2500, seuil: 500, unite: "Paire", uniteEntree: "Boîte", uniteSortie: "Paire", facteurConversion: 100, consommationParInventaire: -15, consommationJournaliere: 50, inventory: [{ zone: "Zone A - Rack 12", quantity: 1500 }, { zone: "Zone B - Rack 03", quantity: 1000 }] },
-  { id: 2, ref: "GL-S-002", nom: "Gants Latex S", categorie: "Gants Latex", stock: 1800, seuil: 400, unite: "Paire", uniteEntree: "Boîte", uniteSortie: "Paire", facteurConversion: 100, consommationParInventaire: 12, consommationJournaliere: 35, inventory: [{ zone: "Zone A - Rack 12", quantity: 1800 }] },
-  { id: 3, ref: "GV-L-003", nom: "Gants Vinyle L", categorie: "Gants Vinyle", stock: 3200, seuil: 600, unite: "Paire", uniteEntree: "Boîte", uniteSortie: "Paire", facteurConversion: 100, consommationParInventaire: 0, consommationJournaliere: 40, inventory: [{ zone: "Zone A - Rack 08", quantity: 2000 }, { zone: "Zone C - Rack 01", quantity: 1200 }] },
-  { id: 4, ref: "GN-XL-004", nom: "Gants Nitrile XL", categorie: "Gants Nitrile", stock: 45, seuil: 200, unite: "Paire", uniteEntree: "Paire", uniteSortie: "Paire", facteurConversion: 1, consommationParInventaire: -5, consommationJournaliere: 15, inventory: [{ zone: "Zone B - Rack 03", quantity: 45 }] },
-  { id: 5, ref: "SG-PE-005", nom: "Sur-gants PE", categorie: "Sur-gants", stock: 120, seuil: 500, unite: "Paire", uniteEntree: "Paire", uniteSortie: "Paire", facteurConversion: 1, consommationParInventaire: -2, consommationJournaliere: 8, inventory: [{ zone: "Zone D - Rack 05", quantity: 120 }] },
-  { id: 6, ref: "MK-FFP2-006", nom: "Masques FFP2", categorie: "Masques", stock: 8000, seuil: 1000, unite: "Unité", uniteEntree: "Carton", uniteSortie: "Unité", facteurConversion: 1000, consommationParInventaire: -50, consommationJournaliere: 200, inventory: [{ zone: "Zone D - Rack 05", quantity: 5000 }, { zone: "Zone E - Quarantaine", quantity: 3000 }] },
+  { id: 1, ref: "GN-M-001", nom: "Gants Nitrile M", categorie: "Gants Nitrile", stock: 2500, seuil: 500, unite: "Paire", uniteEntree: "Boîte", uniteSortie: "Paire", facteurConversion: 100, consommationParInventaire: -15, consommationJournaliere: 50, inventory: [{ zone: "Zone A - Rack 12", quantity: 1500 }, { zone: "Zone B - Rack 03", quantity: 1000 }], supplierIds: [1, 2] },
+  { id: 2, ref: "GL-S-002", nom: "Gants Latex S", categorie: "Gants Latex", stock: 1800, seuil: 400, unite: "Paire", uniteEntree: "Boîte", uniteSortie: "Paire", facteurConversion: 100, consommationParInventaire: 12, consommationJournaliere: 35, inventory: [{ zone: "Zone A - Rack 12", quantity: 1800 }], supplierIds: [2] },
+  { id: 3, ref: "GV-L-003", nom: "Gants Vinyle L", categorie: "Gants Vinyle", stock: 3200, seuil: 600, unite: "Paire", uniteEntree: "Boîte", uniteSortie: "Paire", facteurConversion: 100, consommationParInventaire: 0, consommationJournaliere: 40, inventory: [{ zone: "Zone A - Rack 08", quantity: 2000 }, { zone: "Zone C - Rack 01", quantity: 1200 }], supplierIds: [1, 3] },
+  { id: 4, ref: "GN-XL-004", nom: "Gants Nitrile XL", categorie: "Gants Nitrile", stock: 45, seuil: 200, unite: "Paire", uniteEntree: "Paire", uniteSortie: "Paire", facteurConversion: 1, consommationParInventaire: -5, consommationJournaliere: 15, inventory: [{ zone: "Zone B - Rack 03", quantity: 45 }], supplierIds: [1] },
+  { id: 5, ref: "SG-PE-005", nom: "Sur-gants PE", categorie: "Sur-gants", stock: 120, seuil: 500, unite: "Paire", uniteEntree: "Paire", uniteSortie: "Paire", facteurConversion: 1, consommationParInventaire: -2, consommationJournaliere: 8, inventory: [{ zone: "Zone D - Rack 05", quantity: 120 }], supplierIds: [2, 3] },
+  { id: 6, ref: "MK-FFP2-006", nom: "Masques FFP2", categorie: "Masques", stock: 8000, seuil: 1000, unite: "Unité", uniteEntree: "Carton", uniteSortie: "Unité", facteurConversion: 1000, consommationParInventaire: -50, consommationJournaliere: 200, inventory: [{ zone: "Zone D - Rack 05", quantity: 5000 }, { zone: "Zone E - Quarantaine", quantity: 3000 }], supplierIds: [1, 2, 3] },
 ];
 
 const initialCategories: Categorie[] = [
@@ -199,6 +213,12 @@ const initialDestinations: Destination[] = [
   { id: 5, nom: "Client B" },
 ];
 
+const initialSuppliers: Supplier[] = [
+  { id: 1, nom: "Fournisseur A", contact1: "+213 555 12 34 56", contact2: "+213 555 12 34 57" },
+  { id: 2, nom: "Fournisseur B", contact1: "+213 556 23 45 67", contact2: "+213 556 23 45 68" },
+  { id: 3, nom: "Fournisseur C", contact1: "+213 557 34 56 78", contact2: "+213 557 34 56 79" },
+];
+
 const initialMovements: Mouvement[] = [
   { id: "1", date: "2026-03-02 14:32:20", article: "Gants Nitrile M", ref: "GN-M-001", type: "Entrée", qte: 500, qteOriginale: 5, uniteUtilisee: "Boîte", uniteSortie: "Paire", lotNumber: "LOT-2026-03-001", lotDate: "2026-02-28", emplacementDestination: "Zone A-12", operateur: "Karim B.", statut: "En attente", status: "pending" },
   { id: "2", date: "2026-03-02 13:15:45", article: "Gants Latex S", ref: "GL-S-002", type: "Sortie", qte: 200, qteOriginale: 200, uniteUtilisee: "Paire", uniteSortie: "Paire", lotNumber: "LOT-2026-03-002", lotDate: "2026-02-27", emplacementDestination: "Département Production", operateur: "Sara M." },
@@ -218,6 +238,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [categories, setCategories] = useState<Categorie[]>(initialCategories);
   const [emplacements, setEmplacements] = useState<Emplacement[]>(initialLocations);
   const [destinations, setDestinations] = useState<Destination[]>(initialDestinations);
+  const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
   const [mouvements, setMouvements] = useState<Mouvement[]>(initialMovements);
   const [inventoryHistory, setInventoryHistory] = useState<InventoryRecord[]>(initialHistory);
 
@@ -276,6 +297,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteDestination = (id: number) => {
     setDestinations(destinations.filter(d => d.id !== id));
+  };
+
+  const addSupplier = (supplier: Omit<Supplier, "id">) => {
+    // Check for duplicates
+    if (suppliers.some(s => s.nom.toLowerCase() === supplier.nom.toLowerCase())) {
+      console.warn(`[SUPPLIER] Duplicate supplier prevented: ${supplier.nom}`);
+      return;
+    }
+    const newId = Math.max(...suppliers.map(s => s.id), 0) + 1;
+    setSuppliers([...suppliers, { ...supplier, id: newId }]);
+  };
+
+  const updateSupplier = (id: number, updates: Partial<Supplier>) => {
+    setSuppliers(suppliers.map(s => s.id === id ? { ...s, ...updates } : s));
+  };
+
+  const deleteSupplier = (id: number) => {
+    setSuppliers(suppliers.filter(s => s.id !== id));
   };
 
   const addMouvement = (mouvement: Omit<Mouvement, "id">) => {
@@ -652,6 +691,41 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           : m
       ));
 
+      // POST-QC SUPPLIER LINKING: For approved Entrée movements with accepted quantity > 0, link supplier to article
+      // CRITICAL LOGIC: Supplier is added if ANY quantity is accepted (validQuantity > 0)
+      // This includes partial acceptance scenarios where some goods are damaged but some are accepted
+      // Example: 1000 units received, 50 damaged, 950 accepted → Supplier IS linked (because 950 > 0)
+      // Only if validQuantity = 0 (entire lot rejected) should supplier NOT be linked
+      if (mouvement.type === "Entrée" && mouvement.fournisseur && validQuantity > 0) {
+        const article = articles.find(a => a.ref === mouvement.ref);
+        if (article) {
+          // Find supplier ID by name
+          const supplier = suppliers.find(s => s.nom === mouvement.fournisseur);
+          if (supplier) {
+            // Check if supplier is already linked to this article (prevent duplicates)
+            const currentSupplierIds = article.supplierIds || [];
+            if (!currentSupplierIds.includes(supplier.id)) {
+              // Add supplier to article's supplier list (cumulative - never overwrite)
+              const updatedSupplierIds = [...currentSupplierIds, supplier.id];
+              updateArticle(article.id, { supplierIds: updatedSupplierIds });
+              console.log(`[PARTIAL QC ACCEPTANCE - SUPPLIER LINKED] Article: ${article.nom}`);
+              console.log(`  Supplier: ${mouvement.fournisseur} (ID: ${supplier.id})`);
+              console.log(`  Accepted Qty: ${validQuantity} ${article.uniteSortie}`);
+              console.log(`  Defective Qty: ${defectiveQuantity} ${article.uniteSortie}`);
+              console.log(`  Status: LINKED (because accepted qty > 0)`);
+            } else {
+              console.log(`[PARTIAL QC ACCEPTANCE - SUPPLIER ALREADY LINKED] Article: ${article.nom}, Supplier: ${mouvement.fournisseur}`);
+            }
+          }
+        }
+      } else if (mouvement.type === "Entrée" && mouvement.fournisseur && validQuantity === 0) {
+        // CRITICAL: If entire lot is rejected (validQuantity = 0), do NOT link supplier
+        console.log(`[COMPLETE REJECTION - NO SUPPLIER LINK] Article: ${mouvement.article}`);
+        console.log(`  Supplier: ${mouvement.fournisseur}`);
+        console.log(`  Accepted Qty: 0 (entire lot rejected)`);
+        console.log(`  Status: NOT LINKED (because accepted qty = 0)`);
+      }
+
       // Update article stock and inventory
       setArticles(prevArticles => {
         return prevArticles.map(article => {
@@ -883,6 +957,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       categories,
       emplacements,
       destinations,
+      suppliers,
       mouvements,
       inventoryHistory,
       addArticle,
@@ -894,6 +969,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addEmplacement,
       updateEmplacement,
       deleteEmplacement,
+      addDestination,
+      updateDestination,
+      deleteDestination,
+      addSupplier,
+      updateSupplier,
+      deleteSupplier,
       addMouvement,
       updateMouvement,
       deleteMouvement,
