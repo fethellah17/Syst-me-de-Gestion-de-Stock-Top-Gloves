@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Plus, Trash2, Calendar as CalendarIcon, AlertCircle } from "lucide-react";
 import { BulkMovementModalWrapper } from "@/components/BulkMovementModalWrapper";
+import CreatableSelect from "@/components/CreatableSelect";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
@@ -26,9 +27,11 @@ interface BulkMovementModalProps {
   onClose: () => void;
   articles: any[];
   emplacements: any[];
+  destinations: any[];
   getArticleLocations: (ref: string) => any[];
   getArticleStockByLocation: (ref: string, location: string) => number;
   onSubmit: (items: BulkMovementItem[], movementType: MovementType, operateur: string) => void;
+  onAddDestination?: (name: string) => void;
   editingId?: number | null;
   initialData?: { movementType: MovementType; items: BulkMovementItem[] } | null;
 }
@@ -38,9 +41,11 @@ export const BulkMovementModal = ({
   onClose,
   articles,
   emplacements,
+  destinations,
   getArticleLocations,
   getArticleStockByLocation,
   onSubmit,
+  onAddDestination,
   editingId = null,
   initialData = null,
 }: BulkMovementModalProps) => {
@@ -113,15 +118,9 @@ export const BulkMovementModal = ({
     setErrors({});
   };
 
-  // Destinations for Sortie
-  const destinationsUtilisation = [
-    "Département Production",
-    "Maintenance",
-    "Expédition",
-    "Destruction",
-    "Retour Fournisseur",
-    "Échantillons",
-  ];
+  // Destinations for Sortie - now dynamic from context
+  // Legacy destinations kept for backward compatibility
+  const destinationsUtilisation = destinations.map(d => d.nom);
 
   const addRow = () => {
     const newId = (Math.max(...items.map(i => parseInt(i.id) || 0), 0) + 1).toString();
@@ -554,22 +553,34 @@ export const BulkMovementModal = ({
 
                           {/* Destination */}
                           <td className="p-4">
-                            <select
-                              value={item.emplacementDestination || ""}
-                              onChange={(e) => updateItem(item.id, "emplacementDestination", e.target.value)}
-                              className={`w-full h-10 px-3 rounded border text-sm ${errors[`item-${item.id}-dest`] ? "border-destructive" : ""}`}
-                            >
-                              <option value="">Sélectionner...</option>
-                              {movementType === "Sortie" ? (
-                                destinationsUtilisation.map(d => (
-                                  <option key={d} value={d}>{d}</option>
-                                ))
-                              ) : (
-                                emplacements.map(e => (
+                            {movementType === "Sortie" ? (
+                              <div className={`w-full ${errors[`item-${item.id}-dest`] ? "border-destructive" : ""}`}>
+                                <CreatableSelect
+                                  options={destinations}
+                                  value={item.emplacementDestination || ""}
+                                  onChange={(value) => updateItem(item.id, "emplacementDestination", value)}
+                                  onCreateNew={(name) => {
+                                    if (onAddDestination) {
+                                      onAddDestination(name);
+                                      // The parent will handle adding to destinations and selecting it
+                                      updateItem(item.id, "emplacementDestination", name);
+                                    }
+                                  }}
+                                  placeholder="Sélectionner..."
+                                />
+                              </div>
+                            ) : (
+                              <select
+                                value={item.emplacementDestination || ""}
+                                onChange={(e) => updateItem(item.id, "emplacementDestination", e.target.value)}
+                                className={`w-full h-10 px-3 rounded border text-sm ${errors[`item-${item.id}-dest`] ? "border-destructive" : ""}`}
+                              >
+                                <option value="">Sélectionner...</option>
+                                {emplacements.map(e => (
                                   <option key={e.id} value={e.nom}>{e.nom} ({e.code})</option>
-                                ))
-                              )}
-                            </select>
+                                ))}
+                              </select>
+                            )}
                           </td>
 
                           {/* Lot Number */}
@@ -776,22 +787,33 @@ export const BulkMovementModal = ({
                         <label className="block text-xs font-semibold text-muted-foreground mb-2">
                           {movementType === "Sortie" ? "Destination (Client/Service)" : "Destination"}
                         </label>
-                        <select
-                          value={item.emplacementDestination || ""}
-                          onChange={(e) => updateItem(item.id, "emplacementDestination", e.target.value)}
-                          className={`w-full h-12 px-3 rounded border text-sm ${errors[`item-${item.id}-dest`] ? "border-destructive" : ""}`}
-                        >
-                          <option value="">Sélectionner...</option>
-                          {movementType === "Sortie" ? (
-                            destinationsUtilisation.map(d => (
-                              <option key={d} value={d}>{d}</option>
-                            ))
-                          ) : (
-                            emplacements.map(e => (
+                        {movementType === "Sortie" ? (
+                          <div className={errors[`item-${item.id}-dest`] ? "border-destructive" : ""}>
+                            <CreatableSelect
+                              options={destinations}
+                              value={item.emplacementDestination || ""}
+                              onChange={(value) => updateItem(item.id, "emplacementDestination", value)}
+                              onCreateNew={(name) => {
+                                if (onAddDestination) {
+                                  onAddDestination(name);
+                                  updateItem(item.id, "emplacementDestination", name);
+                                }
+                              }}
+                              placeholder="Sélectionner..."
+                            />
+                          </div>
+                        ) : (
+                          <select
+                            value={item.emplacementDestination || ""}
+                            onChange={(e) => updateItem(item.id, "emplacementDestination", e.target.value)}
+                            className={`w-full h-12 px-3 rounded border text-sm ${errors[`item-${item.id}-dest`] ? "border-destructive" : ""}`}
+                          >
+                            <option value="">Sélectionner...</option>
+                            {emplacements.map(e => (
                               <option key={e.id} value={e.nom}>{e.nom} ({e.code})</option>
-                            ))
-                          )}
-                        </select>
+                            ))}
+                          </select>
+                        )}
                       </div>
 
                       {/* Lot Number */}

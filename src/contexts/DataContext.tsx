@@ -36,6 +36,11 @@ export interface Emplacement {
   type: string;
 }
 
+export interface Destination {
+  id: number;
+  nom: string;
+}
+
 export interface Mouvement {
   id: string;                   // Changed to string for UUID support
   date: string;
@@ -50,6 +55,7 @@ export interface Mouvement {
   lotDate?: string;             // Lot/Batch Production Date for traceability
   emplacementSource?: string;
   emplacementDestination: string;
+  destination?: string;         // Destination for Sortie movements (e.g., "Client X", "Département Production")
   operateur: string;
   commentaire?: string;         // Optional movement note/comment
   status?: "pending" | "approved" | "rejected";  // QC workflow status
@@ -92,6 +98,7 @@ interface DataContextType {
   articles: Article[];
   categories: Categorie[];
   emplacements: Emplacement[];
+  destinations: Destination[];
   mouvements: Mouvement[];
   inventoryHistory: InventoryRecord[];
   
@@ -106,6 +113,10 @@ interface DataContextType {
   addEmplacement: (emplacement: Omit<Emplacement, "id">) => void;
   updateEmplacement: (id: number, emplacement: Partial<Emplacement>) => void;
   deleteEmplacement: (id: number) => void;
+  
+  addDestination: (destination: Omit<Destination, "id">) => void;
+  updateDestination: (id: number, destination: Partial<Destination>) => void;
+  deleteDestination: (id: number) => void;
   
   addMouvement: (mouvement: Omit<Mouvement, "id">) => void;
   updateMouvement: (id: string, mouvement: Partial<Mouvement>) => void;
@@ -180,6 +191,14 @@ const initialLocations: Emplacement[] = [
   { id: 6, code: "E-02", nom: "Zone E - Quarantaine", type: "Stockage" },
 ];
 
+const initialDestinations: Destination[] = [
+  { id: 1, nom: "Département Production" },
+  { id: 2, nom: "Département Qualité" },
+  { id: 3, nom: "Département Expédition" },
+  { id: 4, nom: "Client A" },
+  { id: 5, nom: "Client B" },
+];
+
 const initialMovements: Mouvement[] = [
   { id: "1", date: "2026-03-02 14:32:20", article: "Gants Nitrile M", ref: "GN-M-001", type: "Entrée", qte: 500, qteOriginale: 5, uniteUtilisee: "Boîte", uniteSortie: "Paire", lotNumber: "LOT-2026-03-001", lotDate: "2026-02-28", emplacementDestination: "Zone A-12", operateur: "Karim B.", statut: "En attente", status: "pending" },
   { id: "2", date: "2026-03-02 13:15:45", article: "Gants Latex S", ref: "GL-S-002", type: "Sortie", qte: 200, qteOriginale: 200, uniteUtilisee: "Paire", uniteSortie: "Paire", lotNumber: "LOT-2026-03-002", lotDate: "2026-02-27", emplacementDestination: "Département Production", operateur: "Sara M." },
@@ -198,6 +217,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [articles, setArticles] = useState<Article[]>(initialArticles);
   const [categories, setCategories] = useState<Categorie[]>(initialCategories);
   const [emplacements, setEmplacements] = useState<Emplacement[]>(initialLocations);
+  const [destinations, setDestinations] = useState<Destination[]>(initialDestinations);
   const [mouvements, setMouvements] = useState<Mouvement[]>(initialMovements);
   const [inventoryHistory, setInventoryHistory] = useState<InventoryRecord[]>(initialHistory);
 
@@ -238,6 +258,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteEmplacement = (id: number) => {
     setEmplacements(emplacements.filter(e => e.id !== id));
+  };
+
+  const addDestination = (destination: Omit<Destination, "id">) => {
+    // Check for duplicates
+    if (destinations.some(d => d.nom.toLowerCase() === destination.nom.toLowerCase())) {
+      console.warn(`[DESTINATION] Duplicate destination prevented: ${destination.nom}`);
+      return;
+    }
+    const newId = Math.max(...destinations.map(d => d.id), 0) + 1;
+    setDestinations([...destinations, { ...destination, id: newId }]);
+  };
+
+  const updateDestination = (id: number, updates: Partial<Destination>) => {
+    setDestinations(destinations.map(d => d.id === id ? { ...d, ...updates } : d));
+  };
+
+  const deleteDestination = (id: number) => {
+    setDestinations(destinations.filter(d => d.id !== id));
   };
 
   const addMouvement = (mouvement: Omit<Mouvement, "id">) => {
@@ -844,6 +882,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       articles,
       categories,
       emplacements,
+      destinations,
       mouvements,
       inventoryHistory,
       addArticle,

@@ -28,6 +28,7 @@ const navItems = [
   { to: "/articles", label: "Articles", icon: Package },
   { to: "/categories", label: "Catégories", icon: Tags },
   { to: "/emplacements", label: "Emplacements", icon: MapPin },
+  { to: "/destinations", label: "Destinations", icon: MapPin },
   { to: "/mouvements", label: "Mouvements", icon: ArrowLeftRight },
   { to: "/inventaire", label: "Inventaire", icon: ClipboardCheck },
   { to: "/unites", label: "Unités de Mesure", icon: Ruler },

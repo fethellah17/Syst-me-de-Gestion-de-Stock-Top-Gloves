@@ -10,7 +10,7 @@ import { generateAdministrativeErrorPDF, generateDefectiveItemsPDF } from "@/lib
 import { format } from "date-fns";
 
 const MouvementsPage = () => {
-  const { mouvements, articles, emplacements, addMouvement, updateArticle, deleteMouvement, getArticleLocations, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies } = useData();
+  const { mouvements, articles, emplacements, destinations, addMouvement, updateArticle, deleteMouvement, getArticleLocations, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination } = useData();
   const [selectedArticleId, setSelectedArticleId] = useState<string>("");
   const [typeFilter, setTypeFilter] = useState<"all" | "Entrée" | "Sortie" | "Transfert">("all");
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
@@ -293,13 +293,17 @@ const MouvementsPage = () => {
     console.log(`[DUPLICATE] Article:`, article);
 
     // Prepare the duplicate data for the modal
+    // CRITICAL: For Sortie, clear destination so user can select a new one
+    // For other types, preserve the destination
+    const isDestinationEditable = mouvement.type === "Sortie";
+    
     const duplicateItem = {
       id: "1",
       articleId: article.id.toString(),
       quantity: mouvement.qteOriginale || mouvement.qte,
       selectedUnit: mouvement.uniteUtilisee || article.uniteEntree,
       emplacementSource: mouvement.emplacementSource || "",
-      emplacementDestination: mouvement.emplacementDestination || "",
+      emplacementDestination: isDestinationEditable ? "" : (mouvement.emplacementDestination || ""),
       lotNumber: mouvement.lotNumber || "",
       lotDate: mouvement.lotDate ? new Date(mouvement.lotDate) : undefined,
       qc_status: "pending" as const,
@@ -614,9 +618,13 @@ const MouvementsPage = () => {
         }}
         articles={articles}
         emplacements={emplacements}
+        destinations={destinations}
         getArticleLocations={getArticleLocations}
         getArticleStockByLocation={() => 0}
         onSubmit={handleBulkMovementSubmit}
+        onAddDestination={(name) => {
+          addDestination({ nom: name });
+        }}
         initialData={duplicateData}
       />
 
