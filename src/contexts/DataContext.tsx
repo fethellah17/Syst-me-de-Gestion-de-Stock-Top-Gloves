@@ -1,0 +1,1005 @@
+import React, { createContext, useContext, useState } from "react";
+
+export interface InventoryEntry {
+  zone: string;
+  quantity: number;
+}
+
+export interface Article {
+  id: number;
+  ref: string;
+  nom: string;
+  categorie: string;
+  stock: number; // Always stored in exit unit (smallest unit)
+  seuil: number;
+  unite: string; // Legacy field - kept for backward compatibility
+  uniteEntree: string; // Entry unit (bulk unit, e.g., "Tonne")
+  uniteSortie: string; // Exit unit (consumption unit, e.g., "Kg")
+  facteurConversion: number; // How many exit units in one entry unit (e.g., 1000 Kg per Tonne)
+  consommationParInventaire: number;
+  consommationJournaliere: number;
+  inventory: InventoryEntry[];
+  supplierIds?: number[]; // Many-to-Many: IDs of suppliers for this article
+}
+
+export interface Categorie {
+  id: number;
+  nom: string;
+  description: string;
+  articles: number;
+  stock: number;
+}
+
+export interface Emplacement {
+  id: number;
+  code: string;
+  nom: string;
+  type: string;
+}
+
+export interface Destination {
+  id: number;
+  nom: string;
+}
+
+export interface Supplier {
+  id: number;
+  nom: string;
+  contact1: string;
+  contact2?: string;
+}
+
+export interface Mouvement {
+  id: string;                   // Changed to string for UUID support
+  date: string;
+  article: string;
+  ref: string;
+  type: "Entrée" | "Sortie" | "Transfert" | "Ajustement";
+  qte: number;                  // Always stored in exit unit (smallest unit) for consistency
+  qteOriginale?: number;        // Original quantity as entered by user (for display)
+  uniteUtilisee?: string;       // Unit selected by user during operation (for display)
+  uniteSortie?: string;         // Exit unit (base unit) of the article (for display in Impact Stock)
+  lotNumber: string;            // Lot/Batch Number for traceability (medical compliance)
+  lotDate?: string;             // Lot/Batch Production Date for traceability
+  fournisseur?: string;         // Supplier name (for Entrée only)
+  emplacementSource?: string;
+  emplacementDestination: string;
+  destination?: string;         // Destination for Sortie movements (e.g., "Client X", "Département Production")
+  operateur: string;
+  commentaire?: string;         // Optional movement note/comment
+  status?: "pending" | "approved" | "rejected";  // QC workflow status
+  statut?: "En attente" | "En attente de validation Qualité" | "Terminé" | "Rejeté" | "Refusé";
+  controleur?: string;
+  etatArticles?: "Conforme" | "Non-conforme";
+  unitesDefectueuses?: number;
+  validQuantity?: number;       // QC metadata: quantity approved for use
+  defectiveQuantity?: number;   // QC metadata: quantity marked as defective
+  raison?: string;
+  rejectionReason?: string;     // QC rejection reason for PDF report
+  motif?: string;
+  refusalReason?: string;       // Reason for total refusal
+  typeAjustement?: "Surplus" | "Manquant";
+  qcStatus?: "Conforme" | "Non-conforme";  // QC outcome status for PDF generation
+  noteControle?: string;        // QC control notes/observations for PDF
+  verificationPoints?: Record<string, boolean>;  // QC checklist verification points state
+  wasDelayed?: boolean;         // SLA tracking: was this movement delayed (> 24h in "En attente")?
+  // SORTIE ONLY: Dual refusal modes
+  refusalType?: "administrative" | "defective"; // Type of refusal for Sortie
+  nomOperateur?: string;        // For administrative error refusal
+  motifErreur?: string;         // For administrative error refusal
+  nomControleur?: string;       // For defective items refusal
+  motifRejet?: string;          // For defective items refusal
+}
+
+export interface InventoryRecord {
+  id: number;
+  dateHeure: string;
+  article: string;
+  ref: string; // Article reference for linking
+  emplacement: string; // Specific emplacement where inventory was done
+  stockTheorique: number;
+  stockPhysique: number;
+  ecart: number;
+  uniteSortie: string; // Unit for display in PDF
+}
+
+interface DataContextType {
+  articles: Article[];
+  categories: Categorie[];
+  emplacements: Emplacement[];
+  destinations: Destination[];
+  suppliers: Supplier[];
+  mouvements: Mouvement[];
+  inventoryHistory: InventoryRecord[];
+  
+  addArticle: (article: Omit<Article, "id">) => void;
+  updateArticle: (id: number, article: Partial<Article>) => void;
+  deleteArticle: (id: number) => void;
+  
+  addCategorie: (categorie: Omit<Categorie, "id">) => void;
+  updateCategorie: (id: number, categorie: Partial<Categorie>) => void;
+  deleteCategorie: (id: number) => void;
+  
+  addEmplacement: (emplacement: Omit<Emplacement, "id">) => void;
+  updateEmplacement: (id: number, emplacement: Partial<Emplacement>) => void;
+  deleteEmplacement: (id: number) => void;
+  
+  addDestination: (destination: Omit<Destination, "id">) => void;
+  updateDestination: (id: number, destination: Partial<Destination>) => void;
+  deleteDestination: (id: number) => void;
+  
+  addSupplier: (supplier: Omit<Supplier, "id">) => void;
+  updateSupplier: (id: number, supplier: Partial<Supplier>) => void;
+  deleteSupplier: (id: number) => void;
+  
+  addMouvement: (mouvement: Omit<Mouvement, "id">) => void;
+  updateMouvement: (id: string, mouvement: Partial<Mouvement>) => void;
+  deleteMouvement: (id: string) => void;
+  approveQualityControl: (id: string, controleur: string, etatArticles: "Conforme" | "Non-conforme", unitesDefectueuses?: number, qteValide?: number, refusTotalMotif?: string, noteControle?: string, verificationPoints?: Record<string, boolean>, refusalType?: "administrative" | "defective", nomOperateur?: string, motifErreur?: string, nomControleur?: string, motifRejet?: string) => void;
+  rejectQualityControl: (id: string, controleur: string, raison: string) => void;
+  
+  addInventoryRecord: (record: Omit<InventoryRecord, "id">) => void;
+  applyInventoryAdjustment: (articleId: number, emplacementNom: string, ecart: number) => void;
+  batchUpdateArticles: (updatedArticles: Article[]) => void;
+  batchAddInventoryRecords: (records: Array<Omit<InventoryRecord, "id">>) => void;
+  
+  calculateEmplacementOccupancy: (emplacementName: string) => number;
+  getArticleLocations: (articleRef: string) => InventoryEntry[];
+  getArticleStockByLocation: (articleRef: string, emplacementName: string) => number;
+  getArticleCurrentLocation: (articleRef: string) => string | null;
+  processTransfer: (articleRef: string, sourceLocation: string, quantity: number, destinationLocation: string) => { success: boolean; error?: string };
+  recalculateAllOccupancies: () => void;
+}
+
+/**
+ * Round stock quantity based on unit type
+ * - Whole items (Pièce, Boîte, Unité, Paire, Carton): Round to integer
+ * - Weight/Volume (Kg, g, Litre, ml, Tonne): Round to 3 decimals
+ */
+const roundStockQuantity = (quantity: number, unit: string): number => {
+  const wholeItemUnits = ['pièce', 'boîte', 'unité', 'paire', 'carton', 'palette'];
+  const isWholeItem = wholeItemUnits.some(u => unit.toLowerCase().includes(u));
+  
+  if (isWholeItem) {
+    // Round to nearest integer for whole items
+    return Math.round(quantity);
+  } else {
+    // Round to 3 decimals for weight/volume, then remove trailing zeros
+    return parseFloat(quantity.toFixed(3));
+  }
+};
+
+/**
+ * Format stock for display - removes unnecessary trailing zeros
+ */
+const formatStockDisplay = (quantity: number): number => {
+  return parseFloat(quantity.toFixed(3));
+};
+
+const DataContext = createContext<DataContextType | undefined>(undefined);
+
+const initialArticles: Article[] = [
+  { id: 1, ref: "GN-M-001", nom: "Gants Nitrile M", categorie: "Gants Nitrile", stock: 2500, seuil: 500, unite: "Paire", uniteEntree: "Boîte", uniteSortie: "Paire", facteurConversion: 100, consommationParInventaire: -15, consommationJournaliere: 50, inventory: [{ zone: "Zone A - Rack 12", quantity: 1500 }, { zone: "Zone B - Rack 03", quantity: 1000 }], supplierIds: [1, 2] },
+  { id: 2, ref: "GL-S-002", nom: "Gants Latex S", categorie: "Gants Latex", stock: 1800, seuil: 400, unite: "Paire", uniteEntree: "Boîte", uniteSortie: "Paire", facteurConversion: 100, consommationParInventaire: 12, consommationJournaliere: 35, inventory: [{ zone: "Zone A - Rack 12", quantity: 1800 }], supplierIds: [2] },
+  { id: 3, ref: "GV-L-003", nom: "Gants Vinyle L", categorie: "Gants Vinyle", stock: 3200, seuil: 600, unite: "Paire", uniteEntree: "Boîte", uniteSortie: "Paire", facteurConversion: 100, consommationParInventaire: 0, consommationJournaliere: 40, inventory: [{ zone: "Zone A - Rack 08", quantity: 2000 }, { zone: "Zone C - Rack 01", quantity: 1200 }], supplierIds: [1, 3] },
+  { id: 4, ref: "GN-XL-004", nom: "Gants Nitrile XL", categorie: "Gants Nitrile", stock: 45, seuil: 200, unite: "Paire", uniteEntree: "Paire", uniteSortie: "Paire", facteurConversion: 1, consommationParInventaire: -5, consommationJournaliere: 15, inventory: [{ zone: "Zone B - Rack 03", quantity: 45 }], supplierIds: [1] },
+  { id: 5, ref: "SG-PE-005", nom: "Sur-gants PE", categorie: "Sur-gants", stock: 120, seuil: 500, unite: "Paire", uniteEntree: "Paire", uniteSortie: "Paire", facteurConversion: 1, consommationParInventaire: -2, consommationJournaliere: 8, inventory: [{ zone: "Zone D - Rack 05", quantity: 120 }], supplierIds: [2, 3] },
+  { id: 6, ref: "MK-FFP2-006", nom: "Masques FFP2", categorie: "Masques", stock: 8000, seuil: 1000, unite: "Unité", uniteEntree: "Carton", uniteSortie: "Unité", facteurConversion: 1000, consommationParInventaire: -50, consommationJournaliere: 200, inventory: [{ zone: "Zone D - Rack 05", quantity: 5000 }, { zone: "Zone E - Quarantaine", quantity: 3000 }], supplierIds: [1, 2, 3] },
+];
+
+const initialCategories: Categorie[] = [
+  { id: 1, nom: "Gants Nitrile", description: "Gants en nitrile pour usage médical et industriel", articles: 8, stock: 12500 },
+  { id: 2, nom: "Gants Latex", description: "Gants en latex naturel", articles: 5, stock: 8200 },
+  { id: 3, nom: "Gants Vinyle", description: "Gants en vinyle pour usage court", articles: 4, stock: 6800 },
+  { id: 4, nom: "Sur-gants", description: "Sur-gants de protection polyéthylène", articles: 3, stock: 3400 },
+  { id: 5, nom: "Masques", description: "Masques de protection respiratoire", articles: 6, stock: 15000 },
+  { id: 6, nom: "Accessoires", description: "Distributeurs, supports et accessoires", articles: 12, stock: 2200 },
+];
+
+const initialLocations: Emplacement[] = [
+  { id: 1, code: "A-12", nom: "Zone A - Rack 12", type: "Stockage" },
+  { id: 2, code: "B-03", nom: "Zone B - Rack 03", type: "Stockage" },
+  { id: 3, code: "A-08", nom: "Zone A - Rack 08", type: "Stockage" },
+  { id: 4, code: "C-01", nom: "Zone C - Rack 01", type: "Stockage" },
+  { id: 5, code: "D-05", nom: "Zone D - Rack 05", type: "Stockage" },
+  { id: 6, code: "E-02", nom: "Zone E - Quarantaine", type: "Stockage" },
+];
+
+const initialDestinations: Destination[] = [
+  { id: 1, nom: "Département Production" },
+  { id: 2, nom: "Département Qualité" },
+  { id: 3, nom: "Département Expédition" },
+  { id: 4, nom: "Client A" },
+  { id: 5, nom: "Client B" },
+];
+
+const initialSuppliers: Supplier[] = [
+  { id: 1, nom: "Fournisseur A", contact1: "+213 555 12 34 56", contact2: "+213 555 12 34 57" },
+  { id: 2, nom: "Fournisseur B", contact1: "+213 556 23 45 67", contact2: "+213 556 23 45 68" },
+  { id: 3, nom: "Fournisseur C", contact1: "+213 557 34 56 78", contact2: "+213 557 34 56 79" },
+];
+
+const initialMovements: Mouvement[] = [
+  { id: "1", date: "2026-03-02 14:32:20", article: "Gants Nitrile M", ref: "GN-M-001", type: "Entrée", qte: 500, qteOriginale: 5, uniteUtilisee: "Boîte", uniteSortie: "Paire", lotNumber: "LOT-2026-03-001", lotDate: "2026-02-28", emplacementDestination: "Zone A-12", operateur: "Karim B.", statut: "En attente", status: "pending" },
+  { id: "2", date: "2026-03-02 13:15:45", article: "Gants Latex S", ref: "GL-S-002", type: "Sortie", qte: 200, qteOriginale: 200, uniteUtilisee: "Paire", uniteSortie: "Paire", lotNumber: "LOT-2026-03-002", lotDate: "2026-02-27", emplacementDestination: "Département Production", operateur: "Sara M." },
+  { id: "3", date: "2026-03-02 09:30:15", article: "Gants Nitrile M", ref: "GN-M-001", type: "Sortie", qte: 50, qteOriginale: 50, uniteUtilisee: "Paire", uniteSortie: "Paire", lotNumber: "LOT-2026-03-003", lotDate: "2026-03-01", emplacementSource: "Zone A - Rack 12", emplacementDestination: "Département Production", operateur: "Jean D.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
+  { id: "4", date: "2026-03-01 10:45:30", article: "Gants Nitrile M", ref: "GN-M-001", type: "Sortie", qte: 50, qteOriginale: 50, uniteUtilisee: "Paire", uniteSortie: "Paire", lotNumber: "LOT-2026-03-004", lotDate: "2026-02-28", emplacementSource: "Zone A - Rack 12", emplacementDestination: "Département Production", operateur: "Pierre M.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
+  { id: "5", date: "2026-03-01 11:20:00", article: "Masques FFP2", ref: "MK-FFP2-006", type: "Sortie", qte: 100, qteOriginale: 100, uniteUtilisee: "Unité", uniteSortie: "Unité", lotNumber: "LOT-2026-03-005", lotDate: "2026-02-27", emplacementSource: "Zone D - Rack 05", emplacementDestination: "Département Production", operateur: "Sophie R.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
+  { id: "6", date: "2026-03-01 14:15:45", article: "Masques FFP2", ref: "MK-FFP2-006", type: "Sortie", qte: 150, qteOriginale: 150, uniteUtilisee: "Unité", uniteSortie: "Unité", lotNumber: "LOT-2026-03-006", lotDate: "2026-02-28", emplacementSource: "Zone D - Rack 05", emplacementDestination: "Département Production", operateur: "Luc B.", statut: "Terminé", controleur: "Marie L.", etatArticles: "Conforme" },
+];
+
+const initialHistory: InventoryRecord[] = [
+  { id: 1, dateHeure: "2025-02-24 14:30", article: "Gants Nitrile M", ref: "GN-M-001", emplacement: "Zone A - Rack 12", stockTheorique: 2500, stockPhysique: 2485, ecart: -15, uniteSortie: "Paire" },
+  { id: 2, dateHeure: "2025-02-24 14:30", article: "Gants Latex S", ref: "GL-S-002", emplacement: "Zone A - Rack 12", stockTheorique: 1800, stockPhysique: 1812, ecart: 12, uniteSortie: "Paire" },
+];
+
+export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [articles, setArticles] = useState<Article[]>(initialArticles);
+  const [categories, setCategories] = useState<Categorie[]>(initialCategories);
+  const [emplacements, setEmplacements] = useState<Emplacement[]>(initialLocations);
+  const [destinations, setDestinations] = useState<Destination[]>(initialDestinations);
+  const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
+  const [mouvements, setMouvements] = useState<Mouvement[]>(initialMovements);
+  const [inventoryHistory, setInventoryHistory] = useState<InventoryRecord[]>(initialHistory);
+
+  const addArticle = (article: Omit<Article, "id">) => {
+    const newId = Math.max(...articles.map(a => a.id), 0) + 1;
+    setArticles([...articles, { ...article, id: newId }]);
+  };
+
+  const updateArticle = (id: number, updates: Partial<Article>) => {
+    setArticles(articles.map(a => a.id === id ? { ...a, ...updates } : a));
+  };
+
+  const deleteArticle = (id: number) => {
+    setArticles(articles.filter(a => a.id !== id));
+  };
+
+  const addCategorie = (categorie: Omit<Categorie, "id">) => {
+    const newId = Math.max(...categories.map(c => c.id), 0) + 1;
+    setCategories([...categories, { ...categorie, id: newId }]);
+  };
+
+  const updateCategorie = (id: number, updates: Partial<Categorie>) => {
+    setCategories(categories.map(c => c.id === id ? { ...c, ...updates } : c));
+  };
+
+  const deleteCategorie = (id: number) => {
+    setCategories(categories.filter(c => c.id !== id));
+  };
+
+  const addEmplacement = (emplacement: Omit<Emplacement, "id">) => {
+    const newId = Math.max(...emplacements.map(e => e.id), 0) + 1;
+    setEmplacements([...emplacements, { ...emplacement, id: newId }]);
+  };
+
+  const updateEmplacement = (id: number, updates: Partial<Emplacement>) => {
+    setEmplacements(emplacements.map(e => e.id === id ? { ...e, ...updates } : e));
+  };
+
+  const deleteEmplacement = (id: number) => {
+    setEmplacements(emplacements.filter(e => e.id !== id));
+  };
+
+  const addDestination = (destination: Omit<Destination, "id">) => {
+    // Check for duplicates
+    if (destinations.some(d => d.nom.toLowerCase() === destination.nom.toLowerCase())) {
+      console.warn(`[DESTINATION] Duplicate destination prevented: ${destination.nom}`);
+      return;
+    }
+    const newId = Math.max(...destinations.map(d => d.id), 0) + 1;
+    setDestinations([...destinations, { ...destination, id: newId }]);
+  };
+
+  const updateDestination = (id: number, updates: Partial<Destination>) => {
+    setDestinations(destinations.map(d => d.id === id ? { ...d, ...updates } : d));
+  };
+
+  const deleteDestination = (id: number) => {
+    setDestinations(destinations.filter(d => d.id !== id));
+  };
+
+  const addSupplier = (supplier: Omit<Supplier, "id">) => {
+    // Check for duplicates
+    if (suppliers.some(s => s.nom.toLowerCase() === supplier.nom.toLowerCase())) {
+      console.warn(`[SUPPLIER] Duplicate supplier prevented: ${supplier.nom}`);
+      return;
+    }
+    const newId = Math.max(...suppliers.map(s => s.id), 0) + 1;
+    setSuppliers([...suppliers, { ...supplier, id: newId }]);
+  };
+
+  const updateSupplier = (id: number, updates: Partial<Supplier>) => {
+    setSuppliers(suppliers.map(s => s.id === id ? { ...s, ...updates } : s));
+  };
+
+  const deleteSupplier = (id: number) => {
+    setSuppliers(suppliers.filter(s => s.id !== id));
+  };
+
+  const addMouvement = (mouvement: Omit<Mouvement, "id">) => {
+    // Generate unique UUID for the movement
+    const newId = crypto.randomUUID();
+    
+    // QC STEP 1: Entrée movements start with "En attente" status
+    // CRITICAL: Do NOT update stock for Entrée - it's pending QC approval
+    let mouvementAvecStatut = mouvement;
+    if (mouvement.type === "Entrée") {
+      mouvementAvecStatut = { ...mouvement, statut: "En attente" as const, status: "pending" as const };
+    } else if (mouvement.type === "Sortie") {
+      // CRITICAL FIX: Sortie movements must also start with "En attente" status
+      // Stock will only be deducted AFTER QC approval
+      mouvementAvecStatut = { ...mouvement, statut: "En attente" as const, status: "pending" as const };
+    } else if (mouvement.type === "Ajustement") {
+      mouvementAvecStatut = { ...mouvement, statut: "Terminé" as const, status: "approved" as const };
+    } else if (mouvement.type === "Transfert") {
+      mouvementAvecStatut = { ...mouvement, statut: "Terminé" as const, status: "approved" as const };
+    }
+    
+    // Add new movement to the array (prepend for efficiency)
+    // Note: Sorting by date is handled in the UI layer (MouvementsPage, Dashboard)
+    // to ensure chronological consistency between mock and real data
+    setMouvements(prev => [{ ...mouvementAvecStatut, id: newId }, ...prev]);
+    
+    // Update article stock based on movement type
+    const article = articles.find(a => a.ref === mouvement.ref);
+    if (article) {
+      if (mouvement.type === "Entrée") {
+        // QC STEP 1: CRITICAL - Do NOT update stock for Entrée movements
+        // Stock will only be updated when the Entrée is approved by QC
+        console.log(`[ENTRÉE - PENDING QC] Article: ${article.nom}`);
+        console.log(`  Quantité: ${mouvement.qte} ${article.uniteSortie}`);
+        console.log(`  Status: En attente`);
+        console.log(`  Stock remains unchanged: ${article.stock} ${article.uniteSortie}`);
+      } else if (mouvement.type === "Sortie") {
+        // Pour les sorties, NE PAS déduire le stock immédiatement
+        // Attendre l'approbation du contrôle qualité
+        // Stock reste inchangé
+        // NOTE: La quantité de sortie est DÉJÀ en unité de sortie (pas de conversion)
+        console.log(`[SORTIE] Article: ${article.nom}`);
+        console.log(`  Quantité: ${mouvement.qte} ${article.uniteSortie}`);
+        console.log(`  En attente de validation qualité`);
+      } else if (mouvement.type === "Ajustement") {
+        // Pour les Ajustements: logique bi-directionnelle selon le typeAjustement
+        // NOTE: Les ajustements sont TOUJOURS en unité de sortie
+        if (mouvement.typeAjustement === "Surplus") {
+          // SURPLUS: Ajouter au stock (comme une Entrée)
+          const emplacementCible = mouvement.emplacementSource || mouvement.emplacementDestination;
+          if (emplacementCible) {
+            console.log(`[AJUSTEMENT SURPLUS] Article: ${article.nom}`);
+            console.log(`  Quantité: ${mouvement.qte} ${article.uniteSortie}`);
+            
+            const newStock = article.stock + mouvement.qte;
+            
+            // Mettre à jour les inventory
+            const updatedInventory = [...article.inventory];
+            const existingLocation = updatedInventory.find(l => l.zone === emplacementCible);
+            
+            if (existingLocation) {
+              // CRITICAL: Convert to Number before adding to prevent string concatenation
+              existingLocation.quantity = Number(existingLocation.quantity) + Number(mouvement.qte);
+            } else {
+              updatedInventory.push({ zone: emplacementCible, quantity: Number(mouvement.qte) });
+            }
+            
+            updateArticle(article.id, { stock: newStock, inventory: updatedInventory });
+          }
+        } else if (mouvement.typeAjustement === "Manquant") {
+          // MANQUANT: Retirer du stock (comme une Sortie)
+          if (mouvement.emplacementSource) {
+            console.log(`[AJUSTEMENT MANQUANT] Article: ${article.nom}`);
+            console.log(`  Quantité: ${mouvement.qte} ${article.uniteSortie}`);
+            
+            const updatedInventory = article.inventory.map(loc => {
+              if (loc.zone === mouvement.emplacementSource) {
+                return { ...loc, quantity: Math.max(0, loc.quantity - mouvement.qte) };
+              }
+              return loc;
+            }).filter(l => l.quantity > 0);
+            
+            updateArticle(article.id, { 
+              stock: Math.max(0, article.stock - mouvement.qte),
+              inventory: updatedInventory 
+            });
+          }
+        }
+      }
+      // Transfert ne change pas le stock total et est géré par processTransfer
+    }
+  };
+
+  const updateMouvement = (id: string, updates: Partial<Mouvement>) => {
+    const oldMouvement = mouvements.find(m => m.id === id);
+    if (!oldMouvement) return;
+
+    // Calculate stock adjustment
+    const article = articles.find(a => a.ref === oldMouvement.ref);
+    if (article && updates.qte !== undefined) {
+      // Reverse the old movement effect
+      let newStock = article.stock;
+      
+      if (oldMouvement.type === "Entrée") {
+        newStock = article.stock - oldMouvement.qte;
+      } else if (oldMouvement.type === "Sortie") {
+        newStock = article.stock + oldMouvement.qte;
+      }
+      
+      // Apply the new movement effect
+      const newType = updates.type || oldMouvement.type;
+      const newQte = updates.qte || oldMouvement.qte;
+      
+      if (newType === "Entrée") {
+        newStock = newStock + newQte;
+      } else if (newType === "Sortie") {
+        newStock = newStock - newQte;
+      }
+      // Transfert ne change pas le stock total
+      
+      updateArticle(article.id, { stock: Math.max(0, newStock) });
+    }
+
+    setMouvements(mouvements.map(m => m.id === id ? { ...m, ...updates } : m));
+  };
+
+  const deleteMouvement = (id: string) => {
+    const mouvement = mouvements.find(m => m.id === id);
+    if (!mouvement) return;
+
+    // Reverse the movement effect on stock
+    const article = articles.find(a => a.ref === mouvement.ref);
+    if (article) {
+      let newStock = article.stock;
+      
+      if (mouvement.type === "Entrée") {
+        newStock = article.stock - mouvement.qte;
+      } else if (mouvement.type === "Sortie") {
+        newStock = article.stock + mouvement.qte;
+      }
+      // Transfert ne change pas le stock total
+      
+      updateArticle(article.id, { stock: Math.max(0, newStock) });
+    }
+
+    setMouvements(mouvements.filter(m => m.id !== id));
+  };
+
+  const addInventoryRecord = (record: Omit<InventoryRecord, "id">) => {
+    const newId = Math.max(...inventoryHistory.map(r => r.id), 0) + 1;
+    setInventoryHistory([...inventoryHistory, { ...record, id: newId }]);
+    
+    // Update article consommationParInventaire
+    const article = articles.find(a => a.nom === record.article);
+    if (article) {
+      updateArticle(article.id, { consommationParInventaire: record.ecart });
+    }
+  };
+
+  const applyInventoryAdjustment = (articleId: number, emplacementNom: string, ecart: number) => {
+    const article = articles.find(a => a.id === articleId);
+    if (!article) return;
+
+    console.log(`[INVENTORY ADJUSTMENT] Article: ${article.nom}, Emplacement: ${emplacementNom}, Écart: ${ecart}`);
+
+    // Update the specific location quantity
+    const updatedInventory = article.inventory.map(loc => {
+      if (loc.zone === emplacementNom) {
+        // CRITICAL: Convert to Number before adding to prevent string concatenation
+        const newQuantity = Math.max(0, Number(loc.quantity) + Number(ecart));
+        console.log(`  Location ${emplacementNom}: ${loc.quantity} → ${newQuantity}`);
+        return { ...loc, quantity: roundStockQuantity(newQuantity, article.uniteSortie) };
+      }
+      return loc;
+    }).filter(l => Number(l.quantity) > 0); // Remove locations with 0 quantity
+
+    // Update the total article stock
+    const newTotalStock = Math.max(0, article.stock + ecart);
+    console.log(`  Total Stock: ${article.stock} → ${newTotalStock}`);
+
+    updateArticle(articleId, { 
+      stock: roundStockQuantity(newTotalStock, article.uniteSortie),
+      inventory: updatedInventory 
+    });
+  };
+
+  const batchUpdateArticles = (updatedArticles: Article[]) => {
+    setArticles(updatedArticles);
+  };
+
+  const batchAddInventoryRecords = (records: Array<Omit<InventoryRecord, "id">>) => {
+    const newRecords = records.map((record, index) => {
+      const newId = Math.max(...inventoryHistory.map(r => r.id), 0) + 1 + index;
+      return { ...record, id: newId };
+    });
+    setInventoryHistory([...inventoryHistory, ...newRecords]);
+  };
+
+  const approveQualityControl = (id: string, controleur: string, etatArticles: "Conforme" | "Non-conforme", unitesDefectueuses: number = 0, qteValide?: number, refusTotalMotif?: string, noteControle?: string, verificationPoints?: Record<string, boolean>, refusalType?: "administrative" | "defective", nomOperateur?: string, motifErreur?: string, nomControleur?: string, motifRejet?: string) => {
+    const mouvement = mouvements.find(m => m.id === id);
+    if (!mouvement) return;
+
+    // Calculate if movement was delayed (> 24 hours in "En attente" status)
+    const calculateWasDelayed = (): boolean => {
+      try {
+        const movementDate = new Date(mouvement.date);
+        const currentDate = new Date();
+        const hoursDifference = (currentDate.getTime() - movementDate.getTime()) / (1000 * 60 * 60);
+        return hoursDifference > 24;
+      } catch {
+        return false;
+      }
+    };
+
+    const wasDelayed = calculateWasDelayed();
+
+    // ============================================================================
+    // HANDLE REFUS TOTAL (Complete Rejection)
+    // ============================================================================
+    if (refusTotalMotif) {
+      console.log(`[REFUS TOTAL] Movement ID: ${id}`);
+      console.log(`  Article: ${mouvement.article} (${mouvement.ref})`);
+      console.log(`  Quantity Rejected: ${mouvement.qte} ${mouvement.uniteSortie}`);
+      console.log(`  Reason: ${refusTotalMotif}`);
+      console.log(`  Control Notes: ${noteControle || 'N/A'}`);
+
+      // SORTIE ONLY: Dual refusal modes
+      if (mouvement.type === "Sortie" && refusalType) {
+        console.log(`  Refusal Type: ${refusalType}`);
+        
+        if (refusalType === "administrative") {
+          console.log(`  Operator: ${nomOperateur}`);
+          console.log(`  Error Reason: ${motifErreur}`);
+          
+          // Administrative error: NO stock deduction (goods return to stock)
+          setMouvements(mouvements.map(m =>
+            m.id === id
+              ? {
+                  ...m,
+                  statut: "Refusé" as const,
+                  status: "rejected" as const,
+                  controleur: nomOperateur || controleur,
+                  refusalReason: motifErreur,
+                  refusalType: "administrative",
+                  nomOperateur,
+                  motifErreur,
+                  validQuantity: 0,
+                  defectiveQuantity: mouvement.qte,
+                  qcStatus: "Non-conforme",
+                  noteControle: motifErreur || "",
+                  verificationPoints: verificationPoints || {},
+                  wasDelayed
+                }
+              : m
+          ));
+          console.log(`[REFUS ADMINISTRATIF] NO stock update - goods return to stock`);
+        } else if (refusalType === "defective") {
+          console.log(`  Controller: ${nomControleur}`);
+          console.log(`  Rejection Reason: ${motifRejet}`);
+          
+          // Defective items: MUST deduct from stock (permanent loss)
+          setMouvements(mouvements.map(m =>
+            m.id === id
+              ? {
+                  ...m,
+                  statut: "Refusé" as const,
+                  status: "rejected" as const,
+                  controleur: nomControleur || controleur,
+                  refusalReason: motifRejet,
+                  refusalType: "defective",
+                  nomControleur,
+                  motifRejet,
+                  validQuantity: 0,
+                  defectiveQuantity: mouvement.qte,
+                  qcStatus: "Non-conforme",
+                  noteControle: motifRejet || "",
+                  verificationPoints: verificationPoints || {},
+                  wasDelayed
+                }
+              : m
+          ));
+          
+          // CRITICAL: Deduct ALL units from stock (permanent loss)
+          setArticles(prevArticles => {
+            return prevArticles.map(article => {
+              if (article.ref !== mouvement.ref) {
+                return article;
+              }
+
+              if (!mouvement.emplacementSource) {
+                return article;
+              }
+
+              console.log(`[REFUS DÉFECTUEUX] Article: ${article.nom} | Zone: ${mouvement.emplacementSource} | Qty to deduct: ${mouvement.qte}`);
+
+              const updatedInventory = article.inventory.map(loc => {
+                if (loc.zone === mouvement.emplacementSource) {
+                  const currentQty = Number(loc.quantity);
+                  const newQty = Math.max(0, currentQty - mouvement.qte);
+                  console.log(`[REFUS DÉFECTUEUX] Zone: ${loc.zone} | Before: ${currentQty} | After: ${newQty}`);
+                  return { ...loc, quantity: newQty };
+                }
+                return loc;
+              }).filter(l => Number(l.quantity) > 0);
+
+              const newTotalStock = Math.max(0, article.stock - mouvement.qte);
+              console.log(`[REFUS DÉFECTUEUX] Article: ${article.nom} | Total stock: ${article.stock} → ${newTotalStock}`);
+
+              return {
+                ...article,
+                stock: newTotalStock,
+                inventory: updatedInventory
+              };
+            });
+          });
+        }
+      } else {
+        // ENTRÉE ONLY: Simple refusal logic (no stock impact)
+        setMouvements(mouvements.map(m =>
+          m.id === id
+            ? {
+                ...m,
+                statut: "Refusé" as const,
+                status: "rejected" as const,
+                controleur,
+                refusalReason: refusTotalMotif,
+                validQuantity: 0,
+                defectiveQuantity: mouvement.qte,
+                qcStatus: "Non-conforme",
+                noteControle: noteControle || refusTotalMotif,
+                verificationPoints: verificationPoints || {},
+                wasDelayed
+              }
+              : m
+        ));
+        console.log(`[REFUS TOTAL] NO stock update - transaction rejected`);
+      }
+      return;
+    }
+
+    // ============================================================================
+    // QC STEP 3: HANDLE BOTH ENTRÉE AND SORTIE APPROVALS
+    // ============================================================================
+
+    if (mouvement.type === "Entrée") {
+      // ========================================================================
+      // ENTRÉE APPROVAL: Add valid quantity to destination zone
+      // ========================================================================
+      const validQuantity = qteValide !== undefined ? qteValide : mouvement.qte;
+      const defectiveQuantity = unitesDefectueuses || 0;
+
+      console.log(`[ENTRÉE APPROVAL] Movement ID: ${id}`);
+      console.log(`  Article: ${mouvement.article} (${mouvement.ref})`);
+      console.log(`  Destination Zone: ${mouvement.emplacementDestination}`);
+      console.log(`  Valid Qty: ${validQuantity} | Defective Qty: ${defectiveQuantity}`);
+
+      // Update mouvement status to "Terminé"
+      setMouvements(mouvements.map(m =>
+        m.id === id
+          ? {
+              ...m,
+              statut: "Terminé" as const,
+              status: "approved" as const,
+              controleur,
+              etatArticles,
+              unitesDefectueuses: defectiveQuantity > 0 ? defectiveQuantity : undefined,
+              validQuantity,
+              defectiveQuantity,
+              qcStatus: etatArticles,
+              noteControle: noteControle || m.noteControle || "",
+              verificationPoints: verificationPoints || {},
+              wasDelayed
+            }
+          : m
+      ));
+
+      // POST-QC SUPPLIER LINKING: For approved Entrée movements with accepted quantity > 0, link supplier to article
+      // CRITICAL LOGIC: Supplier is added if ANY quantity is accepted (validQuantity > 0)
+      // This includes partial acceptance scenarios where some goods are damaged but some are accepted
+      // Example: 1000 units received, 50 damaged, 950 accepted → Supplier IS linked (because 950 > 0)
+      // Only if validQuantity = 0 (entire lot rejected) should supplier NOT be linked
+      if (mouvement.type === "Entrée" && mouvement.fournisseur && validQuantity > 0) {
+        const article = articles.find(a => a.ref === mouvement.ref);
+        if (article) {
+          // Find supplier ID by name
+          const supplier = suppliers.find(s => s.nom === mouvement.fournisseur);
+          if (supplier) {
+            // Check if supplier is already linked to this article (prevent duplicates)
+            const currentSupplierIds = article.supplierIds || [];
+            if (!currentSupplierIds.includes(supplier.id)) {
+              // Add supplier to article's supplier list (cumulative - never overwrite)
+              const updatedSupplierIds = [...currentSupplierIds, supplier.id];
+              updateArticle(article.id, { supplierIds: updatedSupplierIds });
+              console.log(`[PARTIAL QC ACCEPTANCE - SUPPLIER LINKED] Article: ${article.nom}`);
+              console.log(`  Supplier: ${mouvement.fournisseur} (ID: ${supplier.id})`);
+              console.log(`  Accepted Qty: ${validQuantity} ${article.uniteSortie}`);
+              console.log(`  Defective Qty: ${defectiveQuantity} ${article.uniteSortie}`);
+              console.log(`  Status: LINKED (because accepted qty > 0)`);
+            } else {
+              console.log(`[PARTIAL QC ACCEPTANCE - SUPPLIER ALREADY LINKED] Article: ${article.nom}, Supplier: ${mouvement.fournisseur}`);
+            }
+          }
+        }
+      } else if (mouvement.type === "Entrée" && mouvement.fournisseur && validQuantity === 0) {
+        // CRITICAL: If entire lot is rejected (validQuantity = 0), do NOT link supplier
+        console.log(`[COMPLETE REJECTION - NO SUPPLIER LINK] Article: ${mouvement.article}`);
+        console.log(`  Supplier: ${mouvement.fournisseur}`);
+        console.log(`  Accepted Qty: 0 (entire lot rejected)`);
+        console.log(`  Status: NOT LINKED (because accepted qty = 0)`);
+      }
+
+      // Update article stock and inventory
+      setArticles(prevArticles => {
+        return prevArticles.map(article => {
+          if (article.ref !== mouvement.ref) {
+            return article;
+          }
+
+          const destinationZone = mouvement.emplacementDestination;
+
+          // Update inventory: Add valid quantity to destination zone
+          const updatedInventory = article.inventory.map(loc => {
+            if (loc.zone === destinationZone) {
+              const newQty = Number(loc.quantity) + validQuantity;
+              console.log(`[ENTRÉE APPROVAL] Zone ${destinationZone}: ${loc.quantity} + ${validQuantity} = ${newQty}`);
+              return { ...loc, quantity: newQty };
+            }
+            return loc;
+          });
+
+          // If destination zone doesn't exist, create it
+          if (!updatedInventory.some(loc => loc.zone === destinationZone)) {
+            console.log(`[ENTRÉE APPROVAL] Zone ${destinationZone} is NEW: +${validQuantity}`);
+            updatedInventory.push({ zone: destinationZone, quantity: validQuantity });
+          }
+
+          // Update total stock
+          const newTotalStock = article.stock + validQuantity;
+
+          console.log(`[ENTRÉE APPROVAL] Article: ${article.nom}`);
+          console.log(`  Total Stock: ${article.stock} → ${newTotalStock}`);
+          console.log(`  Zones: ${updatedInventory.map(z => `${z.zone}(${z.quantity})`).join(', ')}`);
+
+          return {
+            ...article,
+            stock: newTotalStock,
+            inventory: updatedInventory
+          };
+        });
+      });
+
+    } else if (mouvement.type === "Sortie") {
+      // ========================================================================
+      // SORTIE APPROVAL: Deduct total quantity from source zone
+      // ========================================================================
+      // CRITICAL: ALL units (including defective) have physically left the warehouse
+      // We ALWAYS deduct the TOTAL quantity from inventory
+      // Defective units are a PERMANENT LOSS and are NOT added back to stock
+      const totalQtyToDeduct = mouvement.qte;
+
+      // Calculate quantities for display in table (metadata only)
+      const validQty = etatArticles === "Non-conforme"
+        ? mouvement.qte - unitesDefectueuses
+        : mouvement.qte;
+      const defectiveQty = etatArticles === "Non-conforme" ? unitesDefectueuses : 0;
+
+      console.log(`[SORTIE APPROVAL] Movement ID: ${id}`);
+      console.log(`  Article: ${mouvement.article} (${mouvement.ref})`);
+      console.log(`  Source Zone: ${mouvement.emplacementSource}`);
+      console.log(`  Total Qty to deduct: ${totalQtyToDeduct}`);
+
+      // Update mouvement status to "Terminé"
+      setMouvements(mouvements.map(m =>
+        m.id === id
+          ? {
+              ...m,
+              statut: "Terminé" as const,
+              status: "approved" as const,
+              controleur,
+              etatArticles,
+              unitesDefectueuses: etatArticles === "Non-conforme" ? unitesDefectueuses : undefined,
+              validQuantity: validQty,
+              defectiveQuantity: defectiveQty,
+              qcStatus: etatArticles,
+              noteControle: noteControle || m.noteControle || "",
+              verificationPoints: verificationPoints || {},
+              wasDelayed
+            }
+          : m
+      ));
+
+      // Update article stock and inventory
+      setArticles(prevArticles => {
+        return prevArticles.map(article => {
+          if (article.ref !== mouvement.ref) {
+            return article;
+          }
+
+          if (!mouvement.emplacementSource) {
+            return article;
+          }
+
+          console.log(`[SORTIE APPROVAL] Article: ${article.nom} | Zone: ${mouvement.emplacementSource} | Qty to deduct: ${totalQtyToDeduct}`);
+
+          // Find the inventory entry for this specific zone
+          const updatedInventory = article.inventory.map(loc => {
+            if (loc.zone === mouvement.emplacementSource) {
+              const currentQty = Number(loc.quantity);
+              const newQty = Math.max(0, currentQty - totalQtyToDeduct);
+
+              console.log(`[SORTIE APPROVAL] Zone: ${loc.zone} | Before: ${currentQty} | After: ${newQty}`);
+
+              return { ...loc, quantity: newQty };
+            }
+            return loc;
+          }).filter(l => Number(l.quantity) > 0); // Remove zones with 0 quantity
+
+          // Calculate new total stock
+          const newTotalStock = Math.max(0, article.stock - totalQtyToDeduct);
+
+          console.log(`[SORTIE APPROVAL] Article: ${article.nom} | Total stock: ${article.stock} → ${newTotalStock}`);
+          console.log(`[SORTIE APPROVAL] Remaining zones: ${updatedInventory.map(z => `${z.zone}(${z.quantity})`).join(', ')}`);
+
+          return {
+            ...article,
+            stock: newTotalStock,
+            inventory: updatedInventory
+          };
+        });
+      });
+    }
+  };
+
+  const rejectQualityControl = (id: string, controleur: string, raison: string) => {
+    const mouvement = mouvements.find(m => m.id === id);
+    if (!mouvement || mouvement.type !== "Sortie") return;
+
+    // Mettre à jour le mouvement avec le statut "Rejeté"
+    setMouvements(mouvements.map(m => 
+      m.id === id 
+        ? { 
+            ...m, 
+            statut: "Rejeté" as const,
+            status: "rejected" as const,
+            controleur,
+            raison,
+            rejectionReason: raison
+          }
+        : m
+    ));
+  };
+
+  const calculateEmplacementOccupancy = (emplacementName: string): number => {
+    return articles
+      .reduce((sum, a) => {
+        const location = a.inventory.find(l => l.zone === emplacementName);
+        return sum + (location?.quantity || 0);
+      }, 0);
+  };
+
+  const getArticleLocations = (articleRef: string): InventoryEntry[] => {
+    const article = articles.find(a => a.ref === articleRef);
+    return article?.inventory || [];
+  };
+
+  const getArticleStockByLocation = (articleRef: string, emplacementName: string): number => {
+    const article = articles.find(a => a.ref === articleRef);
+    const location = article?.inventory.find(l => l.zone === emplacementName);
+    return location?.quantity || 0;
+  };
+
+  const getArticleCurrentLocation = (articleRef: string): string | null => {
+    // Récupère le dernier mouvement "Terminé" de l'article
+    const lastMovement = mouvements
+      .filter(m => m.ref === articleRef && m.statut !== "Rejeté")
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .at(0);
+
+    if (!lastMovement) return null;
+
+    // Pour les Entrées et Transferts, retourner la destination
+    if (lastMovement.type === "Entrée" || lastMovement.type === "Transfert") {
+      return lastMovement.emplacementDestination;
+    }
+
+    // Pour les Sorties, retourner la source (avant la sortie)
+    if (lastMovement.type === "Sortie") {
+      return lastMovement.emplacementSource || null;
+    }
+
+    return null;
+  };
+
+  const processTransfer = (articleRef: string, sourceLocation: string, quantity: number, destinationLocation: string): { success: boolean; error?: string } => {
+    const article = articles.find(a => a.ref === articleRef);
+    if (!article) {
+      return { success: false, error: "Article non trouvé" };
+    }
+
+    // Vérifier que la quantité disponible dans la source est suffisante
+    const sourceStock = getArticleStockByLocation(articleRef, sourceLocation);
+    if (quantity > sourceStock) {
+      return { success: false, error: `Quantité insuffisante dans ${sourceLocation}. Disponible: ${sourceStock}` };
+    }
+
+    // Mettre à jour les inventory de l'article
+    const updatedInventory = article.inventory.map(loc => {
+      if (loc.zone === sourceLocation) {
+        // CRITICAL: Convert to Number before subtracting to prevent string issues
+        return { ...loc, quantity: Math.max(0, Number(loc.quantity) - Number(quantity)) };
+      }
+      if (loc.zone === destinationLocation) {
+        // CRITICAL: Convert to Number before adding to prevent string concatenation
+        return { ...loc, quantity: Number(loc.quantity) + Number(quantity) };
+      }
+      return loc;
+    });
+
+    // Si la destination n'existe pas dans les inventory, l'ajouter
+    if (!updatedInventory.find(l => l.zone === destinationLocation)) {
+      updatedInventory.push({ zone: destinationLocation, quantity: Number(quantity) });
+    }
+
+    // Supprimer les inventory avec quantité 0
+    const cleanedInventory = updatedInventory.filter(l => Number(l.quantity) > 0);
+
+    // Mettre à jour l'article avec les nouvelles inventory
+    updateArticle(article.id, { inventory: cleanedInventory });
+
+    return { success: true };
+  };
+
+  const recalculateAllOccupancies = () => {
+    // No-op: Capacity tracking has been removed
+  };
+
+  return (
+    <DataContext.Provider value={{
+      articles,
+      categories,
+      emplacements,
+      destinations,
+      suppliers,
+      mouvements,
+      inventoryHistory,
+      addArticle,
+      updateArticle,
+      deleteArticle,
+      addCategorie,
+      updateCategorie,
+      deleteCategorie,
+      addEmplacement,
+      updateEmplacement,
+      deleteEmplacement,
+      addDestination,
+      updateDestination,
+      deleteDestination,
+      addSupplier,
+      updateSupplier,
+      deleteSupplier,
+      addMouvement,
+      updateMouvement,
+      deleteMouvement,
+      approveQualityControl,
+      rejectQualityControl,
+      addInventoryRecord,
+      applyInventoryAdjustment,
+      batchUpdateArticles,
+      batchAddInventoryRecords,
+      calculateEmplacementOccupancy,
+      getArticleLocations,
+      getArticleStockByLocation,
+      getArticleCurrentLocation,
+      processTransfer,
+      recalculateAllOccupancies,
+    }}>
+      {children}
+    </DataContext.Provider>
+  );
+};
+
+export const useData = () => {
+  const context = useContext(DataContext);
+  if (!context) {
+    throw new Error("useData must be used within DataProvider");
+  }
+  return context;
+};

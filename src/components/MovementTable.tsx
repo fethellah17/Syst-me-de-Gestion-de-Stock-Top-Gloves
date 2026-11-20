@@ -1,0 +1,808 @@
+import { FileText, ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, FileEdit, CheckCircle2, AlertCircle, Clock, Copy, CheckIcon, XIcon, ClipboardCheck, Timer } from "lucide-react";
+import { 
+  generateInboundPDF, 
+  generateOutboundPDF, 
+  generateTransferPDF, 
+  generateAdjustmentPDF,
+  generateRejectionPDF,
+  generateAdministrativeErrorPDF,
+  generateDefectiveItemsPDF
+} from "@/lib/pdf-generator";
+import { UnitBadge } from "@/components/UnitBadge";
+import type { Mouvement, Article } from "@/contexts/DataContext";
+
+interface MovementTableProps {
+  movements: Mouvement[];
+  articles?: Article[];
+  onQualityControl?: (id: string) => void;
+  onReject?: (id: string) => void;
+  onInspect?: (id: string) => void;
+  onDuplicate?: (mouvement: Mouvement) => void;
+  showActions?: boolean;
+  compact?: boolean;
+}
+
+export const MovementTable = ({ 
+  movements, 
+  articles = [],
+  onQualityControl,
+  onReject,
+  onInspect,
+  onDuplicate,
+  showActions = true,
+  compact = false
+}: MovementTableProps) => {
+  
+  const getMovementIcon = (type: string) => {
+    switch (type) {
+      case "Entrée":
+        return <ArrowDownToLine className="w-3 h-3" />;
+      case "Sortie":
+        return <ArrowUpFromLine className="w-3 h-3" />;
+      case "Transfert":
+        return <ArrowRightLeft className="w-3 h-3" />;
+      case "Ajustement":
+        return <FileEdit className="w-3 h-3" />;
+      default:
+        return null;
+    }
+  };
+
+  // Check if a movement uses an old conversion factor
+  const hasOldFactor = (mouvement: Mouvement): boolean => {
+    if (!mouvement.ref) return false;
+    const article = articles.find(a => a.ref === mouvement.ref);
+    if (!article) return false;
+    // If movement has a stored factor and it differs from current, it's old
+    return mouvement.uniteSortie !== undefined && article.facteurConversion !== 1;
+  };
+
+  const getOldFactorTooltip = (mouvement: Mouvement): string => {
+    const article = articles.find(a => a.ref === mouvement.ref);
+    if (!article) return "";
+    // Calculate what the old factor might have been based on the conversion
+    if (mouvement.qteOriginale && mouvement.qte && mouvement.qteOriginale !== mouvement.qte) {
+      const oldFactor = mouvement.qte / mouvement.qteOriginale;
+      return `Ce mouvement utilise un ancien facteur de conversion (${oldFactor.toFixed(1)}). Le facteur actuel est ${article.facteurConversion}.`;
+    }
+    return "";
+  };
+
+  // Calculate if a movement is delayed (> 24 hours in "En attente" status)
+  const isMovementDelayed = (mouvement: Mouvement): boolean => {
+    if (mouvement.statut !== "En attente") return false;
+    
+    try {
+      const movementDate = new Date(mouvement.date);
+      const currentDate = new Date();
+      const hoursDifference = (currentDate.getTime() - movementDate.getTime()) / (1000 * 60 * 60);
+      
+      return hoursDifference > 24;
+    } catch {
+      return false;
+    }
+  };
+
+  // Get delay duration in hours for tooltip
+  const getDelayDuration = (mouvement: Mouvement): string => {
+    try {
+      const movementDate = new Date(mouvement.date);
+      const currentDate = new Date();
+      const hoursDifference = (currentDate.getTime() - movementDate.getTime()) / (1000 * 60 * 60);
+      
+      if (hoursDifference < 1) {
+        const minutes = Math.round(hoursDifference * 60);
+        return `${minutes} minute${minutes > 1 ? 's' : ''}`;
+      } else if (hoursDifference < 24) {
+        const hours = Math.round(hoursDifference);
+        return `${hours} heure${hours > 1 ? 's' : ''}`;
+      } else {
+        const days = Math.round(hoursDifference / 24);
+        return `${days} jour${days > 1 ? 's' : ''}`;
+      }
+    } catch {
+      return "N/A";
+    }
+  };
+
+  const getStatusBadge = (mouvement: Mouvement) => {
+    const isDelayed = isMovementDelayed(mouvement);
+    const delayDuration = getDelayDuration(mouvement);
+    
+    switch (mouvement.statut) {
+      case "En attente":
+        return (
+          <div className="relative group inline-flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-100 text-yellow-800">
+              <Clock className="w-3 h-3" />
+              En attente
+            </span>
+            {isDelayed && (
+              <>
+                <Timer className="w-4 h-4 text-red-600 animate-pulse" strokeWidth={2} />
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-red-900 text-red-50 text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                  Attention: En attente depuis {delayDuration}
+                </div>
+              </>
+            )}
+          </div>
+        );
+      case "En attente de validation Qualité":
+        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-100 text-orange-800">
+          <AlertCircle className="w-3 h-3" />
+          En attente
+        </span>;
+      case "Terminé":
+        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold status-green">
+          <CheckCircle2 className="w-3 h-3" />
+          Terminé
+        </span>;
+      case "Rejeté":
+        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold status-red">
+          <AlertCircle className="w-3 h-3" />
+          Rejeté
+        </span>;
+      default:
+        return null;
+    }
+  };
+
+  const getSourceLabel = (mouvement: Mouvement) => {
+    if (mouvement.type === "Sortie" || mouvement.type === "Transfert" || mouvement.type === "Ajustement") {
+      return mouvement.emplacementSource || "N/A";
+    }
+    return "—";
+  };
+
+  const getDestinationLabel = (mouvement: Mouvement) => {
+    if (mouvement.type === "Entrée" || mouvement.type === "Transfert") {
+      return mouvement.emplacementDestination;
+    }
+    if (mouvement.type === "Sortie") {
+      return mouvement.emplacementDestination;
+    }
+    if (mouvement.type === "Ajustement") {
+      return "—";
+    }
+    return "N/A";
+  };
+
+  const getApprovedByLabel = (mouvement: Mouvement) => {
+    if (mouvement.controleur) {
+      return mouvement.controleur;
+    }
+    if (mouvement.type === "Entrée" || mouvement.type === "Ajustement") {
+      return "Système";
+    }
+    if (mouvement.type === "Transfert") {
+      return "N/A";
+    }
+    if (mouvement.type === "Sortie" && mouvement.statut === "En attente de validation Qualité") {
+      return "En attente";
+    }
+    return "N/A";
+  };
+
+  if (compact) {
+    // Version compacte pour le Dashboard
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b">
+              <th className="text-left py-2 px-2 md:px-4 text-muted-foreground font-medium">Type</th>
+              <th className="text-left py-2 px-2 md:px-4 text-muted-foreground font-medium">Article</th>
+              <th className="hidden md:table-cell text-left py-2 px-4 text-muted-foreground font-medium">Source</th>
+              <th className="hidden md:table-cell text-left py-2 px-4 text-muted-foreground font-medium">Destination</th>
+              <th className="text-right py-2 px-2 md:px-4 text-muted-foreground font-medium">Date</th>
+              <th className="text-center py-2 px-2 md:px-4 text-muted-foreground font-medium">Statut</th>
+            </tr>
+          </thead>
+          <tbody>
+            {movements.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-4 text-center text-muted-foreground text-xs">
+                  Aucun mouvement récent
+                </td>
+              </tr>
+            ) : (
+              movements.map((m) => (
+                <tr key={m.id} className="border-b border-border/50 last:border-0">
+                  <td className="py-2.5 px-2 md:px-4">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                      m.type === "Entrée" ? "status-green" 
+                      : m.type === "Sortie" ? "status-yellow" 
+                      : m.type === "Ajustement" ? "bg-purple-100 text-purple-800"
+                      : "status-blue"
+                    }`}>
+                      {getMovementIcon(m.type)}
+                      {m.type}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-2 md:px-4 font-medium text-foreground">{m.article}</td>
+                  <td className="hidden md:table-cell py-2.5 px-4 text-muted-foreground">{getSourceLabel(m)}</td>
+                  <td className="hidden md:table-cell py-2.5 px-4 text-muted-foreground">{getDestinationLabel(m)}</td>
+                  <td className="py-2.5 px-2 md:px-4 text-right text-muted-foreground font-mono text-xs">{m.date.split(' ')[1]?.substring(0, 5) || "00:00"}</td>
+                  <td className="py-2.5 px-2 md:px-4 text-center">{getStatusBadge(m)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  // Version complète pour la page Mouvements
+  return (
+    <>
+      {/* Desktop Table View */}
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b bg-muted/50">
+            <th className="text-left py-3 px-2 md:px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date</th>
+            <th className="text-left py-3 px-2 md:px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Article</th>
+            <th className="text-center py-3 px-2 md:px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Type</th>
+            <th className="hidden lg:table-cell text-left py-3 px-4 text-xs font-semibold text-primary uppercase tracking-wide">Numéro de Lot</th>
+            <th className="hidden lg:table-cell text-left py-3 px-4 text-xs font-semibold text-primary uppercase tracking-wide">Date du Lot</th>
+            <th className="hidden md:table-cell text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Quantité Saisie</th>
+            <th className="hidden lg:table-cell text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Impact Stock</th>
+            <th className="hidden lg:table-cell text-right py-3 px-4 text-xs font-semibold text-success uppercase tracking-wide">Qté Valide</th>
+            <th className="hidden lg:table-cell text-right py-3 px-4 text-xs font-semibold text-destructive uppercase tracking-wide">Qté Défect.</th>
+            <th className="hidden lg:table-cell text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Source</th>
+            <th className="hidden lg:table-cell text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Destination</th>
+            <th className="text-center py-3 px-2 md:px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Statut</th>
+            <th className="hidden md:table-cell text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Opérateur</th>
+            <th className="hidden lg:table-cell text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Approuvé par</th>
+            <th className="hidden lg:table-cell text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Commentaire</th>
+            {showActions && <th className="text-center py-3 px-2 md:px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {movements.length === 0 ? (
+            <tr>
+              <td colSpan={showActions ? 16 : 15} className="py-8 text-center text-muted-foreground">
+                Aucun mouvement récent
+              </td>
+            </tr>
+          ) : (
+            movements.map((m) => {
+              // Determine if conversion happened
+              const hasConversion = m.qteOriginale !== undefined && m.qte !== m.qteOriginale;
+              
+              return (
+                <tr key={m.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                  <td className="py-3 px-2 md:px-4 font-mono text-xs text-muted-foreground">{m.date}</td>
+                  <td className="py-3 px-2 md:px-4">
+                    <span className="font-medium text-foreground">{m.article}</span>
+                    <span className="block text-[10px] text-muted-foreground font-mono">{m.ref}</span>
+                  </td>
+                  <td className="py-3 px-2 md:px-4 text-center">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                      m.type === "Entrée" ? "status-green" 
+                      : m.type === "Sortie" ? "status-yellow" 
+                      : m.type === "Ajustement" ? "bg-purple-100 text-purple-800"
+                      : "status-blue"
+                    }`}>
+                      {getMovementIcon(m.type)}
+                      {m.type === "Ajustement" 
+                        ? `Ajustement (${m.typeAjustement === "Surplus" ? "+" : "-"})`
+                        : m.type
+                      }
+                    </span>
+                  </td>
+                  <td className="hidden lg:table-cell py-3 px-4">
+                    <span className="font-mono text-xs font-semibold text-primary bg-primary/5 px-2 py-1 rounded border border-primary/20">
+                      {m.lotNumber || "N/A"}
+                    </span>
+                  </td>
+                  <td className="hidden lg:table-cell py-3 px-4">
+                    <span className="font-mono text-xs text-foreground">
+                      {m.lotDate ? new Date(m.lotDate).toLocaleDateString('fr-FR') : "N/A"}
+                    </span>
+                  </td>
+                  
+                  {/* Quantité Saisie - User Input with Unit Badge */}
+                  <td className="hidden md:table-cell py-3 px-4">
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="font-mono font-semibold text-foreground text-sm">
+                        {m.qteOriginale !== undefined ? m.qteOriginale.toLocaleString('fr-FR') : m.qte.toLocaleString('fr-FR')}
+                      </span>
+                      {m.uniteUtilisee ? (
+                        <UnitBadge unit={m.uniteUtilisee} />
+                      ) : (
+                        <span className="text-muted-foreground/30 text-xs">—</span>
+                      )}
+                    </div>
+                  </td>
+                  
+                  {/* Impact Stock - Calculated Total with Arrow and Exit Unit Badge */}
+                  <td className="hidden lg:table-cell py-3 px-4">
+                    <div className="flex items-center justify-center gap-2">
+                      {m.statut === "En attente" && m.type === "Entrée" ? (
+                        <>
+                          <Clock className="w-3.5 h-3.5 text-yellow-500" />
+                          <span className="font-mono font-semibold text-yellow-600 text-sm">
+                            {m.qte.toLocaleString('fr-FR')}
+                          </span>
+                          {m.uniteSortie && <UnitBadge unit={m.uniteSortie} />}
+                        </>
+                      ) : hasConversion ? (
+                        <>
+                          <span className="text-muted-foreground text-xs">→</span>
+                          <span className="font-mono font-semibold text-primary text-sm">
+                            {m.qte.toLocaleString('fr-FR')}
+                          </span>
+                          {m.uniteSortie && <UnitBadge unit={m.uniteSortie} />}
+                          {hasOldFactor(m) && (
+                            <div className="relative group">
+                              <Clock className="w-3.5 h-3.5 text-amber-500 cursor-help" />
+                              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-amber-900 text-amber-50 text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                {getOldFactorTooltip(m)}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-mono text-muted-foreground text-xs">
+                            {m.qte.toLocaleString('fr-FR')}
+                          </span>
+                          {m.uniteSortie && <UnitBadge unit={m.uniteSortie} />}
+                          {hasOldFactor(m) && (
+                            <div className="relative group">
+                              <Clock className="w-3.5 h-3.5 text-amber-500 cursor-help" />
+                              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-amber-900 text-amber-50 text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                                {getOldFactorTooltip(m)}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </td>
+                  
+                  <td className="hidden lg:table-cell py-3 px-4 text-right font-mono">
+                    {m.validQuantity !== undefined ? (
+                      <span className="text-success font-semibold">{m.validQuantity.toLocaleString()}</span>
+                    ) : (
+                      <span className="text-muted-foreground/30">—</span>
+                    )}
+                  </td>
+                  <td className="hidden lg:table-cell py-3 px-4 text-right font-mono">
+                    {m.defectiveQuantity !== undefined && m.defectiveQuantity > 0 ? (
+                      <span className="text-destructive font-semibold">{m.defectiveQuantity.toLocaleString()}</span>
+                    ) : (
+                      <span className="text-muted-foreground/30">—</span>
+                    )}
+                  </td>
+                  <td className="hidden lg:table-cell py-3 px-4 text-muted-foreground text-xs">
+                    <span className="font-medium">{getSourceLabel(m)}</span>
+                  </td>
+                  <td className="hidden lg:table-cell py-3 px-4 text-muted-foreground text-xs">
+                    <span className="font-medium">{getDestinationLabel(m)}</span>
+                  </td>
+                  <td className="py-3 px-2 md:px-4 text-center">{getStatusBadge(m)}</td>
+                  <td className="hidden md:table-cell py-3 px-4 text-muted-foreground text-xs">{m.operateur}</td>
+                  <td className="hidden lg:table-cell py-3 px-4 text-muted-foreground text-xs">
+                    <span className={`${
+                      getApprovedByLabel(m) === "En attente" ? "text-orange-600 font-medium" :
+                      getApprovedByLabel(m) === "Système" ? "text-blue-600 font-medium" :
+                      getApprovedByLabel(m) === "N/A" ? "text-muted-foreground/50" :
+                      "text-foreground font-medium"
+                    }`}>
+                      {getApprovedByLabel(m)}
+                    </span>
+                  </td>
+                  <td className="hidden lg:table-cell py-3 px-4 text-muted-foreground text-xs">
+                    {m.commentaire ? (
+                      <div className="relative group">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 text-xs font-medium cursor-help">
+                          <FileText className="w-3 h-3" />
+                          Note
+                        </span>
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded whitespace-normal max-w-xs opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 break-words">
+                          {m.commentaire}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground/30">—</span>
+                    )}
+                  </td>
+                  {showActions && (
+                    <td className="py-3 px-2 md:px-4 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                      {(m.type === "Entrée" || m.type === "Sortie") && m.statut === "En attente" && (
+                        <button
+                          onClick={() => onInspect?.(m.id)}
+                          className="p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300 hover:scale-110"
+                          title="Contrôle Qualité"
+                        >
+                          <ClipboardCheck className="w-5 h-5" />
+                        </button>
+                      )}
+                      {m.type === "Sortie" && m.statut === "Terminé" && m.status === "approved" && (
+                        <button
+                          onClick={() => generateOutboundPDF(m, articles)}
+                          className="p-1.5 rounded-md hover:bg-green-100 transition-colors text-green-600 hover:text-green-800"
+                          title="Télécharger le Bon de Sortie (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Sortie" && m.statut === "Refusé" && m.refusalType === "administrative" && (
+                        <button
+                          onClick={() => generateAdministrativeErrorPDF(m)}
+                          className="p-1.5 rounded-md hover:bg-orange-100 transition-colors text-orange-600 hover:text-orange-800"
+                          title="Télécharger la Note de Correction (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Sortie" && m.statut === "Refusé" && m.refusalType === "defective" && (
+                        <button
+                          onClick={() => generateDefectiveItemsPDF(m)}
+                          className="p-1.5 rounded-md hover:bg-red-100 transition-colors text-red-600 hover:text-red-800"
+                          title="Télécharger l'Avis de Rejet (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Entrée" && m.statut !== "En attente" && (
+                        <button
+                          onClick={() => generateInboundPDF(m, articles)}
+                          className="p-1.5 rounded-md hover:bg-blue-100 transition-colors text-blue-600 hover:text-blue-800"
+                          title="Télécharger le Bon d'Entrée (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Transfert" && (
+                        <button
+                          onClick={() => generateTransferPDF(m)}
+                          className="p-1.5 rounded-md hover:bg-purple-100 transition-colors text-purple-600 hover:text-purple-800"
+                          title="Télécharger le Bon de Transfert (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Ajustement" && (
+                        <button
+                          onClick={() => generateAdjustmentPDF(m)}
+                          className="p-1.5 rounded-md hover:bg-amber-100 transition-colors text-amber-600 hover:text-amber-800"
+                          title="Télécharger le Bon d'Ajustement (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.status === "rejected" && m.rejectionReason && (
+                        <button
+                          onClick={() => generateRejectionPDF(m)}
+                          className="p-1.5 rounded-md hover:bg-red-100 transition-colors text-red-600 hover:text-red-800"
+                          title="Télécharger le rapport de rejet (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {onDuplicate && m.type !== "Ajustement" && (
+                        <button
+                          onClick={() => onDuplicate(m)}
+                          className="p-1.5 rounded-md hover:bg-blue-100 transition-colors text-blue-600 hover:text-blue-800"
+                          title="Dupliquer ce mouvement"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                  )}
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+      </div>
+
+      {/* Mobile Card View */}
+      <div className="md:hidden space-y-3">
+        {movements.length === 0 ? (
+          <div className="py-8 text-center text-muted-foreground">
+            Aucun mouvement récent
+          </div>
+        ) : (
+          movements.map((m) => {
+            const hasConversion = m.qteOriginale !== undefined && m.qte !== m.qteOriginale;
+            const hasQualityData = m.validQuantity !== undefined || (m.defectiveQuantity !== undefined && m.defectiveQuantity > 0);
+            
+            return (
+              <div key={m.id} className="border rounded-lg p-4 bg-card hover:bg-muted/50 transition-colors space-y-0">
+                {/* Header: Article Name + REF + Type Badge */}
+                <div className="flex items-start justify-between gap-3 pb-3 border-b">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-foreground text-base truncate">{m.article}</div>
+                    <div className="text-xs text-muted-foreground font-mono truncate">{m.ref}</div>
+                  </div>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap flex-shrink-0 ${
+                    m.type === "Entrée" ? "status-green" 
+                    : m.type === "Sortie" ? "status-yellow" 
+                    : m.type === "Ajustement" ? "bg-purple-100 text-purple-800"
+                    : "status-blue"
+                  }`}>
+                    {getMovementIcon(m.type)}
+                    {m.type === "Ajustement" 
+                      ? `${m.typeAjustement === "Surplus" ? "+" : "-"}`
+                      : m.type
+                    }
+                  </span>
+                </div>
+
+                {/* Section 1: Quantities */}
+                <div className="space-y-2 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1">
+                      <span className="text-xs text-muted-foreground font-medium">Quantité Saisie</span>
+                      <div className="text-sm font-semibold text-foreground">
+                        {m.qteOriginale !== undefined ? m.qteOriginale.toLocaleString('fr-FR') : m.qte.toLocaleString('fr-FR')}
+                        {m.uniteUtilisee && ` ${m.uniteUtilisee}`}
+                      </div>
+                    </div>
+                    {hasConversion && (
+                      <div className="flex-1">
+                        <span className="text-xs text-muted-foreground font-medium">Impact Stock</span>
+                        <div className="text-sm font-semibold text-primary">
+                          → {m.qte.toLocaleString('fr-FR')} {m.uniteSortie}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {!hasConversion && (
+                    <div>
+                      <span className="text-xs text-muted-foreground font-medium">Impact Stock</span>
+                      <div className="text-sm font-semibold flex items-center gap-2">
+                        {m.statut === "En attente" && m.type === "Entrée" ? (
+                          <>
+                            <Clock className="w-4 h-4 text-yellow-500" />
+                            <span className="text-yellow-600">{m.qte.toLocaleString('fr-FR')} {m.uniteSortie}</span>
+                          </>
+                        ) : (
+                          <span className="text-foreground">{m.qte.toLocaleString('fr-FR')} {m.uniteSortie}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="border-t" />
+
+                {/* Section 2: Traceability - Lot Number and Date */}
+                <div className="space-y-2 py-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs text-muted-foreground font-medium min-w-fit">Lot:</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-mono font-semibold text-primary bg-primary/5 px-2 py-1 rounded border border-primary/20 truncate">
+                        {m.lotNumber || "N/A"}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs text-muted-foreground font-medium min-w-fit">Date Lot:</span>
+                    <div className="text-xs font-mono text-foreground">
+                      {m.lotDate ? new Date(m.lotDate).toLocaleDateString('fr-FR') : "N/A"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t" />
+
+                {/* Section 3: Location - Source ⮕ Destination */}
+                {(m.emplacementSource || m.emplacementDestination) && (
+                  <>
+                    <div className="space-y-2 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground font-medium">Source & Destination</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                        <span className="truncate flex-1">{getSourceLabel(m)}</span>
+                        <span className="text-muted-foreground flex-shrink-0">⮕</span>
+                        <span className="truncate flex-1">{getDestinationLabel(m)}</span>
+                      </div>
+                    </div>
+                    <div className="border-t" />
+                  </>
+                )}
+
+                {/* Section 4: Approval Information */}
+                <div className="space-y-2 py-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs text-muted-foreground font-medium min-w-fit">Approuvé par:</span>
+                    <div className={`text-xs font-medium ${
+                      getApprovedByLabel(m) === "En attente" ? "text-orange-600" :
+                      getApprovedByLabel(m) === "Système" ? "text-blue-600" :
+                      getApprovedByLabel(m) === "N/A" ? "text-muted-foreground/50" :
+                      "text-foreground"
+                    }`}>
+                      {getApprovedByLabel(m)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t" />
+
+                {/* Section 5: Quality Control Data */}
+                {hasQualityData && (
+                  <>
+                    <div className="space-y-2 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground font-medium">Contrôle Qualité</span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        {m.validQuantity !== undefined && (
+                          <div className="flex items-center gap-2">
+                            <CheckIcon className="w-4 h-4 text-green-600 flex-shrink-0" />
+                            <div>
+                              <div className="text-xs text-muted-foreground">Qté Valide</div>
+                              <div className="text-sm font-semibold text-green-600">
+                                {m.validQuantity.toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {m.defectiveQuantity !== undefined && m.defectiveQuantity > 0 && (
+                          <div className="flex items-center gap-2">
+                            <XIcon className="w-4 h-4 text-red-600 flex-shrink-0" />
+                            <div>
+                              <div className="text-xs text-muted-foreground">Qté Défect.</div>
+                              <div className="text-sm font-semibold text-red-600">
+                                {m.defectiveQuantity.toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="border-t" />
+                  </>
+                )}
+
+                {/* Section 6: System Info - Date/Heure and Opérateur */}
+                <div className="space-y-2 py-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs text-muted-foreground font-medium min-w-fit">Date:</span>
+                    <div className="text-xs font-mono text-foreground">
+                      {m.date}
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs text-muted-foreground font-medium min-w-fit">Opérateur:</span>
+                    <div className="text-xs text-foreground font-medium">
+                      {m.operateur}
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs text-muted-foreground font-medium min-w-fit">Statut:</span>
+                    <div className="text-xs">
+                      {getStatusBadge(m)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 7: Notes - Commentaire */}
+                {m.commentaire && (
+                  <>
+                    <div className="border-t" />
+                    <div className="py-3">
+                      <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded p-3 space-y-1">
+                        <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                          <FileText className="w-3 h-3" />
+                          Commentaire
+                        </span>
+                        <div className="text-xs text-foreground break-words">
+                          {m.commentaire}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Bottom: Action Buttons */}
+                {showActions && (
+                  <>
+                    <div className="border-t" />
+                    <div className="flex items-center justify-end gap-2 pt-3">
+                      {/* Inspecter Button for Pending Entrée */}
+                      {m.type === "Entrée" && m.statut === "En attente" && (
+                        <button
+                          onClick={() => onInspect?.(m.id)}
+                          className="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300 hover:scale-110"
+                          title="Contrôle Qualité"
+                        >
+                          <ClipboardCheck className="w-5 h-5" />
+                        </button>
+                      )}
+                      {/* PDF Download Button */}
+                      {m.type === "Sortie" && m.statut === "Terminé" && m.status === "approved" && (
+                        <button
+                          onClick={() => generateOutboundPDF(m)}
+                          className="p-2 rounded-md hover:bg-green-100 dark:hover:bg-green-900 transition-colors text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300"
+                          title="Télécharger le Bon de Sortie (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Sortie" && m.statut === "Refusé" && m.refusalType === "administrative" && (
+                        <button
+                          onClick={() => generateAdministrativeErrorPDF(m)}
+                          className="p-2 rounded-md hover:bg-orange-100 dark:hover:bg-orange-900 transition-colors text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-300"
+                          title="Télécharger la Note de Correction (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Sortie" && m.statut === "Refusé" && m.refusalType === "defective" && (
+                        <button
+                          onClick={() => generateDefectiveItemsPDF(m)}
+                          className="p-2 rounded-md hover:bg-red-100 dark:hover:bg-red-900 transition-colors text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                          title="Télécharger l'Avis de Rejet (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Entrée" && m.statut !== "En attente" && (
+                        <button
+                          onClick={() => generateInboundPDF(m, articles)}
+                          className="p-2 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                          title="Télécharger le Bon d'Entrée (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Transfert" && (
+                        <button
+                          onClick={() => generateTransferPDF(m)}
+                          className="p-2 rounded-md hover:bg-purple-100 dark:hover:bg-purple-900 transition-colors text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300"
+                          title="Télécharger le Bon de Transfert (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.type === "Ajustement" && (
+                        <button
+                          onClick={() => generateAdjustmentPDF(m)}
+                          className="p-2 rounded-md hover:bg-amber-100 dark:hover:bg-amber-900 transition-colors text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300"
+                          title="Télécharger le Bon d'Ajustement (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {m.status === "rejected" && m.rejectionReason && (
+                        <button
+                          onClick={() => generateRejectionPDF(m)}
+                          className="p-2 rounded-md hover:bg-red-100 dark:hover:bg-red-900 transition-colors text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
+                          title="Télécharger le rapport de rejet (PDF)"
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                      )}
+                      {/* Copy/Duplicate Button */}
+                      {onDuplicate && m.type !== "Ajustement" && (
+                        <button
+                          onClick={() => onDuplicate(m)}
+                          className="p-2 rounded-md hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                          title="Dupliquer ce mouvement"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </>
+  );
+};
