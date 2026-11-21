@@ -140,7 +140,8 @@ const MouvementsPage = () => {
           data.nomOperateur,
           data.motifErreur,
           data.nomControleur,
-          data.motifRejet
+          data.motifRejet,
+          data.lotDate
         );
 
         // Trigger PDF generation based on refusal type
@@ -177,7 +178,13 @@ const MouvementsPage = () => {
           0,
           data.refusTotalMotif,
           data.refusTotalMotif,
-          data.verificationPoints
+          data.verificationPoints,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          data.lotDate
         );
 
         setToast({
@@ -195,7 +202,13 @@ const MouvementsPage = () => {
         data.qteValide,
         undefined,
         data.noteControle,
-        data.verificationPoints
+        data.verificationPoints,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        data.lotDate
       );
 
       const successMessage = mouvement.type === "Sortie"

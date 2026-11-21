@@ -677,7 +677,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setInventoryHistory([...inventoryHistory, ...newRecords]);
   };
 
-  const approveQualityControl = (id: string, controleur: string, etatArticles: "Conforme" | "Non-conforme", unitesDefectueuses: number = 0, qteValide?: number, refusTotalMotif?: string, noteControle?: string, verificationPoints?: Record<string, boolean>, refusalType?: "administrative" | "defective", nomOperateur?: string, motifErreur?: string, nomControleur?: string, motifRejet?: string) => {
+  const approveQualityControl = (id: string, controleur: string, etatArticles: "Conforme" | "Non-conforme", unitesDefectueuses: number = 0, qteValide?: number, refusTotalMotif?: string, noteControle?: string, verificationPoints?: Record<string, boolean>, refusalType?: "administrative" | "defective", nomOperateur?: string, motifErreur?: string, nomControleur?: string, motifRejet?: string, lotDate?: string) => {
     const mouvement = mouvements.find(m => m.id === id);
     if (!mouvement) return;
 
@@ -730,7 +730,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   qcStatus: "Non-conforme",
                   noteControle: motifErreur || "",
                   verificationPoints: verificationPoints || {},
-                  wasDelayed
+                  wasDelayed,
+                  lotDate: lotDate || m.lotDate
                 }
               : m
           ));
@@ -756,7 +757,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   qcStatus: "Non-conforme",
                   noteControle: motifRejet || "",
                   verificationPoints: verificationPoints || {},
-                  wasDelayed
+                  wasDelayed,
+                  lotDate: lotDate || m.lotDate
                 }
               : m
           ));
@@ -810,7 +812,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 qcStatus: "Non-conforme",
                 noteControle: noteControle || refusTotalMotif,
                 verificationPoints: verificationPoints || {},
-                wasDelayed
+                wasDelayed,
+                lotDate: lotDate || m.lotDate
               }
               : m
         ));
@@ -850,7 +853,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               qcStatus: etatArticles,
               noteControle: noteControle || m.noteControle || "",
               verificationPoints: verificationPoints || {},
-              wasDelayed
+              wasDelayed,
+              lotDate: lotDate || m.lotDate
             }
           : m
       ));
@@ -965,7 +969,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               qcStatus: etatArticles,
               noteControle: noteControle || m.noteControle || "",
               verificationPoints: verificationPoints || {},
-              wasDelayed
+              wasDelayed,
+              lotDate: lotDate || m.lotDate
             }
           : m
       ));

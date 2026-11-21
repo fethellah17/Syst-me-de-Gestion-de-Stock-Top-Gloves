@@ -25,6 +25,7 @@ export interface InspectionData {
   motifErreur?: string; // For administrative error
   nomControleur?: string; // For defective items
   motifRejet?: string; // For defective items
+  lotDate?: string; // Optional expiration date
 }
 
 // Define checklists for each movement type
@@ -95,6 +96,7 @@ export const InspectionModal = ({
   const [motifErreur, setMotifErreur] = useState("");
   const [nomControleur, setNomControleur] = useState("");
   const [motifRejet, setMotifRejet] = useState("");
+  const [lotDate, setLotDate] = useState("");
   const [errors, setErrors] = useState<string[]>([]);
 
   // Initialize quantities and verification points when mouvement changes
@@ -111,6 +113,7 @@ export const InspectionModal = ({
       setMotifErreur("");
       setNomControleur("");
       setMotifRejet("");
+      setLotDate(mouvement.lotDate || "");
       
       // Initialize verification points based on movement type
       const checklist = getChecklistForType(mouvement.type);
@@ -233,6 +236,7 @@ export const InspectionModal = ({
           motifErreur: refusalType === "administrative" ? motifErreur : undefined,
           nomControleur: refusalType === "defective" ? nomControleur : undefined,
           motifRejet: refusalType === "defective" ? motifRejet : undefined,
+          lotDate: lotDate || undefined,
         });
       }
       // ENTRÉE ONLY: Simple refusal logic
@@ -245,6 +249,7 @@ export const InspectionModal = ({
           qteDefectueuseUnit: "sortie",
           noteControle: "",
           refusTotalMotif,
+          lotDate: lotDate || undefined,
         });
       }
       // Normal approval (both Entrée and Sortie)
@@ -256,6 +261,7 @@ export const InspectionModal = ({
           qteDefectueuse,
           qteDefectueuseUnit,
           noteControle,
+          lotDate: lotDate || undefined,
         });
       }
       onClose();
@@ -289,539 +295,518 @@ export const InspectionModal = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-background rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-lg shadow-lg max-w-4xl w-[95vw] max-h-[92vh] flex flex-col border border-gray-200">
         {/* Header */}
-        <div className="bg-background border-b p-6 flex items-center justify-between flex-shrink-0">
+        <div className="px-6 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
           <div>
-            <h2 className="text-2xl font-bold text-foreground">
+            <h2 className="text-lg font-semibold text-gray-900">
               {modalTitle}
             </h2>
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-[13px] text-gray-500">
               Vérification de la qualité et de la conformité
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-muted rounded-md transition-colors flex-shrink-0"
+            className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded transition-colors text-gray-400"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content - Scrollable */}
-        <div className="p-6 space-y-6 overflow-y-auto flex-1">
-          {/* Refus Total Toggle - Prominent at top */}
-          <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={refusTotal}
-                onChange={(e) => setRefusTotal(e.target.checked)}
-                className="w-5 h-5 rounded border-slate-300 mt-0.5 cursor-pointer"
-              />
-              <div className="flex-1">
-                <div className="font-semibold text-foreground text-sm">
-                  Refuser toute la quantité
-                </div>
-                <div className="text-xs text-muted-foreground mt-0.5">
-                  Cochez cette case pour rejeter complètement ce mouvement
-                </div>
-              </div>
-            </label>
-          </div>
-
-          {/* If Refus Total is selected, show only motif field */}
-          {refusTotal ? (
-            <>
-              {/* Movement Details */}
-              <div className="bg-muted/50 rounded-lg p-4 border border-border/50 space-y-3">
-                <h3 className="font-semibold text-foreground text-sm uppercase tracking-wide">
-                  Détails du Mouvement
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Article
-                    </span>
-                    <p className="text-sm font-semibold text-foreground">
-                      {article.nom}
-                    </p>
-                    <p className="text-xs text-muted-foreground font-mono">
-                      {article.ref}
-                    </p>
+        <div className="px-6 py-4 overflow-y-auto overflow-x-hidden flex-1">
+          <div className="space-y-5">
+            {/* Refus Total Toggle - Full width compact row */}
+            <div className="md:col-span-2 border border-gray-200 rounded py-2 px-3">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={refusTotal}
+                  onChange={(e) => setRefusTotal(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-primary"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-gray-900">
+                    Refuser toute la quantité
                   </div>
-                  <div>
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Quantité à Refuser
-                    </span>
-                    <p className="text-sm font-semibold text-destructive">
-                      {mouvement.qte.toLocaleString("fr-FR")} {article.uniteSortie}
-                    </p>
+                  <div className="text-xs text-gray-500">
+                    Cochez cette case pour rejeter complètement ce mouvement
                   </div>
                 </div>
-              </div>
+              </label>
+            </div>
 
-              {/* SORTIE ONLY: Dual Refusal Mode Selection */}
-              {mouvement.type === "Sortie" ? (
-                <>
-                  {/* Refusal Type Selection */}
-                  <div className="space-y-3">
-                    <h3 className="font-semibold text-foreground text-sm uppercase tracking-wide">
-                      Sélectionnez le Type de Refus
-                    </h3>
+            {/* If Refus Total is selected, show conditional fields */}
+            {refusTotal ? (
+              <div className="space-y-5">
+                {/* SORTIE ONLY: Dual Refusal Mode Selection */}
+                {mouvement.type === "Sortie" ? (
+                  <>
+                    <div className="border-b border-gray-200 pb-2">
+                      <h3 className="text-xs uppercase tracking-wide font-medium text-gray-500">
+                        Sélectionnez le Type de Refus
+                      </h3>
+                    </div>
                     
-                    {/* Option 1: Administrative Error */}
-                    <label className="flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-colors"
-                      style={{
-                        borderColor: refusalType === "administrative" ? "rgb(59, 130, 246)" : "rgb(226, 232, 240)",
-                        backgroundColor: refusalType === "administrative" ? "rgb(239, 246, 255)" : "transparent"
-                      }}>
-                      <input
-                        type="radio"
-                        name="refusalType"
-                        value="administrative"
-                        checked={refusalType === "administrative"}
-                        onChange={() => setRefusalType("administrative")}
-                        className="w-5 h-5 rounded-full border-2 mt-0.5 cursor-pointer"
-                      />
-                      <div className="flex-1">
-                        <div className="font-semibold text-foreground text-sm">
-                          Erreur Administrative / Retour en Stock
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Option 1: Administrative Error */}
+                      <label className="flex items-start gap-3 p-3 rounded border-2 cursor-pointer transition-colors"
+                        style={{
+                          borderColor: refusalType === "administrative" ? "rgb(59, 130, 246)" : "rgb(229, 231, 235)",
+                          backgroundColor: refusalType === "administrative" ? "rgb(239, 246, 255)" : "transparent"
+                        }}>
+                        <input
+                          type="radio"
+                          name="refusalType"
+                          value="administrative"
+                          checked={refusalType === "administrative"}
+                          onChange={() => setRefusalType("administrative")}
+                          className="w-4 h-4 mt-0.5 cursor-pointer accent-primary"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-900">
+                            Erreur Administrative / Retour en Stock
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            Erreur de picking ou d'entrée. La marchandise est réintégrée au stock.
+                          </div>
                         </div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Erreur de picking ou d'entrée. La marchandise est réintégrée au stock.
+                      </label>
+
+                      {/* Option 2: Defective Items */}
+                      <label className="flex items-start gap-3 p-3 rounded border-2 cursor-pointer transition-colors"
+                        style={{
+                          borderColor: refusalType === "defective" ? "rgb(220, 38, 38)" : "rgb(229, 231, 235)",
+                          backgroundColor: refusalType === "defective" ? "rgb(254, 242, 242)" : "transparent"
+                        }}>
+                        <input
+                          type="radio"
+                          name="refusalType"
+                          value="defective"
+                          checked={refusalType === "defective"}
+                          onChange={() => setRefusalType("defective")}
+                          className="w-4 h-4 mt-0.5 cursor-pointer accent-primary"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-900">
+                            Article Défectueux / Rebut
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            Dommage physique. La marchandise est déduite du stock.
+                          </div>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* Conditional Fields Based on Refusal Type */}
+                    {refusalType === "administrative" && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+                        <div className="min-w-0">
+                          <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                            Nom de l'Opérateur <span className="text-red-600">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={nomOperateur}
+                            onChange={(e) => setNomOperateur(e.target.value)}
+                            placeholder="Entrez le nom de l'opérateur"
+                            className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
+                          />
+                        </div>
+
+                        <div className="md:col-span-2 min-w-0">
+                          <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                            Motif de l'Erreur <span className="text-red-600">*</span>
+                          </label>
+                          <textarea
+                            value={motifErreur}
+                            onChange={(e) => setMotifErreur(e.target.value)}
+                            placeholder="Décrivez l'erreur de préparation..."
+                            className="w-full px-3 py-2 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
+                            rows={3}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Détails sur l'erreur administrative
+                          </p>
                         </div>
                       </div>
-                    </label>
+                    )}
 
-                    {/* Option 2: Defective Items */}
-                    <label className="flex items-start gap-3 p-4 rounded-lg border-2 cursor-pointer transition-colors"
-                      style={{
-                        borderColor: refusalType === "defective" ? "rgb(220, 38, 38)" : "rgb(226, 232, 240)",
-                        backgroundColor: refusalType === "defective" ? "rgb(254, 242, 242)" : "transparent"
-                      }}>
-                      <input
-                        type="radio"
-                        name="refusalType"
-                        value="defective"
-                        checked={refusalType === "defective"}
-                        onChange={() => setRefusalType("defective")}
-                        className="w-5 h-5 rounded-full border-2 mt-0.5 cursor-pointer"
-                      />
-                      <div className="flex-1">
-                        <div className="font-semibold text-foreground text-sm">
-                          Article Défectueux / Rebut
+                    {refusalType === "defective" && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+                        <div className="min-w-0">
+                          <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                            Nom du Contrôleur <span className="text-red-600">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={nomControleur}
+                            onChange={(e) => setNomControleur(e.target.value)}
+                            placeholder="Entrez le nom du contrôleur"
+                            className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
+                          />
                         </div>
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Dommage physique. La marchandise est déduite du stock.
+
+                        <div className="md:col-span-2 min-w-0">
+                          <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                            Motif du Rejet <span className="text-red-600">*</span>
+                          </label>
+                          <textarea
+                            value={motifRejet}
+                            onChange={(e) => setMotifRejet(e.target.value)}
+                            placeholder="Décrivez les défauts détectés..."
+                            className="w-full px-3 py-2 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
+                            rows={3}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Détails sur les articles défectueux
+                          </p>
                         </div>
                       </div>
-                    </label>
-                  </div>
-
-                  {/* Conditional Fields Based on Refusal Type */}
-                  {refusalType === "administrative" && (
-                    <>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Nom de l'Opérateur <span className="text-red-500">*</span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {/* ENTRÉE ONLY: Simple refusal logic */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+                      <div className="min-w-0">
+                        <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                          Nom du Contrôleur <span className="text-red-600">*</span>
                         </label>
                         <input
                           type="text"
-                          value={nomOperateur}
-                          onChange={(e) => setNomOperateur(e.target.value)}
-                          placeholder="Entrez le nom de l'opérateur"
-                          className="w-full h-10 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                          value={controleur}
+                          onChange={(e) => setControleur(e.target.value)}
+                          placeholder="Entrez votre nom"
+                          className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
                         />
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Motif de l'Erreur <span className="text-red-500">*</span>
+                      <div className="md:col-span-2 min-w-0">
+                        <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                          Motif du Refus Total <span className="text-red-600">*</span>
                         </label>
                         <textarea
-                          value={motifErreur}
-                          onChange={(e) => setMotifErreur(e.target.value)}
-                          placeholder="Décrivez l'erreur de préparation..."
-                          className="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                          rows={4}
+                          value={refusTotalMotif}
+                          onChange={(e) => setRefusTotalMotif(e.target.value)}
+                          placeholder="Décrivez les raisons du refus complet de ce mouvement..."
+                          className="w-full px-3 py-2 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
+                          rows={3}
                         />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Justification détaillée du refus total
+                        </p>
                       </div>
-                    </>
-                  )}
-
-                  {refusalType === "defective" && (
-                    <>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Nom du Contrôleur <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={nomControleur}
-                          onChange={(e) => setNomControleur(e.target.value)}
-                          placeholder="Entrez le nom du contrôleur"
-                          className="w-full h-10 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Motif du Rejet <span className="text-red-500">*</span>
-                        </label>
-                        <textarea
-                          value={motifRejet}
-                          onChange={(e) => setMotifRejet(e.target.value)}
-                          placeholder="Décrivez les défauts détectés..."
-                          className="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                          rows={4}
-                        />
-                      </div>
-                    </>
-                  )}
-                </>
-              ) : (
-                <>
-                  {/* ENTRÉE ONLY: Simple refusal logic */}
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Nom du Contrôleur <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={controleur}
-                      onChange={(e) => setControleur(e.target.value)}
-                      placeholder="Entrez votre nom"
-                      className="w-full h-10 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Motif du Refus Total <span className="text-red-500">* (Obligatoire)</span>
-                    </label>
-                    <textarea
-                      value={refusTotalMotif}
-                      onChange={(e) => setRefusTotalMotif(e.target.value)}
-                      placeholder="Décrivez les raisons du refus complet de ce mouvement..."
-                      className="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                      rows={5}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Justification détaillée du refus total
-                    </p>
-                  </div>
-                </>
-              )}
-            </>
-          ) : (
-            <>
-              {/* Movement Details */}
-              <div className="bg-muted/50 rounded-lg p-4 border border-border/50 space-y-3">
-                <h3 className="font-semibold text-foreground text-sm uppercase tracking-wide">
-                  Détails du Mouvement
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Article
-                    </span>
-                    <p className="text-sm font-semibold text-foreground">
-                      {article.nom}
-                    </p>
-                    <p className="text-xs text-muted-foreground font-mono">
-                      {article.ref}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Quantité Reçue
-                    </span>
-                    <p className="text-sm font-semibold text-foreground">
-                      {mouvement.qte.toLocaleString("fr-FR")} {article.uniteSortie}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Zone de Destination
-                    </span>
-                    <p className="text-sm font-semibold text-foreground">
-                      {mouvement.emplacementDestination}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Opérateur
-                    </span>
-                    <p className="text-sm font-semibold text-foreground">
-                      {mouvement.operateur}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Numéro de Lot
-                    </span>
-                    <p className="text-sm font-mono font-semibold text-primary">
-                      {mouvement.lotNumber}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Date
-                    </span>
-                    <p className="text-sm font-mono text-foreground">
-                      {mouvement.date}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Verification Checklist - Dynamic based on type */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-foreground text-sm uppercase tracking-wide">
-                    Points de Vérification
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={handleSelectAll}
-                    className="text-xs font-medium px-3 py-1.5 rounded-md bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
-                  >
-                    {allPointsChecked ? "Désélectionner Tout" : "Sélectionner Tout"}
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {checklist.map(({ key, label, description }) => (
-                    <label
-                      key={key}
-                      className="flex items-start gap-3 p-3 rounded-lg border border-border/50 hover:bg-muted/30 cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={verificationPoints[key] || false}
-                        onChange={(e) =>
-                          setVerificationPoints({
-                            ...verificationPoints,
-                            [key]: e.target.checked,
-                          })
-                        }
-                        className="w-5 h-5 rounded border-border mt-0.5 cursor-pointer"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-foreground text-sm">
-                          {label}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {description}
-                        </div>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Quantity Input Section */}
-              <div className="space-y-3">
-                <h3 className="font-semibold text-foreground text-sm uppercase tracking-wide">
-                  Saisie des Quantités
-                </h3>
-                
-                {/* Total to Process - Read-only Master Reference */}
-                <div className="p-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-muted-foreground">
-                      Quantité à Traiter (Total)
-                    </span>
-                    <span className="text-lg font-bold text-foreground">
-                      {mouvement.qte.toLocaleString("fr-FR")} {article.uniteSortie}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Référence maître (lecture seule)
-                  </p>
-                </div>
-
-                {/* Dual Unit Input for Defective Quantity */}
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Quantité Non-Conforme (Défectueuse)
-                    <span className="text-red-500">*</span>
-                  </label>
-                  
-                  {/* Unit Toggle */}
-                  <div className="flex gap-2 mb-3">
-                    <button
-                      type="button"
-                      onClick={() => setQteDefectueuseUnit("sortie")}
-                      className={`flex-1 h-9 rounded-md text-sm font-medium transition-colors ${
-                        qteDefectueuseUnit === "sortie"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground hover:bg-muted/80"
-                      }`}
-                    >
-                      En {article.uniteSortie}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setQteDefectueuseUnit("entree")}
-                      className={`flex-1 h-9 rounded-md text-sm font-medium transition-colors ${
-                        qteDefectueuseUnit === "entree"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground hover:bg-muted/80"
-                      }`}
-                    >
-                      En {article.uniteEntree}
-                    </button>
-                  </div>
-
-                  {/* Input Field */}
-                  <input
-                    type="number"
-                    value={
-                      qteDefectueuse === 0
-                        ? ""
-                        : qteDefectueuseUnit === "sortie"
-                        ? qteDefectueuse
-                        : qteDefectueuse / article.facteurConversion
-                    }
-                    onChange={(e) => handleDefectuousChange(e.target.value, qteDefectueuseUnit)}
-                    className="w-full h-10 px-3 rounded-md border border-slate-200 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    min="0"
-                    step="0.01"
-                    placeholder="0"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Saisissez le nombre d'unités défectueuses en {qteDefectueuseUnit === "sortie" ? article.uniteSortie : article.uniteEntree}
-                  </p>
-                  
-                  {/* Conversion Display */}
-                  {qteDefectueuse > 0 && (
-                    <div className="mt-2 p-2 rounded bg-muted/50 text-xs text-muted-foreground">
-                      {qteDefectueuseUnit === "sortie" ? (
-                        <>
-                          {qteDefectueuse.toLocaleString("fr-FR")} {article.uniteSortie} = {(qteDefectueuse / article.facteurConversion).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {article.uniteEntree}
-                        </>
-                      ) : (
-                        <>
-                          {(qteDefectueuse / article.facteurConversion).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {article.uniteEntree} = {qteDefectueuse.toLocaleString("fr-FR")} {article.uniteSortie}
-                        </>
-                      )}
                     </div>
-                  )}
-                </div>
-
-                {/* Auto-calculated: Quantité Valide */}
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Quantité Conforme (Auto-calculée)
-                  </label>
-                  <div className="w-full h-10 px-3 rounded-md border border-slate-200 bg-background flex items-center text-sm text-foreground font-semibold">
-                    {qteValide.toLocaleString("fr-FR")} {article.uniteSortie}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Calculée automatiquement: Total - Défectueuse
-                  </p>
-                </div>
-              </div>
-
-              {/* Compact Horizontal Summary */}
-              <div className="border-t border-b border-slate-200 dark:border-slate-700 py-3 px-0">
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex-1 text-center">
-                    <div className="text-muted-foreground mb-1">Total</div>
-                    <div className="font-bold text-foreground">
-                      {mouvement.qte.toLocaleString("fr-FR")}
-                    </div>
-                  </div>
-                  <div className="text-slate-300 dark:text-slate-600 px-2">|</div>
-                  <div className="flex-1 text-center">
-                    <div className="text-muted-foreground mb-1">Conforme</div>
-                    <div className="font-bold text-green-600 dark:text-green-400">
-                      {qteValide.toLocaleString("fr-FR")}
-                    </div>
-                  </div>
-                  <div className="text-slate-300 dark:text-slate-600 px-2">|</div>
-                  <div className="flex-1 text-center">
-                    <div className="text-muted-foreground mb-1">Non-Conforme</div>
-                    <div className={`font-bold ${
-                      qteDefectueuse > 0
-                        ? "text-red-600 dark:text-red-400"
-                        : "text-muted-foreground"
-                    }`}>
-                      {qteDefectueuse.toLocaleString("fr-FR")}
-                    </div>
-                  </div>
-                </div>
-                {/* Warning Message - Inline if defects */}
-                {qteDefectueuse > 0 && (
-                  <div className="flex items-center gap-1 mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-                    <AlertCircle className="w-3 h-3 text-orange-600 dark:text-orange-400 flex-shrink-0" />
-                    <p className="text-xs text-orange-700 dark:text-orange-300">
-                      {qteDefectueuse.toLocaleString("fr-FR")} unité{qteDefectueuse > 1 ? "s" : ""} exclue{qteDefectueuse > 1 ? "s" : ""} du stock
-                    </p>
-                  </div>
+                  </>
                 )}
               </div>
+            ) : (
+              <>
+                {/* Two-column layout for normal approval */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+                  {/* Left Column: Détails du mouvement */}
+                  <div className="space-y-5">
+                    <div>
+                      <h3 className="text-xs uppercase tracking-wide font-medium text-gray-500 border-b border-gray-200 pb-2 mb-3">
+                        Détails du mouvement
+                      </h3>
+                      <div className="space-y-0">
+                        <div className="flex items-start gap-3 py-1.5 border-b border-dotted border-gray-200">
+                          <span className="text-[13px] text-gray-500 w-36 flex-shrink-0">Article</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm text-gray-900">{article.nom}</div>
+                            <div className="text-xs text-gray-500">{article.ref}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3 py-1.5 border-b border-dotted border-gray-200">
+                          <span className="text-[13px] text-gray-500 w-36 flex-shrink-0">Quantité reçue</span>
+                          <span className="text-sm text-gray-900">{mouvement.qte.toLocaleString("fr-FR")} {article.uniteSortie}</span>
+                        </div>
+                        <div className="flex items-start gap-3 py-1.5 border-b border-dotted border-gray-200">
+                          <span className="text-[13px] text-gray-500 w-36 flex-shrink-0">Zone</span>
+                          <span className="text-sm text-gray-900">{mouvement.emplacementDestination || mouvement.emplacementSource}</span>
+                        </div>
+                        <div className="flex items-start gap-3 py-1.5 border-b border-dotted border-gray-200">
+                          <span className="text-[13px] text-gray-500 w-36 flex-shrink-0">Opérateur</span>
+                          <span className="text-sm text-gray-900">{mouvement.operateur}</span>
+                        </div>
+                        <div className="flex items-start gap-3 py-1.5 border-b border-dotted border-gray-200">
+                          <span className="text-[13px] text-gray-500 w-36 flex-shrink-0">Numéro de lot</span>
+                          <span className="text-sm text-gray-900">{mouvement.lotNumber}</span>
+                        </div>
+                        <div className="flex items-start gap-3 py-1.5 border-b border-dotted border-gray-200">
+                          <span className="text-[13px] text-gray-500 w-36 flex-shrink-0">Date</span>
+                          <span className="text-sm text-gray-900">{mouvement.date}</span>
+                        </div>
+                      </div>
+                    </div>
 
-              {/* Controller Name */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Nom du Contrôleur <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={controleur}
-                  onChange={(e) => setControleur(e.target.value)}
-                  placeholder="Entrez votre nom"
-                  className="w-full h-10 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Personne responsable de l'inspection
-                </p>
+                    {/* Date d'expiration - inline with other fields */}
+                    <div className="min-w-0">
+                      <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                        Date d'expiration (optionnel)
+                      </label>
+                      <input
+                        type="date"
+                        value={lotDate}
+                        onChange={(e) => setLotDate(e.target.value)}
+                        className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Date limite de consommation ou d'utilisation
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Points de vérification */}
+                  <div className="space-y-5">
+                    <div>
+                      <div className="flex items-center justify-between border-b border-gray-200 pb-2 mb-3">
+                        <h3 className="text-xs uppercase tracking-wide font-medium text-gray-500">
+                          Points de vérification
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={handleSelectAll}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          {allPointsChecked ? "Désélectionner Tout" : "Sélectionner Tout"}
+                        </button>
+                      </div>
+                      <div className="space-y-0">
+                        {checklist.map(({ key, label, description }) => (
+                          <label
+                            key={key}
+                            className="flex items-start gap-3 py-2 border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={verificationPoints[key] || false}
+                              onChange={(e) =>
+                                setVerificationPoints({
+                                  ...verificationPoints,
+                                  [key]: e.target.checked,
+                                })
+                              }
+                              className="w-4 h-4 rounded border-gray-300 mt-0.5 cursor-pointer accent-primary"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm text-gray-900">
+                                {label}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {description}
+                              </div>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Full width: Saisie des quantités */}
+                  <div className="md:col-span-2 space-y-5">
+                    <div>
+                      <h3 className="text-xs uppercase tracking-wide font-medium text-gray-500 border-b border-gray-200 pb-2 mb-3">
+                        Saisie des quantités
+                      </h3>
+
+                      {/* Three-column row on desktop */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        {/* Total */}
+                        <div className="min-w-0">
+                          <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                            Quantité à traiter (total)
+                          </label>
+                          <div className="w-full h-9 px-3 rounded border border-gray-300 bg-gray-50 flex items-center text-sm text-gray-900 font-medium">
+                            {mouvement.qte.toLocaleString("fr-FR")} {article.uniteSortie}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Référence maître (lecture seule)
+                          </p>
+                        </div>
+
+                        {/* Defective with unit toggle */}
+                        <div className="min-w-0">
+                          <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                            Quantité non-conforme <span className="text-red-600">*</span>
+                          </label>
+                          
+                          {/* Unit Toggle - segmented control */}
+                          <div className="flex gap-0.5 mb-2 border border-gray-300 rounded overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => setQteDefectueuseUnit("sortie")}
+                              className={`flex-1 h-9 text-xs font-medium transition-colors ${
+                                qteDefectueuseUnit === "sortie"
+                                  ? "bg-primary/10 text-primary"
+                                  : "bg-white text-gray-600 hover:bg-gray-50"
+                              }`}
+                            >
+                              En {article.uniteSortie}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setQteDefectueuseUnit("entree")}
+                              className={`flex-1 h-9 text-xs font-medium transition-colors ${
+                                qteDefectueuseUnit === "entree"
+                                  ? "bg-primary/10 text-primary"
+                                  : "bg-white text-gray-600 hover:bg-gray-50"
+                              }`}
+                            >
+                              En {article.uniteEntree}
+                            </button>
+                          </div>
+
+                          <input
+                            type="number"
+                            value={
+                              qteDefectueuse === 0
+                                ? ""
+                                : qteDefectueuseUnit === "sortie"
+                                ? qteDefectueuse
+                                : qteDefectueuse / article.facteurConversion
+                            }
+                            onChange={(e) => handleDefectuousChange(e.target.value, qteDefectueuseUnit)}
+                            className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary no-spinner"
+                            min="0"
+                            step="0.01"
+                            placeholder="0"
+                          />
+                          {/* Conversion hint */}
+                          {qteDefectueuse > 0 && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              {qteDefectueuseUnit === "sortie" ? (
+                                <>{qteDefectueuse.toLocaleString("fr-FR")} {article.uniteSortie} = {(qteDefectueuse / article.facteurConversion).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {article.uniteEntree}</>
+                              ) : (
+                                <>{(qteDefectueuse / article.facteurConversion).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {article.uniteEntree} = {qteDefectueuse.toLocaleString("fr-FR")} {article.uniteSortie}</>
+                              )}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Valid (auto-calculated) */}
+                        <div className="min-w-0">
+                          <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                            Quantité conforme (auto)
+                          </label>
+                          <div className="w-full h-9 px-3 rounded border border-gray-300 bg-gray-50 flex items-center text-sm text-gray-900 font-medium">
+                            {qteValide.toLocaleString("fr-FR")} {article.uniteSortie}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Calculée: Total - Défectueuse
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Summary stats - single inline row */}
+                      <div className="flex items-center justify-around py-2 border-t border-b border-gray-200">
+                        <div className="text-center">
+                          <div className="text-xs text-gray-500 mb-0.5">Total</div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {mouvement.qte.toLocaleString("fr-FR")}
+                          </div>
+                        </div>
+                        <div className="w-px h-6 bg-gray-200"></div>
+                        <div className="text-center">
+                          <div className="text-xs text-gray-500 mb-0.5">Conforme</div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {qteValide.toLocaleString("fr-FR")}
+                          </div>
+                        </div>
+                        <div className="w-px h-6 bg-gray-200"></div>
+                        <div className="text-center">
+                          <div className="text-xs text-gray-500 mb-0.5">Non-Conforme</div>
+                          <div className={`text-sm font-medium ${
+                            qteDefectueuse > 0 ? "text-red-600" : "text-gray-900"
+                          }`}>
+                            {qteDefectueuse.toLocaleString("fr-FR")}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Warning: units excluded from stock */}
+                      {qteDefectueuse > 0 && (
+                        <div className="flex items-center gap-2 text-xs text-red-600 mt-2">
+                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span>{qteDefectueuse.toLocaleString("fr-FR")} unité{qteDefectueuse > 1 ? "s" : ""} exclue{qteDefectueuse > 1 ? "s" : ""} du stock</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Full width: Contrôle section */}
+                  <div className="md:col-span-2 space-y-5">
+                    <div>
+                      <h3 className="text-xs uppercase tracking-wide font-medium text-gray-500 border-b border-gray-200 pb-2 mb-3">
+                        Contrôle
+                      </h3>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+                        <div className="min-w-0">
+                          <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                            Nom du Contrôleur <span className="text-red-600">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={controleur}
+                            onChange={(e) => setControleur(e.target.value)}
+                            placeholder="Entrez votre nom"
+                            className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            Personne responsable de l'inspection
+                          </p>
+                        </div>
+
+                        {/* Note de Contrôle - Mandatory when defective items, full width */}
+                        {qteDefectueuse > 0 && (
+                          <div className="md:col-span-2 min-w-0">
+                            <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                              Note de Contrôle <span className="text-xs text-red-600">(Obligatoire)</span>
+                            </label>
+                            <textarea
+                              value={noteControle}
+                              onChange={(e) => setNoteControle(e.target.value)}
+                              placeholder="Décrivez les défauts détectés..."
+                              className="w-full px-3 py-2 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
+                              rows={2}
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              Détails sur les articles défectueux
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Error Messages */}
+            {errors.length > 0 && (
+              <div className="p-3 rounded border border-red-200 bg-red-50 space-y-1.5">
+                {errors.map((error, idx) => (
+                  <div key={idx} className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-800">
+                      {error}
+                    </p>
+                  </div>
+                ))}
               </div>
-
-              {/* Control Note - Mandatory when defective items */}
-              {qteDefectueuse > 0 && (
-                <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    Note de Contrôle{" "}
-                    <span className="text-red-500">* (Obligatoire)</span>
-                  </label>
-                  <textarea
-                    value={noteControle}
-                    onChange={(e) => setNoteControle(e.target.value)}
-                    placeholder="Décrivez les défauts détectés..."
-                    className="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    rows={3}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Détails sur les articles défectueux
-                  </p>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Error Messages */}
-          {errors.length > 0 && (
-            <div className="p-4 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 space-y-2">
-              {errors.map((error, idx) => (
-                <div key={idx} className="flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-red-800 dark:text-red-200">
-                    {error}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="bg-background border-t p-6 flex gap-3 flex-shrink-0">
+        <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex gap-3 justify-end flex-shrink-0">
           <button
             onClick={onClose}
-            className="flex-1 h-10 rounded-md border text-sm font-medium text-foreground hover:bg-muted transition-colors"
+            className="h-9 px-4 rounded border border-gray-300 text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
           >
             Annuler
           </button>
@@ -834,17 +819,17 @@ export const InspectionModal = ({
                   : !controleur.trim() || !refusTotalMotif.trim()
                 : isApproveDisabled || !controleur.trim()
             }
-            className={`flex-1 h-10 rounded-md text-sm font-medium transition-colors ${
+            className={`h-9 px-4 rounded text-sm font-medium transition-colors ${
               refusTotal
                 ? mouvement?.type === "Sortie"
                   ? !refusalType || (refusalType === "administrative" && (!nomOperateur.trim() || !motifErreur.trim())) || (refusalType === "defective" && (!nomControleur.trim() || !motifRejet.trim()))
-                    ? "bg-muted text-muted-foreground cursor-not-allowed"
+                    ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                     : "bg-red-600 text-white hover:bg-red-700"
                   : !controleur.trim() || !refusTotalMotif.trim()
-                  ? "bg-muted text-muted-foreground cursor-not-allowed"
+                  ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                   : "bg-red-600 text-white hover:bg-red-700"
                 : isApproveDisabled || !controleur.trim()
-                ? "bg-muted text-muted-foreground cursor-not-allowed"
+                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                 : "bg-green-600 text-white hover:bg-green-700"
             }`}
           >
