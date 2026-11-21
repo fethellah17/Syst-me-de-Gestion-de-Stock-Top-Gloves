@@ -19,8 +19,8 @@ export const BulkMovementModalWrapper: React.FC<BulkMovementModalWrapperProps> =
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      {/* Full-screen on mobile, 95vw on desktop */}
-      <div className="relative bg-card border rounded-lg shadow-lg w-full h-screen md:w-[95vw] md:h-[90vh] flex flex-col md:rounded-lg rounded-none">
+      {/* Full-screen on mobile, max-w-6xl w-[95vw] on desktop */}
+      <div className="relative bg-card border rounded-lg shadow-lg w-full h-screen md:max-w-6xl md:w-[95vw] md:h-[90vh] flex flex-col md:rounded-lg rounded-none">
         {/* Sticky Header */}
         <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-card z-10">
           <h2 className="text-lg font-semibold text-foreground">{title}</h2>

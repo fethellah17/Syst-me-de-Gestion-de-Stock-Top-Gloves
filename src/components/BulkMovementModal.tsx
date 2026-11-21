@@ -1,11 +1,7 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Calendar as CalendarIcon, AlertCircle } from "lucide-react";
+import { Plus, Trash2, ChevronDown } from "lucide-react";
 import { BulkMovementModalWrapper } from "@/components/BulkMovementModalWrapper";
 import CreatableSelect from "@/components/CreatableSelect";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format } from "date-fns";
-import { fr } from "date-fns/locale";
 
 type MovementType = "Entrée" | "Sortie" | "Transfert";
 
@@ -37,6 +33,8 @@ interface BulkMovementModalProps {
   editingId?: number | null;
   initialData?: { movementType: MovementType; items: BulkMovementItem[] } | null;
   defaultMovementType?: "Entrée" | "Sortie" | "Transfert";
+  fixedMovementType?: "Entrée" | "Sortie" | "Transfert";
+  fixedOperateur?: string;
 }
 
 export const BulkMovementModal = ({
@@ -53,8 +51,12 @@ export const BulkMovementModal = ({
   editingId = null,
   initialData = null,
   defaultMovementType,
+  fixedMovementType,
+  fixedOperateur,
 }: BulkMovementModalProps) => {
-  const [movementType, setMovementType] = useState<MovementType>(initialData?.movementType || "Entrée");
+  const [movementType, setMovementType] = useState<MovementType>(
+    fixedMovementType || initialData?.movementType || defaultMovementType || "Entrée"
+  );
   const [items, setItems] = useState<BulkMovementItem[]>(
     initialData?.items || [
       { id: "1", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", fournisseur: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
@@ -76,19 +78,23 @@ export const BulkMovementModal = ({
     }
   }, [initialData]);
 
-  // Apply defaultMovementType when modal opens (if no initialData with items)
+  // Apply defaultMovementType or fixedMovementType when modal opens (if no initialData with items)
   useEffect(() => {
-    if (isOpen && defaultMovementType) {
+    if (isOpen) {
       const hasInitialItems = initialData && initialData.items && initialData.items.length > 0;
       if (!hasInitialItems) {
-        setMovementType(defaultMovementType);
+        if (fixedMovementType) {
+          setMovementType(fixedMovementType);
+        } else if (defaultMovementType) {
+          setMovementType(defaultMovementType);
+        }
       }
     }
-  }, [isOpen, defaultMovementType, initialData]);
+  }, [isOpen, defaultMovementType, fixedMovementType, initialData]);
 
   // Reset form to initial state
   const resetForm = () => {
-    setMovementType("Entrée");
+    setMovementType(fixedMovementType || "Entrée");
     setItems([
       { id: "1", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", fournisseur: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
       { id: "2", articleId: "", quantity: 0, selectedUnit: "", emplacementSource: "", emplacementDestination: "", fournisseur: "", lotNumber: "", lotDate: undefined, commentaire: "", qc_status: "pending" },
@@ -172,14 +178,15 @@ export const BulkMovementModal = ({
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    if (!operateur.trim()) newErrors.operateur = "Requis";
+    // Only validate operateur if not provided as fixed prop
+    if (!fixedOperateur && !operateur.trim()) newErrors.operateur = "Requis";
 
     items.forEach((item) => {
       if (!item.articleId) newErrors[`item-${item.id}-article`] = "Requis";
       if (!item.quantity || item.quantity <= 0) newErrors[`item-${item.id}-qty`] = "Requis";
       if (!item.selectedUnit) newErrors[`item-${item.id}-unit`] = "Requis";
       if (!item.lotNumber.trim()) newErrors[`item-${item.id}-lot`] = "Requis";
-      if (!item.lotDate) newErrors[`item-${item.id}-lotDate`] = "Requis";
+      // lotDate is optional - removed validation
 
       if (movementType === "Entrée") {
         if (!item.emplacementDestination) newErrors[`item-${item.id}-dest`] = "Requis";
@@ -219,7 +226,9 @@ export const BulkMovementModal = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (validateForm()) {
-      onSubmit(items, movementType, operateur);
+      // Use fixedOperateur if provided, otherwise use state operateur
+      const effectiveOperateur = fixedOperateur || operateur;
+      onSubmit(items, movementType, effectiveOperateur);
       resetForm();
       onClose();
     }
@@ -359,12 +368,13 @@ export const BulkMovementModal = ({
   };
 
   return (
-    <BulkMovementModalWrapper isOpen={isOpen} onClose={handleClose} title="Nouveau Mouvement">
+    <BulkMovementModalWrapper isOpen={isOpen} onClose={handleClose} title="Ajouter ligne">
       <form onSubmit={handleSubmit} className="flex flex-col h-full">
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
-          {/* Common Information */}
-          <div className="bg-primary/5 border border-primary/20 rounded-lg p-6">
+        <div className="flex-1 overflow-y-auto">
+          {/* Common Information - Only show when NOT in fixed mode */}
+          {!fixedMovementType && !fixedOperateur && (
+          <div className="bg-primary/5 border border-primary/20 rounded-lg p-6 mx-6 mt-6">
           <h3 className="text-base font-semibold mb-6">Informations Communes</h3>
           
           {/* Movement Type */}
@@ -405,36 +415,34 @@ export const BulkMovementModal = ({
             />
           </div>
         </div>
+          )}
 
-        {/* SCROLLABLE BODY - Articles Table */}
-        <div className="mt-8">
-          <div className="space-y-4">
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-semibold">Articles à Traiter</h3>
-                <span className="text-sm text-muted-foreground">{items.length} article(s)</span>
-              </div>
+        {/* Articles Table */}
+        <div className={!fixedMovementType && !fixedOperateur ? "mx-6 mt-6" : "mx-6 mt-0"}>
+          <div className="flex items-center justify-between border-b border-gray-200 pb-3 mb-4">
+            <h3 className="text-xs uppercase tracking-wide text-gray-500 font-medium">Articles à traiter</h3>
+            <span className="text-[13px] text-gray-500">{items.length} article(s)</span>
+          </div>
 
               {/* Desktop Table View */}
-              <div className="hidden md:block border rounded-lg overflow-hidden">
+              <div className="hidden md:block border border-gray-200 rounded overflow-hidden">
                 <table className="w-full">
-                  <thead className="bg-muted/50 sticky top-0 z-5">
+                  <thead className="bg-gray-50">
                     <tr>
-                      <th className="text-left p-4 text-xs font-semibold">Article</th>
-                      <th className="text-left p-4 text-xs font-semibold">Quantité</th>
+                      <th className="text-left px-3 py-3 text-xs uppercase tracking-wide text-gray-500 font-medium">Article</th>
+                      <th className="text-left px-3 py-3 text-xs uppercase tracking-wide text-gray-500 font-medium">Quantité</th>
                       {movementType === "Sortie" || movementType === "Transfert" ? (
-                        <th className="text-left p-4 text-xs font-semibold">Source</th>
+                        <th className="text-left px-3 py-3 text-xs uppercase tracking-wide text-gray-500 font-medium">Source</th>
                       ) : null}
                       {movementType === "Entrée" ? (
-                        <th className="text-left p-4 text-xs font-semibold">Fournisseur</th>
+                        <th className="text-left px-3 py-3 text-xs uppercase tracking-wide text-gray-500 font-medium">Fournisseur</th>
                       ) : null}
-                      <th className="text-left p-4 text-xs font-semibold">
+                      <th className="text-left px-3 py-3 text-xs uppercase tracking-wide text-gray-500 font-medium">
                         {movementType === "Sortie" ? "Destination (Client/Service)" : "Destination"}
                       </th>
-                      <th className="text-left p-4 text-xs font-semibold">Numéro de Lot</th>
-                      <th className="text-left p-4 text-xs font-semibold">Date d'expiration</th>
-                      <th className="text-left p-4 text-xs font-semibold">Commentaire</th>
-                      <th className="text-center p-4 text-xs font-semibold w-20">Action</th>
+                      <th className="text-left px-3 py-3 text-xs uppercase tracking-wide text-gray-500 font-medium">Numéro de Lot</th>
+                      <th className="text-left px-3 py-3 text-xs uppercase tracking-wide text-gray-500 font-medium">Commentaire</th>
+                      <th className="text-center px-3 py-3 text-xs uppercase tracking-wide text-gray-500 font-medium w-20">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -443,45 +451,52 @@ export const BulkMovementModal = ({
                       const availableSourceLocations = selectedArticle ? getAvailableSourceLocations(item.articleId) : [];
 
                       return (
-                        <tr key={item.id} className="border-t hover:bg-muted/30 transition-colors">
+                        <tr key={item.id} className="border-t border-gray-100">
                           {/* Article */}
-                          <td className="p-4">
-                            <select
-                              value={item.articleId}
-                              onChange={(e) => updateItem(item.id, "articleId", e.target.value)}
-                              className={`w-full h-10 px-3 rounded border text-sm ${errors[`item-${item.id}-article`] ? "border-destructive" : ""}`}
-                            >
-                              <option value="">Sélectionner...</option>
-                              {articles.map(a => (
-                                <option key={a.id} value={a.id}>{a.nom} ({a.ref})</option>
-                              ))}
-                            </select>
+                          <td className="px-3 py-2">
+                            <div className="relative">
+                              <select
+                                value={item.articleId}
+                                onChange={(e) => updateItem(item.id, "articleId", e.target.value)}
+                                className={`w-full h-9 px-3 pr-8 rounded bg-white border text-sm appearance-none hover:border-gray-400 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none ${errors[`item-${item.id}-article`] ? "border-destructive" : "border-gray-300"}`}
+                              >
+                                <option value="">Sélectionner...</option>
+                                {articles.map(a => (
+                                  <option key={a.id} value={a.id}>{a.nom} ({a.ref})</option>
+                                ))}
+                              </select>
+                              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                            </div>
                           </td>
 
                           {/* Quantity */}
-                          <td className="p-4">
+                          <td className="px-3 py-2">
                             <div className="space-y-2">
                               <div className="flex gap-2">
                                 <input
                                   type="number"
                                   value={item.quantity === 0 ? "" : item.quantity}
                                   onChange={(e) => updateItem(item.id, "quantity", Number(e.target.value) || 0)}
-                                  className={`w-20 h-9 px-2 rounded border text-sm ${errors[`item-${item.id}-qty`] ? "border-destructive" : ""}`}
+                                  className={`w-20 h-9 px-3 rounded bg-white border text-sm hover:border-gray-400 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none ${errors[`item-${item.id}-qty`] ? "border-destructive" : "border-gray-300"}`}
+                                  style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
                                   placeholder="0"
                                   min="0"
                                   step="0.01"
                                 />
                                 {selectedArticle && (
-                                  <select
-                                    value={item.selectedUnit}
-                                    onChange={(e) => updateItem(item.id, "selectedUnit", e.target.value)}
-                                    className="w-24 h-9 px-1 rounded border text-sm"
-                                  >
-                                    <option value={selectedArticle.uniteEntree}>{selectedArticle.uniteEntree}</option>
-                                    {selectedArticle.uniteSortie !== selectedArticle.uniteEntree && (
-                                      <option value={selectedArticle.uniteSortie}>{selectedArticle.uniteSortie}</option>
-                                    )}
-                                  </select>
+                                  <div className="relative">
+                                    <select
+                                      value={item.selectedUnit}
+                                      onChange={(e) => updateItem(item.id, "selectedUnit", e.target.value)}
+                                      className="w-24 h-9 px-3 pr-8 rounded bg-white border border-gray-300 text-sm appearance-none hover:border-gray-400 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none"
+                                    >
+                                      <option value={selectedArticle.uniteEntree}>{selectedArticle.uniteEntree}</option>
+                                      {selectedArticle.uniteSortie !== selectedArticle.uniteEntree && (
+                                        <option value={selectedArticle.uniteSortie}>{selectedArticle.uniteSortie}</option>
+                                      )}
+                                    </select>
+                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                  </div>
                                 )}
                               </div>
                               {/* Real-time Conversion Display */}
@@ -518,15 +533,16 @@ export const BulkMovementModal = ({
 
                           {/* Source (for Sortie/Transfert) */}
                           {(movementType === "Sortie" || movementType === "Transfert") && (
-                            <td className="p-4">
+                            <td className="px-3 py-2">
                               <div className="space-y-2">
-                                <select
-                                  value={item.emplacementSource || ""}
-                                  onChange={(e) => updateItem(item.id, "emplacementSource", e.target.value)}
-                                  className={`w-full h-10 px-3 rounded border text-sm ${errors[`item-${item.id}-source`] ? "border-destructive" : ""}`}
-                                  disabled={!selectedArticle || availableSourceLocations.length === 0}
-                                >
-                                  <option value="">Sélectionner...</option>
+                                <div className="relative">
+                                  <select
+                                    value={item.emplacementSource || ""}
+                                    onChange={(e) => updateItem(item.id, "emplacementSource", e.target.value)}
+                                    className={`w-full h-9 px-3 pr-8 rounded bg-white border text-sm appearance-none hover:border-gray-400 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none disabled:opacity-50 disabled:cursor-not-allowed ${errors[`item-${item.id}-source`] ? "border-destructive" : "border-gray-300"}`}
+                                    disabled={!selectedArticle || availableSourceLocations.length === 0}
+                                  >
+                                    <option value="">Sélectionner...</option>
                                   {availableSourceLocations.map((loc, idx) => {
                                     // STRICT FILTERING: Hide locations already used for this article
                                     const usedLocations = getUsedLocationsForArticle(item.articleId, item.id, true);
@@ -544,6 +560,8 @@ export const BulkMovementModal = ({
                                     );
                                   })}
                                 </select>
+                                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                                </div>
                                 {/* Live Stock Preview with Dynamic Deduction */}
                                 {item.emplacementSource && selectedArticle && (
                                   (() => {
@@ -572,24 +590,27 @@ export const BulkMovementModal = ({
 
                           {/* Supplier (Entrée only) */}
                           {movementType === "Entrée" && (
-                            <td className="p-4">
-                              <select
-                                value={item.fournisseur || ""}
-                                onChange={(e) => updateItem(item.id, "fournisseur", e.target.value)}
-                                className={`w-full h-10 px-3 rounded border text-sm ${errors[`item-${item.id}-supplier`] ? "border-destructive" : ""}`}
-                              >
-                                <option value="">Sélectionner...</option>
-                                {suppliers.map(s => (
-                                  <option key={s.id} value={s.nom}>{s.nom}</option>
-                                ))}
-                              </select>
+                            <td className="px-3 py-2">
+                              <div className="relative">
+                                <select
+                                  value={item.fournisseur || ""}
+                                  onChange={(e) => updateItem(item.id, "fournisseur", e.target.value)}
+                                  className={`w-full h-9 px-3 pr-8 rounded bg-white border text-sm appearance-none hover:border-gray-400 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none ${errors[`item-${item.id}-supplier`] ? "border-destructive" : "border-gray-300"}`}
+                                >
+                                  <option value="">Sélectionner...</option>
+                                  {suppliers.map(s => (
+                                    <option key={s.id} value={s.nom}>{s.nom}</option>
+                                  ))}
+                                </select>
+                                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                              </div>
                             </td>
                           )}
 
                           {/* Destination */}
-                          <td className="p-4">
+                          <td className="px-3 py-2">
                             {movementType === "Sortie" ? (
-                              <div className={`w-full ${errors[`item-${item.id}-dest`] ? "border-destructive" : ""}`}>
+                              <div className={errors[`item-${item.id}-dest`] ? "border-destructive" : ""}>
                                 <CreatableSelect
                                   options={destinations}
                                   value={item.emplacementDestination || ""}
@@ -597,7 +618,6 @@ export const BulkMovementModal = ({
                                   onCreateNew={(name) => {
                                     if (onAddDestination) {
                                       onAddDestination(name);
-                                      // The parent will handle adding to destinations and selecting it
                                       updateItem(item.id, "emplacementDestination", name);
                                     }
                                   }}
@@ -605,72 +625,51 @@ export const BulkMovementModal = ({
                                 />
                               </div>
                             ) : (
-                              <select
-                                value={item.emplacementDestination || ""}
-                                onChange={(e) => updateItem(item.id, "emplacementDestination", e.target.value)}
-                                className={`w-full h-10 px-3 rounded border text-sm ${errors[`item-${item.id}-dest`] ? "border-destructive" : ""}`}
-                              >
-                                <option value="">Sélectionner...</option>
-                                {emplacements.map(e => (
-                                  <option key={e.id} value={e.nom}>{e.nom} ({e.code})</option>
-                                ))}
-                              </select>
+                              <div className="relative">
+                                <select
+                                  value={item.emplacementDestination || ""}
+                                  onChange={(e) => updateItem(item.id, "emplacementDestination", e.target.value)}
+                                  className={`w-full h-9 px-3 pr-8 rounded bg-white border text-sm appearance-none hover:border-gray-400 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none ${errors[`item-${item.id}-dest`] ? "border-destructive" : "border-gray-300"}`}
+                                >
+                                  <option value="">Sélectionner...</option>
+                                  {emplacements.map(e => (
+                                    <option key={e.id} value={e.nom}>{e.nom} ({e.code})</option>
+                                  ))}
+                                </select>
+                                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                              </div>
                             )}
                           </td>
 
                           {/* Lot Number */}
-                          <td className="p-4">
+                          <td className="px-3 py-2">
                             <input
                               type="text"
                               value={item.lotNumber}
                               onChange={(e) => updateItem(item.id, "lotNumber", e.target.value)}
-                              className={`w-full h-10 px-3 rounded border text-sm ${errors[`item-${item.id}-lot`] ? "border-destructive" : ""}`}
+                              className={`w-full h-9 px-3 rounded bg-white border text-sm hover:border-gray-400 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none placeholder:text-gray-400 ${errors[`item-${item.id}-lot`] ? "border-destructive" : "border-gray-300"}`}
                               placeholder="LOT-2024-001"
                             />
                           </td>
 
-                          {/* Lot Date */}
-                          <td className="p-4">
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <button
-                                  type="button"
-                                  className={`w-full h-10 px-3 rounded border bg-background text-sm flex items-center justify-between ${errors[`item-${item.id}-lotDate`] ? "border-destructive" : ""}`}
-                                >
-                                  <span>{item.lotDate ? format(item.lotDate, "dd/MM/yyyy", { locale: fr }) : "Sélectionner"}</span>
-                                  <CalendarIcon className="w-4 h-4" />
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                  mode="single"
-                                  selected={item.lotDate}
-                                  onSelect={(date) => updateItem(item.id, "lotDate", date)}
-                                  initialFocus
-                                  locale={fr}
-                                />
-                              </PopoverContent>
-                            </Popover>
-                          </td>
-
                           {/* Commentaire */}
-                          <td className="p-4">
+                          <td className="px-3 py-2">
                             <input
                               type="text"
                               value={item.commentaire || ""}
                               onChange={(e) => updateItem(item.id, "commentaire", e.target.value)}
-                              className="w-full h-10 px-3 rounded border bg-background text-sm"
+                              className="w-full h-9 px-3 rounded bg-white border border-gray-300 text-sm hover:border-gray-400 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none placeholder:text-gray-400"
                               placeholder="Optionnel"
                             />
                           </td>
 
                           {/* Action */}
-                          <td className="p-4 text-center">
+                          <td className="px-3 py-2 text-center">
                             <button
                               type="button"
                               onClick={() => removeRow(item.id)}
                               disabled={items.length === 1}
-                              className="p-2 rounded hover:bg-destructive/10 disabled:opacity-50 transition-colors"
+                              className="w-8 h-8 rounded flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:hover:text-gray-400 disabled:hover:bg-transparent transition-colors"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -880,31 +879,6 @@ export const BulkMovementModal = ({
                         />
                       </div>
 
-                      {/* Lot Date */}
-                      <div>
-                        <label className="block text-xs font-semibold text-muted-foreground mb-2">Date d'expiration</label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button
-                              type="button"
-                              className={`w-full h-12 px-3 rounded border bg-background text-sm flex items-center justify-between ${errors[`item-${item.id}-lotDate`] ? "border-destructive" : ""}`}
-                            >
-                              <span>{item.lotDate ? format(item.lotDate, "dd/MM/yyyy", { locale: fr }) : "Sélectionner"}</span>
-                              <CalendarIcon className="w-4 h-4" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={item.lotDate}
-                              onSelect={(date) => updateItem(item.id, "lotDate", date)}
-                              initialFocus
-                              locale={fr}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-
                       {/* Commentaire */}
                       <div>
                         <label className="block text-xs font-semibold text-muted-foreground mb-2">Commentaire</label>
@@ -932,43 +906,33 @@ export const BulkMovementModal = ({
                 })}
               </div>
 
-              {/* Add Row Button - Inside scrollable area with bottom margin */}
+              {/* Add Row Button */}
               <button
                 type="button"
                 onClick={addRow}
-                className="w-full mt-4 h-12 md:h-10 rounded-md border border-dashed border-primary text-primary text-sm font-medium hover:bg-primary/5 flex items-center justify-center gap-2 transition-colors"
+                className="w-full mt-4 h-10 rounded border border-dashed border-gray-300 text-gray-600 text-sm font-medium hover:bg-gray-50 hover:text-gray-900 flex items-center justify-center gap-2 transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 Ajouter un autre article
               </button>
-
-              {/* Info */}
-              <div className="p-4 bg-info/5 border border-info/20 rounded-md flex gap-3 mt-4">
-                <AlertCircle className="w-4 h-4 text-info flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-info">
-                  Tous les articles partageront le même numéro et date de lot.
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
         {/* End Scrollable Content */}
         </div>
 
-        {/* FOOTER - Actions - Sticky */}
-        <div className="flex gap-3 px-4 py-6 border-t bg-card sticky bottom-0 flex-shrink-0">
+        {/* FOOTER - Actions */}
+        <div className="flex items-center justify-end gap-3 px-6 py-3 border-t bg-gray-50">
           <button
             type="button"
             onClick={handleClose}
-            className="flex-1 h-12 md:h-11 rounded-md border text-sm font-medium hover:bg-muted transition-colors"
+            className="h-9 px-4 rounded border border-gray-300 bg-white text-sm font-medium hover:bg-gray-50 transition-colors"
           >
             Annuler
           </button>
           <button
             type="submit"
-            className={`flex-1 h-12 md:h-11 rounded-md text-sm font-medium ${getMovementTypeColor()} hover:opacity-90 transition-opacity`}
+            className="h-9 px-4 rounded text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
           >
-            Confirmer les {getMovementTypeLabel()} ({items.length})
+            Confirmer ({items.length})
           </button>
         </div>
       </form>

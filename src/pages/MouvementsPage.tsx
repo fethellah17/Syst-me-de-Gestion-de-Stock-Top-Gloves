@@ -10,10 +10,16 @@ import { generateAdministrativeErrorPDF, generateDefectiveItemsPDF } from "@/lib
 import { format } from "date-fns";
 
 const MouvementsPage = () => {
-  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination, createOperation } = useData();
+  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination, createOperation, createOperationFull, updateOperationFields, operations } = useData();
   const [selectedType, setSelectedType] = useState<"Entrée" | "Sortie" | "Transfert" | null>(null);
+  const [selectedOperationId, setSelectedOperationId] = useState<number | null>(null);
   const [selectedArticleId, setSelectedArticleId] = useState<string>("");
   const [typeFilter, setTypeFilter] = useState<"all" | "Entrée" | "Sortie" | "Transfert">("all");
+  const [operationSearch, setOperationSearch] = useState<string>("");
+  const [isCreatingOperation, setIsCreatingOperation] = useState(false);
+  const [draftOperateur, setDraftOperateur] = useState("");
+  const [draftDocumentOrigine, setDraftDocumentOrigine] = useState("");
+  const [draftError, setDraftError] = useState("");
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [isQCModalOpen, setIsQCModalOpen] = useState(false);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
@@ -56,7 +62,9 @@ const MouvementsPage = () => {
       const matchArticle = selectedArticleId === "" || m.ref === selectedArticleId;
       // Filter by movement type
       const matchType = typeFilter === "all" || m.type === typeFilter;
-      return matchArticle && matchType;
+      // Filter by operation (level 3 only)
+      const matchOperation = selectedOperationId === null || m.operationId === selectedOperationId;
+      return matchArticle && matchType && matchOperation;
     });
 
   const handleOpenQCModal = (id: string) => {
@@ -341,8 +349,18 @@ const MouvementsPage = () => {
       second: "2-digit",
     }).replace(/(\d+)\/(\d+)\/(\d+),\s(\d+):(\d+):(\d+)/, "$3-$2-$1 $4:$5:$6");
 
-    // Create operation first (one per submission)
-    const operation = createOperation(movementType, operateur);
+    // Use existing operation if at level 3, otherwise create new one
+    let operation;
+    let effectiveOperateur;
+    if (selectedOperationId) {
+      const existingOp = operations.find(op => op.id === selectedOperationId);
+      if (!existingOp) return; // Should not happen
+      operation = existingOp;
+      effectiveOperateur = existingOp.operateur; // Use operation's operator
+    } else {
+      operation = createOperation(movementType, operateur);
+      effectiveOperateur = operateur;
+    }
 
     // Helper: Convert quantity to exit unit
     const convertToExitUnit = (quantity: number, unit: string, article: any): number => {
@@ -384,7 +402,7 @@ const MouvementsPage = () => {
           fournisseur: item.fournisseur,
           emplacementDestination: item.emplacementDestination,
           commentaire: item.commentaire || "",
-          operateur: operateur,
+          operateur: effectiveOperateur,
           operationId: operation.id,
         });
       } else if (movementType === "Sortie") {
@@ -402,7 +420,7 @@ const MouvementsPage = () => {
           emplacementSource: item.emplacementSource,
           emplacementDestination: item.emplacementDestination,
           commentaire: item.commentaire || "",
-          operateur: operateur,
+          operateur: effectiveOperateur,
           operationId: operation.id,
         });
       } else if (movementType === "Transfert") {
@@ -429,7 +447,7 @@ const MouvementsPage = () => {
             emplacementSource: item.emplacementSource,
             emplacementDestination: item.emplacementDestination,
             commentaire: item.commentaire || "",
-            operateur: operateur,
+            operateur: effectiveOperateur,
             operationId: operation.id,
           });
         }
@@ -570,12 +588,141 @@ const MouvementsPage = () => {
   const handleCardClick = (type: "Entrée" | "Sortie" | "Transfert") => {
     setSelectedType(type);
     setTypeFilter(type);
+    setSelectedOperationId(null);
+    setOperationSearch("");
+    setIsCreatingOperation(false);
+    setDraftOperateur("");
+    setDraftDocumentOrigine("");
+    setDraftError("");
   };
 
   // Back to landing
   const handleBackToLanding = () => {
     setSelectedType(null);
     setTypeFilter("all");
+    setSelectedOperationId(null);
+    setOperationSearch("");
+    setIsCreatingOperation(false);
+    setDraftOperateur("");
+    setDraftDocumentOrigine("");
+    setDraftError("");
+  };
+
+  // Back to operations list
+  const handleBackToOperations = () => {
+    setSelectedOperationId(null);
+    setIsCreatingOperation(false);
+    setDraftOperateur("");
+    setDraftDocumentOrigine("");
+    setDraftError("");
+  };
+
+  // Start creating new operation
+  const handleNewOperation = () => {
+    setIsCreatingOperation(true);
+    setDraftOperateur("");
+    setDraftDocumentOrigine("");
+    setDraftError("");
+  };
+
+  // Save new operation
+  const handleSaveOperation = () => {
+    if (!draftOperateur.trim()) {
+      setDraftError("L'opérateur est requis");
+      return;
+    }
+    if (!selectedType) return;
+
+    const newOp = createOperationFull(
+      selectedType,
+      draftOperateur.trim(),
+      draftDocumentOrigine.trim() || undefined
+    );
+
+    setSelectedOperationId(newOp.id);
+    setIsCreatingOperation(false);
+    setDraftOperateur("");
+    setDraftDocumentOrigine("");
+    setDraftError("");
+  };
+
+  // Cancel draft operation
+  const handleCancelDraft = () => {
+    setIsCreatingOperation(false);
+    setDraftOperateur("");
+    setDraftDocumentOrigine("");
+    setDraftError("");
+  };
+
+  // Filter operations for selected type
+  const filteredOperations = useMemo(() => {
+    if (!selectedType) return [];
+    return operations
+      .filter(op => op.type === selectedType)
+      .filter(op => {
+        if (!operationSearch) return true;
+        const search = operationSearch.toLowerCase();
+        return op.reference.toLowerCase().includes(search) || 
+               op.operateur.toLowerCase().includes(search) ||
+               (op.documentOrigine && op.documentOrigine.toLowerCase().includes(search));
+      })
+      .sort((a, b) => b.id - a.id); // Newest first
+  }, [operations, selectedType, operationSearch]);
+
+  // Get selected operation details
+  const selectedOperation = selectedOperationId 
+    ? operations.find(op => op.id === selectedOperationId)
+    : null;
+
+  // Format date helper
+  const formatDate = (isoDate: string) => {
+    try {
+      const date = new Date(isoDate);
+      return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    } catch {
+      return isoDate;
+    }
+  };
+
+  // Status dot color
+  const getStatusDotColor = (statut: string) => {
+    switch (statut) {
+      case "Brouillon": return "bg-gray-400";
+      case "En inspection": return "bg-amber-500";
+      case "En attente de validation": return "bg-blue-500";
+      case "Terminé": return "bg-green-600";
+      default: return "bg-gray-400";
+    }
+  };
+
+  // Type label plural
+  const getTypeLabelPlural = (type: "Entrée" | "Sortie" | "Transfert") => {
+    switch (type) {
+      case "Entrée": return "Entrées";
+      case "Sortie": return "Sorties";
+      case "Transfert": return "Transferts";
+    }
+  };
+
+  // Type label singular
+  const getTypeLabelSingular = (type: "Entrée" | "Sortie" | "Transfert") => {
+    return type; // Already singular
+  };
+
+  // Format date and time for display
+  const formatDateTime = (isoDate: string) => {
+    try {
+      const date = new Date(isoDate);
+      return date.toLocaleString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return isoDate;
+    }
   };
 
   return (
@@ -640,8 +787,118 @@ const MouvementsPage = () => {
             </button>
           </div>
         </>
-      ) : (
-        // FILTERED VIEW: Show table for selected type
+      ) : isCreatingOperation ? (
+        // DRAFT OPERATION FORM
+        <>
+          <div>
+            {/* Back button */}
+            <button
+              onClick={handleBackToOperations}
+              className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 mb-2 focus:outline-none focus:ring-2 focus:ring-primary/50 rounded px-1"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              {getTypeLabelPlural(selectedType)}
+            </button>
+
+            {/* Breadcrumb */}
+            <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
+              <span>Mouvements</span>
+              <span>/</span>
+              <span>{getTypeLabelPlural(selectedType)}</span>
+              <span>/</span>
+              <span className="text-gray-900 font-medium">Nouveau</span>
+            </div>
+
+            {/* Action row */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSaveOperation}
+                  className="h-9 px-4 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:opacity-90 transition-opacity"
+                >
+                  Enregistrer
+                </button>
+                <button
+                  onClick={handleCancelDraft}
+                  className="h-9 px-4 border border-gray-300 bg-white text-gray-700 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Annuler
+                </button>
+              </div>
+              {/* Status Bar */}
+              <div className="flex items-center gap-2 text-xs">
+                <span className="px-3 py-1 bg-primary/10 text-primary font-medium rounded">Brouillon</span>
+                <span className="text-gray-400">›</span>
+                <span className="px-3 py-1 text-gray-400">En inspection</span>
+                <span className="text-gray-400">›</span>
+                <span className="px-3 py-1 text-gray-400">En attente de validation</span>
+                <span className="text-gray-400">›</span>
+                <span className="px-3 py-1 text-gray-400">Terminé</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Operation Card */}
+          <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <h3 className="text-2xl font-semibold text-gray-900 mb-6">Nouveau</h3>
+            
+            {draftError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+                {draftError}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
+              {/* Left column */}
+              <div className="flex items-start">
+                <label className="w-40 text-sm text-gray-500 pt-2 flex-shrink-0">Type d'opération</label>
+                <div className="flex-1 pt-2 text-sm text-gray-900">{getTypeLabelSingular(selectedType)}</div>
+              </div>
+
+              <div className="flex items-start">
+                <label className="w-40 text-sm text-gray-500 pt-2 flex-shrink-0">
+                  Opérateur <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={draftOperateur}
+                  onChange={(e) => {
+                    setDraftOperateur(e.target.value);
+                    setDraftError("");
+                  }}
+                  className="flex-1 h-9 px-3 border border-gray-300 rounded bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  placeholder="Nom de l'opérateur"
+                />
+              </div>
+
+              <div className="flex items-start">
+                <label className="w-40 text-sm text-gray-500 pt-2 flex-shrink-0">Date planifiée</label>
+                <div className="flex-1 pt-2 text-sm text-gray-900">{formatDateTime(new Date().toISOString())}</div>
+              </div>
+
+              <div className="flex items-start">
+                <label className="w-40 text-sm text-gray-500 pt-2 flex-shrink-0">Document d'origine</label>
+                <input
+                  type="text"
+                  value={draftDocumentOrigine}
+                  onChange={(e) => setDraftDocumentOrigine(e.target.value)}
+                  className="flex-1 h-9 px-3 border border-gray-300 rounded bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  placeholder="Ex: BC-2026-001"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Empty state */}
+          <div>
+            <h4 className="text-xs uppercase text-gray-500 mb-3">Articles à traiter</h4>
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
+              <p className="text-sm text-gray-500">Enregistrez l'opération pour ajouter des lignes.</p>
+            </div>
+          </div>
+        </>
+      ) : selectedOperationId === null ? (
+        // LEVEL 2: Operations list for selected type
         <>
           <div>
             {/* Back button */}
@@ -659,58 +916,226 @@ const MouvementsPage = () => {
                 <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
                   <span>Mouvements</span>
                   <span>/</span>
-                  <span className="text-gray-900 font-medium">{selectedType}s</span>
+                  <span className="text-gray-900 font-medium">{getTypeLabelPlural(selectedType)}</span>
                 </div>
-                <h2 className="text-xl font-bold text-foreground">Mouvements</h2>
-                <p className="text-sm text-muted-foreground">Gestion des entrées, sorties et transferts</p>
+                <h2 className="text-xl font-bold text-foreground">{getTypeLabelPlural(selectedType)}</h2>
+                <p className="text-sm text-muted-foreground">{filteredOperations.length} opération{filteredOperations.length > 1 ? 's' : ''}</p>
               </div>
+              <button
+                onClick={handleNewOperation}
+                className="hidden md:flex h-9 px-4 bg-primary text-primary-foreground rounded-md text-sm font-medium items-center gap-2 hover:opacity-90 transition-opacity"
+              >
+                <Plus className="w-4 h-4" />
+                Nouvelle opération
+              </button>
+            </div>
+          </div>
+
+          {/* Search */}
+          <div>
+            <input
+              type="text"
+              value={operationSearch}
+              onChange={(e) => setOperationSearch(e.target.value)}
+              placeholder="Rechercher par référence ou opérateur..."
+              className="w-full h-9 px-3 rounded-md border border-gray-300 bg-white text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all"
+            />
+          </div>
+
+          {/* Operations Table */}
+          {filteredOperations.length === 0 ? (
+            <div className="bg-white border border-gray-200 rounded-md p-12 text-center">
+              <p className="text-gray-500 text-sm">Aucune opération pour le moment.</p>
+              <p className="text-gray-400 text-xs mt-1">Cliquez sur "Nouveau Mouvement" pour commencer</p>
+            </div>
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Référence</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Opérateur</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Document d'origine</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date planifiée</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Statut</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOperations.map((op) => (
+                    <tr
+                      key={op.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedOperationId(op.id)}
+                      onKeyDown={(e) => e.key === 'Enter' && setSelectedOperationId(op.id)}
+                      className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors h-12"
+                    >
+                      <td className="px-4 py-3 text-sm font-medium text-gray-900 tabular-nums">{op.reference}</td>
+                      <td className="px-4 py-3 text-sm text-gray-700">{op.operateur}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{op.documentOrigine || "—"}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{formatDate(op.datePlanifiee)}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${getStatusDotColor(op.statut)}`}></div>
+                          <span className="text-xs text-gray-700">{op.statut}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      ) : (
+        // LEVEL 3: Operation details with movements
+        <>
+          <div>
+            {/* Back button */}
+            <button
+              onClick={handleBackToOperations}
+              className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 mb-2 focus:outline-none focus:ring-2 focus:ring-primary/50 rounded px-1"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              {getTypeLabelPlural(selectedType)}
+            </button>
+
+            {/* Breadcrumb */}
+            <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
+              <span>Mouvements</span>
+              <span>/</span>
+              <span>{getTypeLabelPlural(selectedType)}</span>
+              <span>/</span>
+              <span className="text-gray-900 font-medium">{selectedOperation?.reference}</span>
+            </div>
+
+            {/* Action row with status bar */}
+            <div className="flex items-center justify-end mb-6">
+              {/* Status Bar */}
+              <div className="flex items-center gap-2 text-xs">
+                <span className={`px-3 py-1 rounded ${selectedOperation?.statut === "Brouillon" ? "bg-primary/10 text-primary font-medium" : "text-gray-600"}`}>Brouillon</span>
+                <span className="text-gray-400">›</span>
+                <span className={`px-3 py-1 rounded ${selectedOperation?.statut === "En inspection" ? "bg-primary/10 text-primary font-medium" : "text-gray-400"}`}>En inspection</span>
+                <span className="text-gray-400">›</span>
+                <span className={`px-3 py-1 rounded ${selectedOperation?.statut === "En attente de validation" ? "bg-primary/10 text-primary font-medium" : "text-gray-400"}`}>En attente de validation</span>
+                <span className="text-gray-400">›</span>
+                <span className={`px-3 py-1 rounded ${selectedOperation?.statut === "Terminé" ? "bg-primary/10 text-primary font-medium" : "text-gray-400"}`}>Terminé</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Operation Card */}
+          {selectedOperation && (
+            <div className="bg-white border border-gray-200 rounded-lg p-6">
+              <h3 className="text-2xl font-semibold text-gray-900 mb-6">{selectedOperation.reference}</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
+                {/* Left column */}
+                <div className="flex items-start">
+                  <label className="w-40 text-sm text-gray-500 pt-2 flex-shrink-0">Type d'opération</label>
+                  <div className="flex-1 pt-2 text-sm text-gray-900">{getTypeLabelSingular(selectedOperation.type)}</div>
+                </div>
+
+                <div className="flex items-start">
+                  <label className="w-40 text-sm text-gray-500 pt-2 flex-shrink-0">
+                    Opérateur {selectedOperation.statut === "Brouillon" && <span className="text-red-500">*</span>}
+                  </label>
+                  {selectedOperation.statut === "Brouillon" ? (
+                    <input
+                      type="text"
+                      defaultValue={selectedOperation.operateur}
+                      onBlur={(e) => {
+                        if (e.target.value.trim() && e.target.value !== selectedOperation.operateur) {
+                          updateOperationFields(selectedOperation.id, { operateur: e.target.value.trim() });
+                        }
+                      }}
+                      className="flex-1 h-9 px-3 border border-gray-300 rounded bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                    />
+                  ) : (
+                    <div className="flex-1 pt-2 text-sm text-gray-900">{selectedOperation.operateur}</div>
+                  )}
+                </div>
+
+                <div className="flex items-start">
+                  <label className="w-40 text-sm text-gray-500 pt-2 flex-shrink-0">Date planifiée</label>
+                  <div className="flex-1 pt-2 text-sm text-gray-900">{formatDateTime(selectedOperation.datePlanifiee)}</div>
+                </div>
+
+                <div className="flex items-start">
+                  <label className="w-40 text-sm text-gray-500 pt-2 flex-shrink-0">Document d'origine</label>
+                  {selectedOperation.statut === "Brouillon" ? (
+                    <input
+                      type="text"
+                      defaultValue={selectedOperation.documentOrigine || ""}
+                      onBlur={(e) => {
+                        const newValue = e.target.value.trim() || undefined;
+                        if (newValue !== selectedOperation.documentOrigine) {
+                          updateOperationFields(selectedOperation.id, { documentOrigine: newValue });
+                        }
+                      }}
+                      className="flex-1 h-9 px-3 border border-gray-300 rounded bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                      placeholder="Ex: BC-2026-001"
+                    />
+                  ) : (
+                    <div className="flex-1 pt-2 text-sm text-gray-900">{selectedOperation.documentOrigine || "—"}</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Articles section */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs uppercase text-gray-500">Articles à traiter</h4>
               <button
                 onClick={() => {
                   setDuplicateData(null);
                   setIsBulkModalOpen(true);
                 }}
-                className="hidden md:flex h-9 px-4 bg-primary text-primary-foreground rounded-md text-sm font-medium items-center gap-2 hover:opacity-90 transition-opacity"
+                className="h-9 px-4 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:opacity-90 transition-opacity flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
-                Nouveau Mouvement
+                Ajouter ligne
               </button>
             </div>
-          </div>
 
-          {/* Filters - Odoo Style (hide type filter, keep article filter) */}
-          <div className="bg-white border border-gray-200 rounded-md p-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1.5">Article</label>
-              <select
-                value={selectedArticleId}
-                onChange={(e) => setSelectedArticleId(e.target.value)}
-                className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all"
-              >
-                <option value="">Tous les articles</option>
-                {articles.map((article) => (
-                  <option key={article.id} value={article.ref}>
-                    {article.nom} ({article.ref})
-                  </option>
-                ))}
-              </select>
+            {/* Article Filter - only if more than 1 line */}
+            {filtered.length > 1 && (
+              <div className="mb-3">
+                <select
+                  value={selectedArticleId}
+                  onChange={(e) => setSelectedArticleId(e.target.value)}
+                  className="h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all"
+                >
+                  <option value="">Tous les articles</option>
+                  {articles.map((article) => (
+                    <option key={article.id} value={article.ref}>
+                      {article.nom} ({article.ref})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Table */}
+            <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
+              <MovementTable 
+                movements={filtered}
+                articles={articles}
+                onDuplicate={handleDuplicate}
+                onQualityControl={handleOpenQCModal}
+                onReject={handleOpenRejectModal}
+                onInspect={handleOpenInspectionModal}
+                showActions={true}
+                compact={false}
+              />
             </div>
-          </div>
-
-          {/* Table */}
-          <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
-            <MovementTable 
-              movements={filtered}
-              articles={articles}
-              onDuplicate={handleDuplicate}
-              onQualityControl={handleOpenQCModal}
-              onReject={handleOpenRejectModal}
-              onInspect={handleOpenInspectionModal}
-              showActions={true}
-              compact={false}
-            />
           </div>
         </>
       )}
+
+      {/* Modals remain outside conditional rendering */}
 
       {/* Bulk Movement Modal */}
       <BulkMovementModal
@@ -731,6 +1156,8 @@ const MouvementsPage = () => {
         }}
         initialData={duplicateData}
         defaultMovementType={selectedType ?? undefined}
+        fixedMovementType={selectedOperation?.type}
+        fixedOperateur={selectedOperation?.operateur}
       />
 
       {/* Quality Control Modal */}

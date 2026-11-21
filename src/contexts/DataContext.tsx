@@ -58,6 +58,7 @@ export interface Operation {
   operateur: string;
   datePlanifiee: string;    // ISO string
   statut: OperationStatus;
+  documentOrigine?: string; // Optional reference document
 }
 
 export interface Mouvement {
@@ -152,8 +153,10 @@ interface DataContextType {
   rejectQualityControl: (id: string, controleur: string, raison: string) => void;
   
   createOperation: (type: "Entrée" | "Sortie" | "Transfert", operateur: string) => Operation;
+  createOperationFull: (type: "Entrée" | "Sortie" | "Transfert", operateur: string, documentOrigine?: string) => Operation;
   getOperationMovements: (operationId: number) => Mouvement[];
   updateOperationStatus: (operationId: number, statut: OperationStatus) => void;
+  updateOperationFields: (operationId: number, fields: { operateur?: string; documentOrigine?: string }) => void;
   
   addInventoryRecord: (record: Omit<InventoryRecord, "id">) => void;
   applyInventoryAdjustment: (articleId: number, emplacementNom: string, ecart: number) => void;
@@ -396,29 +399,69 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const now = new Date();
     const year = now.getFullYear().toString();
     
-    // Calculate next counter for this type and year
-    const typePrefix = type === "Entrée" ? "IN" : type === "Sortie" ? "OUT" : "TRF";
-    const existingRefs = operations
-      .filter(op => op.type === type && op.reference.startsWith(`${typePrefix}/${year}/`))
-      .map(op => {
-        const parts = op.reference.split('/');
-        return parseInt(parts[2] || '0', 10);
-      });
+    let newOperation: Operation | null = null;
     
-    const nextCounter = existingRefs.length > 0 ? Math.max(...existingRefs) + 1 : 1;
-    const reference = `${typePrefix}/${year}/${String(nextCounter).padStart(4, '0')}`;
+    setOperations(prev => {
+      // Calculate next counter from the latest state
+      const typePrefix = type === "Entrée" ? "IN" : type === "Sortie" ? "OUT" : "TRF";
+      const existingRefs = prev
+        .filter(op => op.type === type && op.reference.startsWith(`${typePrefix}/${year}/`))
+        .map(op => {
+          const parts = op.reference.split('/');
+          return parseInt(parts[2] || '0', 10);
+        });
+      
+      const nextCounter = existingRefs.length > 0 ? Math.max(...existingRefs) + 1 : 1;
+      const reference = `${typePrefix}/${year}/${String(nextCounter).padStart(4, '0')}`;
 
-    const newOperation: Operation = {
-      id: Math.max(...operations.map(o => o.id), 0) + 1,
-      reference,
-      type,
-      operateur,
-      datePlanifiee: now.toISOString(),
-      statut: "Brouillon",
-    };
+      newOperation = {
+        id: Math.max(...prev.map(o => o.id), 0) + 1,
+        reference,
+        type,
+        operateur,
+        datePlanifiee: now.toISOString(),
+        statut: "Brouillon",
+      };
 
-    setOperations([...operations, newOperation]);
-    return newOperation;
+      return [...prev, newOperation];
+    });
+
+    return newOperation!;
+  };
+
+  const createOperationFull = (type: "Entrée" | "Sortie" | "Transfert", operateur: string, documentOrigine?: string): Operation => {
+    const now = new Date();
+    const year = now.getFullYear().toString();
+    
+    let newOperation: Operation | null = null;
+    
+    setOperations(prev => {
+      // Calculate next counter from the latest state
+      const typePrefix = type === "Entrée" ? "IN" : type === "Sortie" ? "OUT" : "TRF";
+      const existingRefs = prev
+        .filter(op => op.type === type && op.reference.startsWith(`${typePrefix}/${year}/`))
+        .map(op => {
+          const parts = op.reference.split('/');
+          return parseInt(parts[2] || '0', 10);
+        });
+      
+      const nextCounter = existingRefs.length > 0 ? Math.max(...existingRefs) + 1 : 1;
+      const reference = `${typePrefix}/${year}/${String(nextCounter).padStart(4, '0')}`;
+
+      newOperation = {
+        id: Math.max(...prev.map(o => o.id), 0) + 1,
+        reference,
+        type,
+        operateur,
+        datePlanifiee: now.toISOString(),
+        statut: "Brouillon",
+        documentOrigine,
+      };
+
+      return [...prev, newOperation];
+    });
+
+    return newOperation!;
   };
 
   const getOperationMovements = (operationId: number): Mouvement[] => {
@@ -427,6 +470,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateOperationStatus = (operationId: number, statut: OperationStatus): void => {
     setOperations(operations.map(op => op.id === operationId ? { ...op, statut } : op));
+  };
+
+  const updateOperationFields = (operationId: number, fields: { operateur?: string; documentOrigine?: string }): void => {
+    setOperations(operations.map(op => {
+      if (op.id === operationId && op.statut === "Brouillon") {
+        return { ...op, ...fields };
+      }
+      return op;
+    }));
   };
 
   const addMouvement = (mouvement: Omit<Mouvement, "id">) => {
@@ -1094,8 +1146,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       approveQualityControl,
       rejectQualityControl,
       createOperation,
+      createOperationFull,
       getOperationMovements,
       updateOperationStatus,
+      updateOperationFields,
       addInventoryRecord,
       applyInventoryAdjustment,
       batchUpdateArticles,
