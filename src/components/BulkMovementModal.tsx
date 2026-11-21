@@ -36,6 +36,7 @@ interface BulkMovementModalProps {
   onAddDestination?: (name: string) => void;
   editingId?: number | null;
   initialData?: { movementType: MovementType; items: BulkMovementItem[] } | null;
+  defaultMovementType?: "Entrée" | "Sortie" | "Transfert";
 }
 
 export const BulkMovementModal = ({
@@ -51,6 +52,7 @@ export const BulkMovementModal = ({
   onAddDestination,
   editingId = null,
   initialData = null,
+  defaultMovementType,
 }: BulkMovementModalProps) => {
   const [movementType, setMovementType] = useState<MovementType>(initialData?.movementType || "Entrée");
   const [items, setItems] = useState<BulkMovementItem[]>(
@@ -73,6 +75,16 @@ export const BulkMovementModal = ({
       console.log(`[DUPLICATE MODAL] Initialized with ${initialData.items.length} item(s), Type: ${initialData.movementType}`);
     }
   }, [initialData]);
+
+  // Apply defaultMovementType when modal opens (if no initialData with items)
+  useEffect(() => {
+    if (isOpen && defaultMovementType) {
+      const hasInitialItems = initialData && initialData.items && initialData.items.length > 0;
+      if (!hasInitialItems) {
+        setMovementType(defaultMovementType);
+      }
+    }
+  }, [isOpen, defaultMovementType, initialData]);
 
   // Reset form to initial state
   const resetForm = () => {

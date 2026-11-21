@@ -49,6 +49,17 @@ export interface Supplier {
   contact2?: string;
 }
 
+export type OperationStatus = "Brouillon" | "En inspection" | "En attente de validation" | "Terminé";
+
+export interface Operation {
+  id: number;
+  reference: string;        // IN/2026/0001, OUT/2026/0001, TRF/2026/0001
+  type: "Entrée" | "Sortie" | "Transfert";
+  operateur: string;
+  datePlanifiee: string;    // ISO string
+  statut: OperationStatus;
+}
+
 export interface Mouvement {
   id: string;                   // Changed to string for UUID support
   date: string;
@@ -67,6 +78,7 @@ export interface Mouvement {
   destination?: string;         // Destination for Sortie movements (e.g., "Client X", "Département Production")
   operateur: string;
   commentaire?: string;         // Optional movement note/comment
+  operationId?: number;         // Link to parent Operation
   status?: "pending" | "approved" | "rejected";  // QC workflow status
   statut?: "En attente" | "En attente de validation Qualité" | "Terminé" | "Rejeté" | "Refusé";
   controleur?: string;
@@ -110,6 +122,7 @@ interface DataContextType {
   destinations: Destination[];
   suppliers: Supplier[];
   mouvements: Mouvement[];
+  operations: Operation[];
   inventoryHistory: InventoryRecord[];
   
   addArticle: (article: Omit<Article, "id">) => void;
@@ -138,6 +151,10 @@ interface DataContextType {
   approveQualityControl: (id: string, controleur: string, etatArticles: "Conforme" | "Non-conforme", unitesDefectueuses?: number, qteValide?: number, refusTotalMotif?: string, noteControle?: string, verificationPoints?: Record<string, boolean>, refusalType?: "administrative" | "defective", nomOperateur?: string, motifErreur?: string, nomControleur?: string, motifRejet?: string) => void;
   rejectQualityControl: (id: string, controleur: string, raison: string) => void;
   
+  createOperation: (type: "Entrée" | "Sortie" | "Transfert", operateur: string) => Operation;
+  getOperationMovements: (operationId: number) => Mouvement[];
+  updateOperationStatus: (operationId: number, statut: OperationStatus) => void;
+  
   addInventoryRecord: (record: Omit<InventoryRecord, "id">) => void;
   applyInventoryAdjustment: (articleId: number, emplacementNom: string, ecart: number) => void;
   batchUpdateArticles: (updatedArticles: Article[]) => void;
@@ -147,7 +164,7 @@ interface DataContextType {
   getArticleLocations: (articleRef: string) => InventoryEntry[];
   getArticleStockByLocation: (articleRef: string, emplacementName: string) => number;
   getArticleCurrentLocation: (articleRef: string) => string | null;
-  processTransfer: (articleRef: string, sourceLocation: string, quantity: number, destinationLocation: string) => { success: boolean; error?: string };
+  processTransfer: (articleRef: string, sourceLocation: string, quantity: number, destinationLocation: string, operationId?: number) => { success: boolean; error?: string };
   recalculateAllOccupancies: () => void;
 }
 
@@ -234,12 +251,66 @@ const initialHistory: InventoryRecord[] = [
 ];
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Helper: Group seed movements into operations (idempotent)
+  const groupSeedMovementsIntoOperations = (movements: Mouvement[]): { operations: Operation[]; updatedMovements: Mouvement[] } => {
+    const operations: Operation[] = [];
+    const updatedMovements: Mouvement[] = [];
+    const counters: Record<string, Record<string, number>> = {}; // year -> type -> counter
+
+    movements.forEach((movement) => {
+      // Skip if already has operationId
+      if (movement.operationId !== undefined) {
+        updatedMovements.push(movement);
+        return;
+      }
+
+      // Extract year from movement date
+      const year = movement.date.split('-')[0] || '2026';
+      if (!counters[year]) counters[year] = {};
+      if (!counters[year][movement.type]) counters[year][movement.type] = 0;
+      
+      counters[year][movement.type]++;
+      const counter = counters[year][movement.type];
+
+      // Generate reference
+      const typePrefix = movement.type === "Entrée" ? "IN" : movement.type === "Sortie" ? "OUT" : "TRF";
+      const reference = `${typePrefix}/${year}/${String(counter).padStart(4, '0')}`;
+
+      // Determine status from movement
+      let statut: OperationStatus = "Brouillon";
+      if (movement.statut === "Terminé" || movement.status === "approved") {
+        statut = "Terminé";
+      } else if (movement.statut === "Rejeté" || movement.statut === "Refusé" || movement.status === "rejected") {
+        statut = "Terminé"; // Rejected is also final
+      }
+
+      // Create operation for this movement
+      const operation: Operation = {
+        id: operations.length + 1,
+        reference,
+        type: movement.type as "Entrée" | "Sortie" | "Transfert",
+        operateur: movement.operateur,
+        datePlanifiee: movement.date,
+        statut,
+      };
+
+      operations.push(operation);
+      updatedMovements.push({ ...movement, operationId: operation.id });
+    });
+
+    return { operations, updatedMovements };
+  };
+
+  // Initialize operations from seed movements
+  const { operations: seedOperations, updatedMovements: seedMovements } = groupSeedMovementsIntoOperations(initialMovements);
+
   const [articles, setArticles] = useState<Article[]>(initialArticles);
   const [categories, setCategories] = useState<Categorie[]>(initialCategories);
   const [emplacements, setEmplacements] = useState<Emplacement[]>(initialLocations);
   const [destinations, setDestinations] = useState<Destination[]>(initialDestinations);
   const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
-  const [mouvements, setMouvements] = useState<Mouvement[]>(initialMovements);
+  const [mouvements, setMouvements] = useState<Mouvement[]>(seedMovements);
+  const [operations, setOperations] = useState<Operation[]>(seedOperations);
   const [inventoryHistory, setInventoryHistory] = useState<InventoryRecord[]>(initialHistory);
 
   const addArticle = (article: Omit<Article, "id">) => {
@@ -315,6 +386,47 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteSupplier = (id: number) => {
     setSuppliers(suppliers.filter(s => s.id !== id));
+  };
+
+  // ============================================================================
+  // OPERATION FUNCTIONS
+  // ============================================================================
+
+  const createOperation = (type: "Entrée" | "Sortie" | "Transfert", operateur: string): Operation => {
+    const now = new Date();
+    const year = now.getFullYear().toString();
+    
+    // Calculate next counter for this type and year
+    const typePrefix = type === "Entrée" ? "IN" : type === "Sortie" ? "OUT" : "TRF";
+    const existingRefs = operations
+      .filter(op => op.type === type && op.reference.startsWith(`${typePrefix}/${year}/`))
+      .map(op => {
+        const parts = op.reference.split('/');
+        return parseInt(parts[2] || '0', 10);
+      });
+    
+    const nextCounter = existingRefs.length > 0 ? Math.max(...existingRefs) + 1 : 1;
+    const reference = `${typePrefix}/${year}/${String(nextCounter).padStart(4, '0')}`;
+
+    const newOperation: Operation = {
+      id: Math.max(...operations.map(o => o.id), 0) + 1,
+      reference,
+      type,
+      operateur,
+      datePlanifiee: now.toISOString(),
+      statut: "Brouillon",
+    };
+
+    setOperations([...operations, newOperation]);
+    return newOperation;
+  };
+
+  const getOperationMovements = (operationId: number): Mouvement[] => {
+    return mouvements.filter(m => m.operationId === operationId);
+  };
+
+  const updateOperationStatus = (operationId: number, statut: OperationStatus): void => {
+    setOperations(operations.map(op => op.id === operationId ? { ...op, statut } : op));
   };
 
   const addMouvement = (mouvement: Omit<Mouvement, "id">) => {
@@ -908,7 +1020,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return null;
   };
 
-  const processTransfer = (articleRef: string, sourceLocation: string, quantity: number, destinationLocation: string): { success: boolean; error?: string } => {
+  const processTransfer = (articleRef: string, sourceLocation: string, quantity: number, destinationLocation: string, operationId?: number): { success: boolean; error?: string } => {
     const article = articles.find(a => a.ref === articleRef);
     if (!article) {
       return { success: false, error: "Article non trouvé" };
@@ -959,6 +1071,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       destinations,
       suppliers,
       mouvements,
+      operations,
       inventoryHistory,
       addArticle,
       updateArticle,
@@ -980,6 +1093,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       deleteMouvement,
       approveQualityControl,
       rejectQualityControl,
+      createOperation,
+      getOperationMovements,
+      updateOperationStatus,
       addInventoryRecord,
       applyInventoryAdjustment,
       batchUpdateArticles,

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Package, Plus, Search, Edit, Trash2, TrendingDown, HelpCircle, MapPin, Flame } from "lucide-react";
+import { Package, Plus, Search, Edit, Trash2, TrendingDown, HelpCircle, MapPin, Flame, PanelRightOpen, TrendingUp, ChevronDown } from "lucide-react";
 import { useData } from "@/contexts/DataContext";
 import { Modal } from "@/components/Modal";
 import { Toast } from "@/components/Toast";
@@ -9,6 +9,7 @@ import { StockStatusBadge } from "@/components/StockStatusBadge";
 import { UnitBadge } from "@/components/UnitBadge";
 import { getUnitNames, getUnitSymbol } from "@/lib/units-storage";
 import { roundStockQuantity } from "@/lib/unit-conversion";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 
 const Tooltip = ({ text, children }: { text: string; children: React.ReactNode }) => {
   const [isVisible, setIsVisible] = useState(false);
@@ -32,6 +33,8 @@ const Tooltip = ({ text, children }: { text: string; children: React.ReactNode }
   );
 };
 
+// Helper to format dates in French numeric format (dd/MM/yyyy)
+const formatDateFR = (d: Date) => d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" });
 
 
 const ArticlesPage = () => {
@@ -41,6 +44,7 @@ const ArticlesPage = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [units, setUnits] = useState<string[]>([]);
+  const [detailsArticle, setDetailsArticle] = useState<typeof articles[0] | null>(null);
   const [formData, setFormData] = useState({
     ref: "",
     nom: "",
@@ -258,55 +262,32 @@ const ArticlesPage = () => {
 
       {/* Search */}
       <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Rechercher un article..."
-          className="w-full h-9 pl-9 pr-3 rounded-md border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          className="w-full h-9 pl-9 pr-3 rounded-md border border-gray-300 bg-white text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
         />
       </div>
 
       {/* Table */}
-      <div className="w-full max-w-full overflow-x-auto bg-card border rounded-lg">
-        <table className="min-w-[1100px] w-full text-sm">
+      <div className="w-full max-w-full overflow-x-auto bg-white border border-gray-200 rounded-md">
+        <table className="min-w-[640px] w-full">
           <thead>
-            <tr className="border-b bg-muted/50">
-              <th className="text-left py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide min-w-[110px]">Réf</th>
-              <th className="text-left py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Article</th>
-              <th className="text-left py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Catégorie</th>
-              <th className="text-left py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Fournisseurs</th>
-              <th className="text-center py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                <Tooltip text="Unité d'Entrée / Unité de Sortie">
-                  <div className="flex items-center justify-center gap-1">
-                    <span>Unités</span>
-                    <HelpCircle className="w-3.5 h-3.5" />
-                  </div>
-                </Tooltip>
-              </th>
-              <th className="text-left py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Emplacement</th>
-              <th className="text-right py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Stock</th>
-              <th className="text-right py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Seuil</th>
-              <th className="text-center py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Temps Restant</th>
-              <th className="text-center py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">Statut</th>
-              <th className="text-center py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                <Tooltip text="Dernier ajustement suite à l'inventaire physique">
-                  <div className="flex items-center justify-center gap-1">
-                    <span>Consommation par Inventaire</span>
-                    <HelpCircle className="w-3.5 h-3.5" />
-                  </div>
-                </Tooltip>
-              </th>
-              <th className="sticky right-0 bg-muted/50 text-right py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide border-l whitespace-nowrap shadow-sm">Actions</th>
+            <tr className="border-b border-gray-200 bg-gray-50">
+              <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">Réf</th>
+              <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">Article</th>
+              <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">Catégorie</th>
+              <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">Stock</th>
+              <th className="text-center py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">Consommation Inv.</th>
+              <th className="w-12 py-3 px-2"></th>
             </tr>
           </thead>
           <tbody>
               {filtered.map((a) => {
                 // CRITICAL: Calculate total stock directly from inventory array using numeric addition
-                // This ensures we get the true numeric sum, not string concatenation
-                // IMPORTANT: If inventory array exists (even with 0 values), use it as the source of truth
-                // DO NOT fall back to movement-based calculation if inventory is 0
                 const hasInventoryData = a.inventory && a.inventory.length > 0;
                 const totalStockFromInventory = a.inventory?.reduce((sum, item) => sum + Number(item.quantity), 0) || 0;
                 
@@ -316,173 +297,78 @@ const ArticlesPage = () => {
                   mouvements.forEach(mouvement => {
                     if (mouvement.ref === a.ref) {
                       if (mouvement.type === "Entrée") {
-                        // CRITICAL FIX: Only count Entrée movements that are CONFIRMED (Terminé)
-                        // "En attente" entries are NOT yet physically stored and should NOT be counted
                         if (mouvement.statut === "Terminé" || mouvement.status === "approved") {
                           const originalQty = mouvement.qteOriginale || mouvement.qte;
                           totalQtyInEntryUnits += originalQty;
-                          console.log(`[CALC] ${a.nom} ENTRÉE CONFIRMÉE: +${originalQty} ${a.uniteEntree}`);
-                        } else {
-                          console.log(`[CALC] ${a.nom} ENTRÉE EN ATTENTE (IGNORÉE): ${mouvement.qte} ${a.uniteSortie}`);
                         }
                       } else if (mouvement.type === "Sortie") {
-                        // Only subtract if approved (qte is already in exit units, convert back to entry units)
                         if (mouvement.statut === "Terminé" || mouvement.status === "approved") {
                           const originalQty = mouvement.qteOriginale || mouvement.qte;
                           totalQtyInEntryUnits -= originalQty;
                         }
                       } else if (mouvement.type === "Ajustement") {
-                        // CRITICAL: Include Ajustement movements (qte is in exit units, convert to entry units)
                         const qtyInEntryUnits = mouvement.qte / a.facteurConversion;
                         if (mouvement.typeAjustement === "Surplus") {
                           totalQtyInEntryUnits += qtyInEntryUnits;
-                          console.log(`[CALC] ${a.nom} AJUSTEMENT SURPLUS: +${qtyInEntryUnits} ${a.uniteEntree}`);
                         } else if (mouvement.typeAjustement === "Manquant") {
                           totalQtyInEntryUnits -= qtyInEntryUnits;
-                          console.log(`[CALC] ${a.nom} AJUSTEMENT MANQUANT: -${qtyInEntryUnits} ${a.uniteEntree}`);
                         }
                       }
                     }
                   });
                 }
                 
-                // CRITICAL: If inventory data exists, use it (even if it's 0)
-                // Only use movement-based calculation if inventory array is completely empty
                 const stockInExitUnits = hasInventoryData ? Number(totalStockFromInventory) : Number(totalQtyInEntryUnits * a.facteurConversion);
                 const stockInEntryUnits = hasInventoryData ? Number(totalStockFromInventory / a.facteurConversion) : Number(totalQtyInEntryUnits);
                 
-                console.log(`[ARTICLES TABLE] ${a.nom}: HasInventory=${hasInventoryData}, Inventory=${totalStockFromInventory} ${a.uniteSortie}, Stock=${stockInExitUnits} ${a.uniteSortie}`);
-                
                 const status = getStockStatus(stockInExitUnits, a.seuil, a.consommationJournaliere);
                 const autonomy = calculateAutonomy(stockInExitUnits, a.consommationJournaliere);
+                
                 return (
-                  <tr key={a.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                    <td className="py-3 px-3 font-mono text-xs text-muted-foreground whitespace-nowrap">{a.ref}</td>
-                    <td className="py-3 px-3">
-                      <div className="flex items-center gap-2">
-                        <Package className="w-4 h-4 text-primary shrink-0" />
-                        <span className="font-medium text-foreground">{a.nom}</span>
-                      </div>
+                  <tr key={a.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors h-12">
+                    <td className="py-2 px-4 text-sm text-gray-500">{a.ref}</td>
+                    <td className="py-2 px-4">
+                      <span className="text-sm font-medium text-gray-900">{a.nom}</span>
                     </td>
-                    <td className="py-3 px-3 text-muted-foreground">{a.categorie}</td>
-                    <td className="py-3 px-3 text-sm">
-                      {a.supplierIds && a.supplierIds.length > 0 ? (
-                        <div className="flex flex-wrap gap-1 items-center">
-                          {a.supplierIds
-                            .slice(0, 2)
-                            .map(id => {
-                              const supplier = suppliers.find(s => s.id === id);
-                              return supplier ? (
-                                <span
-                                  key={supplier.id}
-                                  className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 truncate max-w-[120px]"
-                                  title={supplier.nom}
-                                >
-                                  {supplier.nom}
-                                </span>
-                              ) : null;
-                            })}
-                          {a.supplierIds.length > 2 && (
-                            <div className="relative group">
-                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300 cursor-help">
-                                +{a.supplierIds.length - 2} more
-                              </span>
-                              <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block bg-gray-900 text-white text-xs rounded-md py-2 px-3 whitespace-nowrap z-10 shadow-lg">
-                                {a.supplierIds
-                                  .slice(2)
-                                  .map(id => suppliers.find(s => s.id === id)?.nom)
-                                  .filter(Boolean)
-                                  .join(", ")}
-                              </div>
-                            </div>
+                    <td className="py-2 px-4 text-sm text-gray-600">{a.categorie}</td>
+                    <td className="py-2 px-4 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {status.level === "critical" && (
+                          <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                        )}
+                        <div className="flex flex-col items-end">
+                          <span className="text-sm text-gray-900 tabular-nums">
+                            {String(stockInExitUnits)} <span className="text-gray-500">{getUnitSymbol(a.uniteSortie)}</span>
+                          </span>
+                          {a.facteurConversion !== 1 && (
+                            <span className="text-xs text-gray-500 tabular-nums">
+                              ({String(stockInEntryUnits)} {getUnitSymbol(a.uniteEntree)})
+                            </span>
                           )}
                         </div>
-                      ) : (
-                        <span className="text-muted-foreground italic">Aucun</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-3 text-center whitespace-nowrap">
-                      <div className="flex flex-col gap-1 items-center">
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-muted-foreground">Entrée:</span>
-                          <UnitBadge unit={a.uniteEntree} />
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-muted-foreground">Sortie:</span>
-                          <UnitBadge unit={a.uniteSortie} />
-                        </div>
-                        {a.facteurConversion !== 1 && (
-                          <span className="text-[9px] text-gray-600 font-mono">
-                            1:{a.facteurConversion}
-                          </span>
-                        )}
                       </div>
                     </td>
-                    <td className="py-3 px-3 text-muted-foreground">
-                      <div className="flex flex-wrap gap-1">
-                        {a.inventory && a.inventory.length > 0 ? (
-                          // CRITICAL: Map through inventory array, ensuring each zone appears only once with numeric quantity
-                          a.inventory.map((inv, idx) => (
-                            <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary/10 text-primary border border-primary/20 whitespace-nowrap">
-                              <MapPin className="w-3 h-3" />
-                              {inv.zone}: {Number(inv.quantity).toLocaleString()}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-[10px] text-muted-foreground italic">Non localisé</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-3 px-3 text-right whitespace-nowrap">
-                      <div className="flex flex-col items-end gap-0.5">
-                        <span className="font-mono font-semibold text-foreground">
-                          {String(stockInExitUnits)} <span className="text-xs text-muted-foreground">{getUnitSymbol(a.uniteSortie)}</span>
-                        </span>
-                        {a.facteurConversion !== 1 && (
-                          <span className="text-[10px] text-muted-foreground font-mono">
-                            ({String(stockInEntryUnits)} {getUnitSymbol(a.uniteEntree)})
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-3 px-3 text-right font-mono text-muted-foreground whitespace-nowrap">{a.seuil}</td>
-                    <td className="py-3 px-3 text-center whitespace-nowrap">
-                      <AutonomyBadge autonomy={autonomy} />
-                    </td>
-                    <td className="py-3 px-3 text-center whitespace-nowrap">
-                      <StockStatusBadge status={status} autonomyLabel={autonomy.label} dailyConsumption={a.consommationJournaliere} />
-                    </td>
-                    <td className="py-3 px-3 text-center whitespace-nowrap">
+                    <td className="py-2 px-4 text-center whitespace-nowrap">
                       <div className="flex items-center justify-center gap-1">
                         {a.consommationParInventaire < 0 ? (
-                          <>
-                            <TrendingDown className="w-4 h-4 text-orange-500" />
-                            <span className={`font-mono font-semibold text-orange-500`}>
-                              {a.consommationParInventaire}
-                            </span>
-                          </>
-                        ) : (
-                          <span className={`font-mono font-semibold ${a.consommationParInventaire === 0 ? "text-success" : "text-info"}`}>
-                            {a.consommationParInventaire > 0 ? "+" : ""}{a.consommationParInventaire}
-                          </span>
-                        )}
+                          <TrendingDown className="w-4 h-4 text-gray-400 shrink-0" />
+                        ) : a.consommationParInventaire > 0 ? (
+                          <TrendingUp className="w-4 h-4 text-gray-400 shrink-0" />
+                        ) : null}
+                        <span className="text-sm text-gray-700 tabular-nums">
+                          {a.consommationParInventaire > 0 ? "+" : ""}{a.consommationParInventaire}
+                        </span>
                       </div>
                     </td>
-                    <td className="sticky right-0 bg-white py-3 px-3 text-right border-l shadow-sm hover:bg-muted/30 whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => handleOpenModal(a)}
-                          className="w-8 h-8 flex items-center justify-center rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(a.id)}
-                          className="w-8 h-8 flex items-center justify-center rounded hover:bg-red-50 transition-colors text-muted-foreground hover:text-red-600"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                    <td className="py-2 px-2 text-center">
+                      <button
+                        onClick={() => setDetailsArticle(a)}
+                        className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-900"
+                        aria-label="Voir les détails"
+                        title="Détails"
+                      >
+                        <PanelRightOpen className="w-[18px] h-[18px]" strokeWidth={1.5} />
+                      </button>
                     </td>
                   </tr>
                 );
@@ -491,22 +377,219 @@ const ArticlesPage = () => {
           </table>
       </div>
 
+      {/* Details Modal */}
+      <Dialog open={!!detailsArticle} onOpenChange={(open) => !open && setDetailsArticle(null)}>
+        <DialogContent className="max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto">
+          {detailsArticle && (() => {
+            // Compute values for the modal (same logic as table)
+            const hasInventoryData = detailsArticle.inventory && detailsArticle.inventory.length > 0;
+            const totalStockFromInventory = detailsArticle.inventory?.reduce((sum, item) => sum + Number(item.quantity), 0) || 0;
+            
+            let totalQtyInEntryUnits = 0;
+            if (!hasInventoryData) {
+              mouvements.forEach(mouvement => {
+                if (mouvement.ref === detailsArticle.ref) {
+                  if (mouvement.type === "Entrée" && (mouvement.statut === "Terminé" || mouvement.status === "approved")) {
+                    totalQtyInEntryUnits += mouvement.qteOriginale || mouvement.qte;
+                  } else if (mouvement.type === "Sortie" && (mouvement.statut === "Terminé" || mouvement.status === "approved")) {
+                    totalQtyInEntryUnits -= mouvement.qteOriginale || mouvement.qte;
+                  } else if (mouvement.type === "Ajustement") {
+                    const qtyInEntryUnits = mouvement.qte / detailsArticle.facteurConversion;
+                    if (mouvement.typeAjustement === "Surplus") totalQtyInEntryUnits += qtyInEntryUnits;
+                    else if (mouvement.typeAjustement === "Manquant") totalQtyInEntryUnits -= qtyInEntryUnits;
+                  }
+                }
+              });
+            }
+            
+            const stockInExitUnits = hasInventoryData ? Number(totalStockFromInventory) : Number(totalQtyInEntryUnits * detailsArticle.facteurConversion);
+            const stockInEntryUnits = hasInventoryData ? Number(totalStockFromInventory / detailsArticle.facteurConversion) : Number(totalQtyInEntryUnits);
+            const status = getStockStatus(stockInExitUnits, detailsArticle.seuil, detailsArticle.consommationJournaliere);
+            const autonomy = calculateAutonomy(stockInExitUnits, detailsArticle.consommationJournaliere);
+            
+            const articleSuppliers = detailsArticle.supplierIds?.map(id => suppliers.find(s => s.id === id)).filter(Boolean) || [];
+            
+            return (
+              <>
+                <DialogHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <DialogTitle className="text-lg font-semibold text-gray-900">{detailsArticle.nom}</DialogTitle>
+                        {status.level === "critical" && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs text-red-600">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                            Critique
+                          </span>
+                        )}
+                        {status.level === "ok" && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs text-gray-500">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                            Sécurisé
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
+                        <span>{detailsArticle.ref}</span>
+                        <span>•</span>
+                        <span>{detailsArticle.categorie}</span>
+                      </div>
+                    </div>
+                  </div>
+                </DialogHeader>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6 py-4">
+                  {/* Section Stock */}
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide border-b border-gray-200 pb-2">Stock</h3>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between py-2 border-b border-dotted border-gray-200">
+                        <span className="text-sm text-gray-500 w-36">Stock actuel</span>
+                        <div className="flex flex-col items-end">
+                          <span className="text-sm text-gray-900 tabular-nums font-medium">
+                            {String(stockInExitUnits)} {getUnitSymbol(detailsArticle.uniteSortie)}
+                          </span>
+                          {detailsArticle.facteurConversion !== 1 && (
+                            <span className="text-xs text-gray-500 tabular-nums">
+                              ({String(stockInEntryUnits)} {getUnitSymbol(detailsArticle.uniteEntree)})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between py-2 border-b border-dotted border-gray-200">
+                        <span className="text-sm text-gray-500 w-36">Seuil d'alerte</span>
+                        <span className="text-sm text-gray-900 tabular-nums">{detailsArticle.seuil}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-2 border-b border-dotted border-gray-200">
+                        <span className="text-sm text-gray-500 w-36">Temps restant</span>
+                        <span className={`text-sm tabular-nums ${status.level === "critical" ? "text-red-600" : "text-gray-900"}`}>
+                          {autonomy.label}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between py-2 border-b border-dotted border-gray-200">
+                        <span className="text-sm text-gray-500 w-36">Consomm. inventaire</span>
+                        <span className="text-sm text-gray-900 tabular-nums">
+                          {detailsArticle.consommationParInventaire > 0 ? "+" : ""}{detailsArticle.consommationParInventaire}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between py-2">
+                        <span className="text-sm text-gray-500 w-36">Consomm. journalière</span>
+                        <span className="text-sm text-gray-900 tabular-nums">{detailsArticle.consommationJournaliere}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section Unités */}
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide border-b border-gray-200 pb-2">Unités de mesure</h3>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between py-2 border-b border-dotted border-gray-200">
+                        <span className="text-sm text-gray-500 w-36">Unité d'entrée</span>
+                        <span className="text-sm text-gray-900">
+                          {detailsArticle.uniteEntree} <span className="text-gray-500">({getUnitSymbol(detailsArticle.uniteEntree)})</span>
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between py-2 border-b border-dotted border-gray-200">
+                        <span className="text-sm text-gray-500 w-36">Unité de sortie</span>
+                        <span className="text-sm text-gray-900">
+                          {detailsArticle.uniteSortie} <span className="text-gray-500">({getUnitSymbol(detailsArticle.uniteSortie)})</span>
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between py-2">
+                        <span className="text-sm text-gray-500 w-36">Facteur conversion</span>
+                        <span className="text-sm text-gray-900 tabular-nums">
+                          1:{detailsArticle.facteurConversion}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section Fournisseurs */}
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide border-b border-gray-200 pb-2">Fournisseurs</h3>
+                    {articleSuppliers.length > 0 ? (
+                      <div className="space-y-2">
+                        {articleSuppliers.map((supplier: any) => (
+                          <div key={supplier.id} className="py-2 border-b border-dotted border-gray-200 last:border-0">
+                            <span className="text-sm text-gray-700">{supplier.nom}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic py-2">Aucun fournisseur</p>
+                    )}
+                  </div>
+
+                  {/* Section Emplacements */}
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide border-b border-gray-200 pb-2">Emplacements</h3>
+                    {detailsArticle.inventory && detailsArticle.inventory.length > 0 ? (
+                      <div className="space-y-2">
+                        {detailsArticle.inventory.map((inv: any, idx: number) => (
+                          <div key={idx} className="flex items-center justify-between py-2 border-b border-dotted border-gray-200 last:border-0">
+                            <div className="flex items-center gap-2">
+                              <MapPin className="w-4 h-4 text-gray-400" />
+                              <span className="text-sm text-gray-700">{inv.zone}</span>
+                            </div>
+                            <span className="text-sm text-gray-900 tabular-nums font-medium">{Number(inv.quantity).toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic py-2">Non localisé</p>
+                    )}
+                  </div>
+                </div>
+
+                <DialogFooter className="flex items-center justify-between border-t border-gray-200 pt-4">
+                  <button
+                    onClick={() => {
+                      setDetailsArticle(null);
+                      handleDelete(detailsArticle.id);
+                    }}
+                    className="px-4 py-2 text-sm text-gray-600 hover:text-red-600 transition-colors"
+                  >
+                    Supprimer
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <DialogClose asChild>
+                      <button className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
+                        Fermer
+                      </button>
+                    </DialogClose>
+                    <button
+                      onClick={() => {
+                        setDetailsArticle(null);
+                        handleOpenModal(detailsArticle);
+                      }}
+                      className="px-4 py-2 text-sm text-white bg-primary rounded-md hover:opacity-90 transition-opacity"
+                    >
+                      Modifier
+                    </button>
+                  </div>
+                </DialogFooter>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
       {/* Historique des Consommations Journalières */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
-          <span className="text-lg font-bold text-foreground">📅 Historique des Consommations Journalières</span>
+          <span className="text-lg font-bold text-foreground">Historique des Consommations Journalières</span>
           <span className="text-xs text-muted-foreground">({consumptionHistory.length} entrées)</span>
         </div>
 
         {consumptionHistory.length > 0 ? (
-          <div className="w-full max-w-full overflow-x-auto bg-card border rounded-lg">
-            <table className="min-w-[700px] w-full text-sm">
+          <div className="w-full max-w-full overflow-x-auto bg-white border border-gray-200 rounded-md">
+            <table className="min-w-[700px] w-full">
               <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date</th>
-                  <th className="text-left py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Référence</th>
-                  <th className="text-left py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Article</th>
-                  <th className="text-right py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide whitespace-nowrap">
+                <tr className="border-b border-gray-200 bg-gray-50">
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">Date</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">Référence</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">Article</th>
+                  <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1">
                       <Flame className="w-3.5 h-3.5" />
                       <span>Total Consommé</span>
@@ -516,36 +599,33 @@ const ArticlesPage = () => {
               </thead>
               <tbody>
                 {consumptionHistory.map((entry, idx) => {
-                  // Déterminer si c'est aujourd'hui
                   const today = new Date().toDateString();
                   const isToday = entry.date === today;
                   
                   return (
                     <tr 
                       key={idx} 
-                      className={`border-b border-border/50 transition-colors ${
+                      className={`border-b border-gray-100 transition-colors h-12 ${
                         isToday 
-                          ? "bg-orange-50/50 hover:bg-orange-100/50" 
-                          : "hover:bg-muted/30"
+                          ? "bg-orange-50 hover:bg-orange-100" 
+                          : "hover:bg-gray-50"
                       }`}
                     >
-                      <td className="py-3 px-3 font-mono text-xs text-muted-foreground whitespace-nowrap">
+                      <td className="py-2 px-4 text-sm text-gray-500 whitespace-nowrap tabular-nums">
                         <div className="flex items-center gap-2">
                           {isToday && <span className="inline-block w-2 h-2 rounded-full bg-orange-500" />}
-                          {entry.date}
+                          {formatDateFR(entry.dateObj)}
                         </div>
                       </td>
-                      <td className="py-3 px-3 font-mono text-xs text-muted-foreground whitespace-nowrap">{entry.ref}</td>
-                      <td className="py-3 px-3 text-foreground font-medium">{entry.article}</td>
-                      <td className="py-3 px-3 text-right whitespace-nowrap">
-                          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold border ${
-                            isToday
-                              ? "bg-orange-100 text-orange-800 border-orange-200"
-                              : "bg-blue-100 text-blue-800 border-blue-200"
-                          }`}>
-                            {entry.totalConsomme.toLocaleString()}
-                          </span>
-                        </td>
+                      <td className="py-2 px-4 text-sm text-gray-500 whitespace-nowrap">{entry.ref}</td>
+                      <td className="py-2 px-4 text-sm font-medium text-gray-900">{entry.article}</td>
+                      <td className="py-2 px-4 text-right whitespace-nowrap">
+                        <span className={`text-sm font-medium tabular-nums ${
+                          isToday ? "text-orange-600" : "text-gray-900"
+                        }`}>
+                          {entry.totalConsomme.toLocaleString()}
+                        </span>
+                      </td>
                       </tr>
                     );
                   })}
@@ -559,142 +639,186 @@ const ArticlesPage = () => {
         )}
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingId ? "Modifier l'article" : "Ajouter un article"}>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Référence</label>
-            <input
-              type="text"
-              value={formData.ref}
-              onChange={(e) => setFormData({ ...formData, ref: e.target.value })}
-              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Ex: GN-M-001"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Nom</label>
-            <input
-              type="text"
-              value={formData.nom}
-              onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
-              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Ex: Gants Nitrile M"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Catégorie</label>
-            <select
-              value={formData.categorie}
-              onChange={(e) => setFormData({ ...formData, categorie: e.target.value })}
-              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">Sélectionner une catégorie</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.nom}>
-                  {cat.nom}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Seuil</label>
-            <input
-              type="number"
-              inputMode="numeric"
-              value={formData.seuil === 0 ? '' : formData.seuil}
-              onChange={(e) => setFormData({ ...formData, seuil: Number(e.target.value) || 0 })}
-              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Unité d'Entrée (Achat)</label>
-            <select
-              value={formData.uniteEntree}
-              onChange={(e) => setFormData({ ...formData, uniteEntree: e.target.value, unite: formData.uniteSortie })}
-              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              {units.length === 0 ? (
-                <option value="">Aucune unité disponible</option>
-              ) : (
-                units.map((unit) => (
-                  <option key={unit} value={unit}>
-                    {unit}
-                  </option>
-                ))
-              )}
-            </select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Unité utilisée lors des entrées de stock (ex: Tonne, Carton, Boîte)
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Unité de Sortie (Consommation)</label>
-            <select
-              value={formData.uniteSortie}
-              onChange={(e) => setFormData({ ...formData, uniteSortie: e.target.value, unite: e.target.value })}
-              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              {units.length === 0 ? (
-                <option value="">Aucune unité disponible</option>
-              ) : (
-                units.map((unit) => (
-                  <option key={unit} value={unit}>
-                    {unit}
-                  </option>
-                ))
-              )}
-            </select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Unité utilisée lors des sorties de stock (ex: Kg, Paire, Unité)
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Facteur de Conversion</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={formData.facteurConversion}
-              onChange={(e) => {
-                // Replace comma with dot for decimal support
-                const value = e.target.value.replace(',', '.');
-                // Store as string to allow typing decimals without parsing
-                setFormData({ ...formData, facteurConversion: value });
-              }}
-              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Ex: 1000 ou 0.5"
-            />
-            <p className="text-xs text-info mt-1 font-medium">
-              1 {formData.uniteEntree} = {formData.facteurConversion} {formData.uniteSortie}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Nombre d'unités de sortie dans une unité d'entrée
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Consommation Journalière Estimée (CJE)</label>
-            <input
-              type="number"
-              inputMode="numeric"
-              value={formData.consommationJournaliere === 0 ? '' : formData.consommationJournaliere}
-              onChange={(e) => setFormData({ ...formData, consommationJournaliere: Number(e.target.value) || 0 })}
-              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Ex: 50 unités/jour"
-            />
-          </div>
-          <div className="flex gap-2 pt-4">
+      <Modal 
+        isOpen={isModalOpen} 
+        onClose={handleCloseModal} 
+        title={editingId ? "Modifier l'article" : "Ajouter un article"}
+        maxWidth="max-w-4xl"
+        maxHeight="max-h-[95vh]"
+        bodyClassName="px-6 py-4"
+        footer={
+          <div className="flex items-center justify-end gap-2">
             <button
               type="button"
               onClick={handleCloseModal}
-              className="flex-1 h-9 rounded-md border text-sm font-medium text-foreground hover:bg-muted transition-colors"
+              className="h-9 px-4 rounded border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
             >
               Annuler
             </button>
             <button
               type="submit"
-              className="flex-1 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+              form="article-form"
+              className="h-9 px-4 rounded bg-primary text-sm font-medium text-white hover:opacity-90 transition-opacity"
             >
               {editingId ? "Modifier" : "Ajouter"}
             </button>
+          </div>
+        }
+      >
+        <form onSubmit={handleSubmit} id="article-form" className="space-y-4">
+          {/* Section: Informations générales */}
+          <div>
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide border-b border-gray-200 pb-2 mb-3">
+              Informations générales
+            </h3>
+            <div className="space-y-4">
+              {/* Row 1: Référence | Nom */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">
+                    Référence <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.ref}
+                    onChange={(e) => setFormData({ ...formData, ref: e.target.value })}
+                    className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder:text-gray-400 hover:border-gray-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-colors"
+                    placeholder="Ex: GN-M-001"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">
+                    Nom <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.nom}
+                    onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
+                    className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder:text-gray-400 hover:border-gray-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-colors"
+                    placeholder="Ex: Gants Nitrile M"
+                  />
+                </div>
+              </div>
+              {/* Row 2: Catégorie | Seuil d'alerte | CJE */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-5">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Catégorie</label>
+                  <div className="relative">
+                    <select
+                      value={formData.categorie}
+                      onChange={(e) => setFormData({ ...formData, categorie: e.target.value })}
+                      className="w-full h-9 px-3 pr-9 rounded border border-gray-300 bg-white text-sm text-gray-900 appearance-none hover:border-gray-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-colors"
+                    >
+                      <option value="">Sélectionner une catégorie</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.nom}>
+                          {cat.nom}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Seuil d'alerte</label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={formData.seuil === 0 ? '' : formData.seuil}
+                    onChange={(e) => setFormData({ ...formData, seuil: Number(e.target.value) || 0 })}
+                    className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder:text-gray-400 hover:border-gray-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-colors no-spinner"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Consommation Journalière Estimée (CJE)</label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={formData.consommationJournaliere === 0 ? '' : formData.consommationJournaliere}
+                    onChange={(e) => setFormData({ ...formData, consommationJournaliere: Number(e.target.value) || 0 })}
+                    className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder:text-gray-400 hover:border-gray-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-colors no-spinner"
+                    placeholder="Ex: 50 unités/jour"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Section: Unités et conversion */}
+          <div>
+            <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide border-b border-gray-200 pb-2 mb-3">
+              Unités et conversion
+            </h3>
+            <div className="space-y-4">
+              {/* Row: Unité d'Entrée | Unité de Sortie | Facteur de Conversion */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-5">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Unité d'Entrée (Achat)</label>
+                  <div className="relative">
+                    <select
+                      value={formData.uniteEntree}
+                      onChange={(e) => setFormData({ ...formData, uniteEntree: e.target.value, unite: formData.uniteSortie })}
+                      className="w-full h-9 px-3 pr-9 rounded border border-gray-300 bg-white text-sm text-gray-900 appearance-none hover:border-gray-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-colors"
+                    >
+                      {units.length === 0 ? (
+                        <option value="">Aucune unité disponible</option>
+                      ) : (
+                        units.map((unit) => (
+                          <option key={unit} value={unit}>
+                            {unit}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Unité utilisée lors des entrées de stock (ex: Tonne, Carton, Boîte)
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Unité de Sortie (Consommation)</label>
+                  <div className="relative">
+                    <select
+                      value={formData.uniteSortie}
+                      onChange={(e) => setFormData({ ...formData, uniteSortie: e.target.value, unite: e.target.value })}
+                      className="w-full h-9 px-3 pr-9 rounded border border-gray-300 bg-white text-sm text-gray-900 appearance-none hover:border-gray-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-colors"
+                    >
+                      {units.length === 0 ? (
+                        <option value="">Aucune unité disponible</option>
+                      ) : (
+                        units.map((unit) => (
+                          <option key={unit} value={unit}>
+                            {unit}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Unité utilisée lors des sorties de stock (ex: Kg, Paire, Unité)
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-1">Facteur de Conversion</label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={formData.facteurConversion}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(',', '.');
+                      setFormData({ ...formData, facteurConversion: value });
+                    }}
+                    className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder:text-gray-400 hover:border-gray-400 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-colors"
+                    placeholder="Ex: 1000 ou 0.5"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    1 {formData.uniteEntree} = {formData.facteurConversion} {formData.uniteSortie}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </form>
       </Modal>

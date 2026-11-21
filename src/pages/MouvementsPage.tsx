@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, Plus } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, ArrowLeftRight, Plus, ChevronLeft } from "lucide-react";
 import { useData } from "@/contexts/DataContext";
 import { Modal } from "@/components/Modal";
 import { Toast } from "@/components/Toast";
@@ -10,7 +10,8 @@ import { generateAdministrativeErrorPDF, generateDefectiveItemsPDF } from "@/lib
 import { format } from "date-fns";
 
 const MouvementsPage = () => {
-  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination } = useData();
+  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination, createOperation } = useData();
+  const [selectedType, setSelectedType] = useState<"Entrée" | "Sortie" | "Transfert" | null>(null);
   const [selectedArticleId, setSelectedArticleId] = useState<string>("");
   const [typeFilter, setTypeFilter] = useState<"all" | "Entrée" | "Sortie" | "Transfert">("all");
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
@@ -340,6 +341,9 @@ const MouvementsPage = () => {
       second: "2-digit",
     }).replace(/(\d+)\/(\d+)\/(\d+),\s(\d+):(\d+):(\d+)/, "$3-$2-$1 $4:$5:$6");
 
+    // Create operation first (one per submission)
+    const operation = createOperation(movementType, operateur);
+
     // Helper: Convert quantity to exit unit
     const convertToExitUnit = (quantity: number, unit: string, article: any): number => {
       if (unit === article.uniteEntree) {
@@ -381,6 +385,7 @@ const MouvementsPage = () => {
           emplacementDestination: item.emplacementDestination,
           commentaire: item.commentaire || "",
           operateur: operateur,
+          operationId: operation.id,
         });
       } else if (movementType === "Sortie") {
         addMouvement({
@@ -398,13 +403,15 @@ const MouvementsPage = () => {
           emplacementDestination: item.emplacementDestination,
           commentaire: item.commentaire || "",
           operateur: operateur,
+          operationId: operation.id,
         });
       } else if (movementType === "Transfert") {
         const transferResult = processTransfer(
           article.ref,
           item.emplacementSource,
           qtyInExitUnit,
-          item.emplacementDestination
+          item.emplacementDestination,
+          operation.id
         );
 
         if (transferResult.success) {
@@ -423,6 +430,7 @@ const MouvementsPage = () => {
             emplacementDestination: item.emplacementDestination,
             commentaire: item.commentaire || "",
             operateur: operateur,
+            operationId: operation.id,
           });
         }
       }
@@ -537,78 +545,172 @@ const MouvementsPage = () => {
     }
   };
 
+  // Compute counts for landing cards
+  const entreeCounts = useMemo(() => {
+    const entreeMovs = combinedMovements.filter(m => m.type === "Entrée" && m.type !== "Ajustement");
+    const total = entreeMovs.length;
+    const pending = entreeMovs.filter(m => m.qc_status === "pending").length;
+    return { total, pending };
+  }, [combinedMovements]);
+
+  const sortieCounts = useMemo(() => {
+    const sortieMovs = combinedMovements.filter(m => m.type === "Sortie" && m.type !== "Ajustement");
+    const total = sortieMovs.length;
+    const pending = sortieMovs.filter(m => m.qc_status === "pending").length;
+    return { total, pending };
+  }, [combinedMovements]);
+
+  const transfertCounts = useMemo(() => {
+    const transfertMovs = combinedMovements.filter(m => m.type === "Transfert" && m.type !== "Ajustement");
+    const total = transfertMovs.length;
+    return { total };
+  }, [combinedMovements]);
+
+  // When a card is clicked, set selectedType and sync typeFilter
+  const handleCardClick = (type: "Entrée" | "Sortie" | "Transfert") => {
+    setSelectedType(type);
+    setTypeFilter(type);
+  };
+
+  // Back to landing
+  const handleBackToLanding = () => {
+    setSelectedType(null);
+    setTypeFilter("all");
+  };
+
   return (
     <div className="space-y-6 w-full pb-24 md:pb-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-foreground">Mouvements</h2>
-          <p className="text-sm text-muted-foreground">Gestion des entrées, sorties et transferts</p>
-        </div>
-        <button
-          onClick={() => {
-            setDuplicateData(null);
-            setIsBulkModalOpen(true);
-          }}
-          className="hidden md:flex h-9 px-4 bg-primary text-primary-foreground rounded-md text-sm font-medium items-center gap-2 hover:opacity-90 transition-opacity"
-        >
-          <Plus className="w-4 h-4" />
-          Nouveau Mouvement
-        </button>
-      </div>
-
-      {/* Filters - Sticky Header */}
-      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b pb-4 mb-6">
-        <div className="flex flex-col gap-4">
-          {/* Article Selector */}
-          <div className="w-full">
-            <label className="block text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Article</label>
-            <select
-              value={selectedArticleId}
-              onChange={(e) => setSelectedArticleId(e.target.value)}
-              className="w-full h-10 px-3 rounded-md border bg-card text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
-            >
-              <option value="">Tous les articles</option>
-              {articles.map((article) => (
-                <option key={article.id} value={article.ref}>
-                  {article.nom} ({article.ref})
-                </option>
-              ))}
-            </select>
+      {selectedType === null ? (
+        // LANDING VIEW: Show 3 cards
+        <>
+          <div>
+            <h2 className="text-xl font-bold text-foreground">Mouvements</h2>
+            <p className="text-sm text-muted-foreground">Gestion des entrées, sorties et transferts</p>
           </div>
 
-          {/* Movement Type Tabs */}
-          <div className="w-full">
-            <label className="block text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Type de Mouvement</label>
-            <div className="flex rounded-md border overflow-x-auto md:overflow-visible">
-              {(["all", "Entrée", "Sortie", "Transfert"] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTypeFilter(t)}
-                  className={`h-10 px-4 text-xs font-medium transition-colors whitespace-nowrap flex-1 ${
-                    typeFilter === t ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted"
-                  }`}
-                >
-                  {t === "all" ? "Tous" : t}
-                </button>
-              ))}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Entrée Card */}
+            <button
+              onClick={() => handleCardClick("Entrée")}
+              className="bg-white border border-gray-200 rounded-lg p-6 hover:border-gray-300 hover:bg-gray-50 transition-colors cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-primary/50"
+            >
+              <div className="flex flex-col gap-3">
+                <ArrowDownToLine className="w-6 h-6 text-gray-500" />
+                <div>
+                  <div className="text-base font-medium text-gray-900">Entrée</div>
+                  <div className="text-sm text-gray-500 mt-1">
+                    {entreeCounts.total} mouvement{entreeCounts.total > 1 ? 's' : ''}
+                    {entreeCounts.pending > 0 && ` · ${entreeCounts.pending} en attente`}
+                  </div>
+                </div>
+              </div>
+            </button>
+
+            {/* Sortie Card */}
+            <button
+              onClick={() => handleCardClick("Sortie")}
+              className="bg-white border border-gray-200 rounded-lg p-6 hover:border-gray-300 hover:bg-gray-50 transition-colors cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-primary/50"
+            >
+              <div className="flex flex-col gap-3">
+                <ArrowUpFromLine className="w-6 h-6 text-gray-500" />
+                <div>
+                  <div className="text-base font-medium text-gray-900">Sortie</div>
+                  <div className="text-sm text-gray-500 mt-1">
+                    {sortieCounts.total} mouvement{sortieCounts.total > 1 ? 's' : ''}
+                    {sortieCounts.pending > 0 && ` · ${sortieCounts.pending} en attente`}
+                  </div>
+                </div>
+              </div>
+            </button>
+
+            {/* Transfert Card */}
+            <button
+              onClick={() => handleCardClick("Transfert")}
+              className="bg-white border border-gray-200 rounded-lg p-6 hover:border-gray-300 hover:bg-gray-50 transition-colors cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-primary/50"
+            >
+              <div className="flex flex-col gap-3">
+                <ArrowLeftRight className="w-6 h-6 text-gray-500" />
+                <div>
+                  <div className="text-base font-medium text-gray-900">Transfert</div>
+                  <div className="text-sm text-gray-500 mt-1">
+                    {transfertCounts.total} mouvement{transfertCounts.total > 1 ? 's' : ''}
+                  </div>
+                </div>
+              </div>
+            </button>
+          </div>
+        </>
+      ) : (
+        // FILTERED VIEW: Show table for selected type
+        <>
+          <div>
+            {/* Back button */}
+            <button
+              onClick={handleBackToLanding}
+              className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 mb-2 focus:outline-none focus:ring-2 focus:ring-primary/50 rounded px-1"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Mouvements
+            </button>
+
+            {/* Header with breadcrumb style */}
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
+                  <span>Mouvements</span>
+                  <span>/</span>
+                  <span className="text-gray-900 font-medium">{selectedType}s</span>
+                </div>
+                <h2 className="text-xl font-bold text-foreground">Mouvements</h2>
+                <p className="text-sm text-muted-foreground">Gestion des entrées, sorties et transferts</p>
+              </div>
+              <button
+                onClick={() => {
+                  setDuplicateData(null);
+                  setIsBulkModalOpen(true);
+                }}
+                className="hidden md:flex h-9 px-4 bg-primary text-primary-foreground rounded-md text-sm font-medium items-center gap-2 hover:opacity-90 transition-opacity"
+              >
+                <Plus className="w-4 h-4" />
+                Nouveau Mouvement
+              </button>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Table */}
-      <div className="bg-card border rounded-lg overflow-hidden">
-        <MovementTable 
-          movements={filtered}
-          articles={articles}
-          onDuplicate={handleDuplicate}
-          onQualityControl={handleOpenQCModal}
-          onReject={handleOpenRejectModal}
-          onInspect={handleOpenInspectionModal}
-          showActions={true}
-          compact={false}
-        />
-      </div>
+          {/* Filters - Odoo Style (hide type filter, keep article filter) */}
+          <div className="bg-white border border-gray-200 rounded-md p-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1.5">Article</label>
+              <select
+                value={selectedArticleId}
+                onChange={(e) => setSelectedArticleId(e.target.value)}
+                className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all"
+              >
+                <option value="">Tous les articles</option>
+                {articles.map((article) => (
+                  <option key={article.id} value={article.ref}>
+                    {article.nom} ({article.ref})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
+            <MovementTable 
+              movements={filtered}
+              articles={articles}
+              onDuplicate={handleDuplicate}
+              onQualityControl={handleOpenQCModal}
+              onReject={handleOpenRejectModal}
+              onInspect={handleOpenInspectionModal}
+              showActions={true}
+              compact={false}
+            />
+          </div>
+        </>
+      )}
 
       {/* Bulk Movement Modal */}
       <BulkMovementModal
@@ -628,6 +730,7 @@ const MouvementsPage = () => {
           addDestination({ nom: name });
         }}
         initialData={duplicateData}
+        defaultMovementType={selectedType ?? undefined}
       />
 
       {/* Quality Control Modal */}
@@ -803,16 +906,18 @@ const MouvementsPage = () => {
       />
 
       {/* Floating Action Button (FAB) - Mobile Only */}
-      <button
-        onClick={() => {
-          setDuplicateData(null);
-          setIsBulkModalOpen(true);
-        }}
-        className="md:hidden fixed bottom-6 right-6 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-110 transition-all flex items-center justify-center z-40"
-        title="Nouveau Mouvement"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
+      {selectedType !== null && (
+        <button
+          onClick={() => {
+            setDuplicateData(null);
+            setIsBulkModalOpen(true);
+          }}
+          className="md:hidden fixed bottom-6 right-6 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-110 transition-all flex items-center justify-center z-40"
+          title="Nouveau Mouvement"
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+      )}
     </div>
   );
 };
