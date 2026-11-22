@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState } from "react";
 import { applyEntreeStock, applySortieStock, computeOperationStockEffect, shouldReverseStockOnDelete } from "@/lib/stock-effects";
+import { resetQcFields } from "@/lib/qc-reset";
 
 export interface InventoryEntry {
   zone: string;
@@ -160,6 +161,7 @@ interface DataContextType {
   updateOperationStatus: (operationId: number, statut: OperationStatus) => void;
   updateOperationFields: (operationId: number, fields: { operateur?: string; documentOrigine?: string }) => void;
   applyOperationStock: (operationId: number) => { success: boolean; error?: string; failedLines?: string[] };
+  revertOperation: (operationId: number) => { success: boolean; error?: string };
   
   addInventoryRecord: (record: Omit<InventoryRecord, "id">) => void;
   applyInventoryAdjustment: (articleId: number, emplacementNom: string, ecart: number) => void;
@@ -520,6 +522,51 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
 
     return { success: true };
+  };
+
+  const revertOperation = (operationId: number): { success: boolean; error?: string } => {
+    // Find the operation
+    const operation = operations.find(op => op.id === operationId);
+    if (!operation) {
+      return { success: false, error: "Opération introuvable" };
+    }
+
+    const { statut, type } = operation;
+
+    // Handle status transitions based on current status and type
+    if (statut === "En inspection" && (type === "Entrée" || type === "Sortie")) {
+      // En inspection -> Brouillon: reset QC fields on operation lines
+      setOperations(prev => prev.map(op => 
+        op.id === operationId ? { ...op, statut: "Brouillon" } : op
+      ));
+
+      setMouvements(prev => prev.map(m => {
+        if (m.operationId === operationId && (m.type === "Entrée" || m.type === "Sortie")) {
+          return resetQcFields(m);
+        }
+        return m;
+      }));
+
+      return { success: true };
+    } else if (statut === "En attente de validation" && type === "Transfert") {
+      // En attente de validation (Transfert) -> Brouillon: lines untouched
+      setOperations(prev => prev.map(op => 
+        op.id === operationId ? { ...op, statut: "Brouillon" } : op
+      ));
+      return { success: true };
+    } else if (statut === "En attente de validation" && (type === "Entrée" || type === "Sortie")) {
+      // En attente de validation (Entrée/Sortie) -> En inspection: lines untouched (keep QC results)
+      setOperations(prev => prev.map(op => 
+        op.id === operationId ? { ...op, statut: "En inspection" } : op
+      ));
+      return { success: true };
+    } else {
+      // Invalid transition (Brouillon, Terminé, or unsupported combination)
+      return { 
+        success: false, 
+        error: `Impossible de revenir en arrière depuis le statut "${statut}"` 
+      };
+    }
   };
 
   const addMouvement = (mouvement: Omit<Mouvement, "id">) => {
@@ -1181,6 +1228,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateOperationStatus,
       updateOperationFields,
       applyOperationStock,
+      revertOperation,
       addInventoryRecord,
       applyInventoryAdjustment,
       batchUpdateArticles,

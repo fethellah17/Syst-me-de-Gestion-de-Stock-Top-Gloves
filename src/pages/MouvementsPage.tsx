@@ -10,7 +10,7 @@ import { generateAdministrativeErrorPDF, generateDefectiveItemsPDF } from "@/lib
 import { format } from "date-fns";
 
 const MouvementsPage = () => {
-  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, getArticleStockByLocation, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination, createOperation, createOperationFull, updateOperationFields, updateOperationStatus, applyOperationStock, operations } = useData();
+  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, getArticleStockByLocation, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination, createOperation, createOperationFull, updateOperationFields, updateOperationStatus, applyOperationStock, revertOperation, operations } = useData();
   const [selectedType, setSelectedType] = useState<"Entrée" | "Sortie" | "Transfert" | null>(null);
   const [selectedOperationId, setSelectedOperationId] = useState<number | null>(null);
   const [selectedArticleId, setSelectedArticleId] = useState<string>("");
@@ -24,6 +24,7 @@ const MouvementsPage = () => {
   const [isQCModalOpen, setIsQCModalOpen] = useState(false);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isRevertConfirmOpen, setIsRevertConfirmOpen] = useState(false);
   const [isInspectionModalOpen, setIsInspectionModalOpen] = useState(false);
   const [inspectionMouvementId, setInspectionMouvementId] = useState<string | null>(null);
   const [qcMouvementId, setQCMouvementId] = useState<string | null>(null);
@@ -347,6 +348,58 @@ const MouvementsPage = () => {
       setDeleteConfirmId(null);
       recalculateAllOccupancies();
     }
+  };
+
+  const handleRevertOperation = () => {
+    if (!selectedOperationId) return;
+    
+    const operation = operations.find(op => op.id === selectedOperationId);
+    if (!operation) return;
+
+    // Check if confirmation is needed (reverting to Brouillon for Entrée/Sortie)
+    const needsConfirmation = 
+      operation.statut === "En inspection" && 
+      (operation.type === "Entrée" || operation.type === "Sortie");
+
+    if (needsConfirmation) {
+      setIsRevertConfirmOpen(true);
+    } else {
+      executeRevert();
+    }
+  };
+
+  const executeRevert = () => {
+    if (!selectedOperationId) return;
+
+    // Read operation state BEFORE calling revertOperation (state updates are async)
+    const operation = operations.find(op => op.id === selectedOperationId);
+    
+    // Compute target status mirroring revertOperation logic (DataContext.tsx:537-562)
+    let targetStatus = "Brouillon";
+    if (operation?.statut === "En inspection") {
+      // En inspection -> Brouillon (for Entrée/Sortie)
+      targetStatus = "Brouillon";
+    } else if (operation?.statut === "En attente de validation" && operation?.type === "Transfert") {
+      // En attente de validation (Transfert) -> Brouillon
+      targetStatus = "Brouillon";
+    } else if (operation?.statut === "En attente de validation" && (operation?.type === "Entrée" || operation?.type === "Sortie")) {
+      // En attente de validation (Entrée/Sortie) -> En inspection
+      targetStatus = "En inspection";
+    }
+
+    const result = revertOperation(selectedOperationId);
+    if (result.success) {
+      setToast({ 
+        message: `Opération revenue à l'état "${targetStatus}"`, 
+        type: "success" 
+      });
+    } else {
+      setToast({ 
+        message: result.error || "Erreur lors du retour", 
+        type: "error" 
+      });
+    }
+    setIsRevertConfirmOpen(false);
   };
 
   const handleDuplicate = (mouvement: any) => {
@@ -1227,6 +1280,14 @@ const MouvementsPage = () => {
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
+                        onClick={handleRevertOperation}
+                        title="Retour au brouillon"
+                        className="h-9 px-4 rounded text-sm font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
+                      >
+                        Retour
+                      </button>
+                      <button
+                        type="button"
                         onClick={handlePassToManager}
                         disabled={!guardState.canAdvance}
                         title={helperText}
@@ -1252,8 +1313,20 @@ const MouvementsPage = () => {
                     ? `${guardState.uninspectedCount} ligne(s) restent à contrôler` 
                     : "";
                   
+                  const revertTooltip = selectedOperation.type === "Transfert" 
+                    ? "Retour au brouillon" 
+                    : "Retour en inspection";
+                  
                   return (
                     <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleRevertOperation}
+                        title={revertTooltip}
+                        className="h-9 px-4 rounded text-sm font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
+                      >
+                        Retour
+                      </button>
                       <button
                         type="button"
                         onClick={handleValidateOperation}
@@ -1613,6 +1686,29 @@ const MouvementsPage = () => {
               className="flex-1 h-9 rounded-md bg-destructive text-destructive-foreground text-sm font-medium hover:opacity-90 transition-opacity"
             >
               Supprimer
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Revert Confirmation Modal */}
+      <Modal isOpen={isRevertConfirmOpen} onClose={() => setIsRevertConfirmOpen(false)} title="Confirmer le retour">
+        <div className="space-y-4">
+          <p className="text-sm text-foreground">
+            Retourner en brouillon ? Les résultats du contrôle qualité seront effacés.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setIsRevertConfirmOpen(false)}
+              className="flex-1 h-9 rounded-md border text-sm font-medium text-foreground hover:bg-muted transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={executeRevert}
+              className="flex-1 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              Confirmer
             </button>
           </div>
         </div>
