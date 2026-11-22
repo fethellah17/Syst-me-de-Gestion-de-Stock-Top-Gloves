@@ -702,6 +702,24 @@ const MouvementsPage = () => {
   };
 
   // Workflow status transition handlers
+  
+  // Phase 7d: Helper to check if a line has been inspected (approved or rejected)
+  const isLineInspected = (m: any): boolean => {
+    return m.status === "approved" || m.status === "rejected";
+  };
+
+  // Phase 7d: Compute operation guard state
+  const getOperationGuardState = (operation: any) => {
+    const lines = mouvements.filter(m => m.operationId === operation.id);
+    const isEmpty = lines.length === 0;
+    const uninspectedCount = operation.type === "Transfert" 
+      ? 0 
+      : lines.filter(m => !isLineInspected(m)).length;
+    const canAdvance = !isEmpty && uninspectedCount === 0;
+    
+    return { isEmpty, uninspectedCount, canAdvance };
+  };
+
   const handleSubmitForInspection = () => {
     if (!selectedOperation) return;
     updateOperationStatus(selectedOperation.id, "En inspection");
@@ -710,6 +728,11 @@ const MouvementsPage = () => {
 
   const handlePassToManager = () => {
     if (!selectedOperation) return;
+    
+    // Phase 7d: Guard check
+    const guardState = getOperationGuardState(selectedOperation);
+    if (!guardState.canAdvance) return;
+    
     updateOperationStatus(selectedOperation.id, "En attente de validation");
     setToast({ message: "Opération transmise au gestionnaire", type: "success" });
   };
@@ -719,6 +742,10 @@ const MouvementsPage = () => {
     
     // Phase 7b: prevent double-click
     if (selectedOperation.statut === "Terminé") return;
+    
+    // Phase 7d: Guard check
+    const guardState = getOperationGuardState(selectedOperation);
+    if (!guardState.canAdvance) return;
     
     // Phase 7b: apply deferred stock first
     const result = applyOperationStock(selectedOperation.id);
@@ -1157,24 +1184,64 @@ const MouvementsPage = () => {
                     )}
                   </>
                 )}
-                {selectedOperation?.statut === "En inspection" && (
-                  <button
-                    type="button"
-                    onClick={handlePassToManager}
-                    className="h-9 px-4 bg-primary text-primary-foreground rounded text-sm font-medium hover:opacity-90 transition-colors"
-                  >
-                    Passer au gestionnaire
-                  </button>
-                )}
-                {selectedOperation?.statut === "En attente de validation" && (
-                  <button
-                    type="button"
-                    onClick={handleValidateOperation}
-                    className="h-9 px-4 bg-primary text-primary-foreground rounded text-sm font-medium hover:opacity-90 transition-colors"
-                  >
-                    Valider
-                  </button>
-                )}
+                {selectedOperation?.statut === "En inspection" && (() => {
+                  const guardState = getOperationGuardState(selectedOperation);
+                  const helperText = guardState.isEmpty 
+                    ? "Ajoutez au moins une ligne" 
+                    : guardState.uninspectedCount > 0 
+                    ? `${guardState.uninspectedCount} ligne(s) restent à contrôler` 
+                    : "";
+                  
+                  return (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handlePassToManager}
+                        disabled={!guardState.canAdvance}
+                        title={helperText}
+                        className={`h-9 px-4 rounded text-sm font-medium transition-colors ${
+                          !guardState.canAdvance
+                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                            : "bg-primary text-primary-foreground hover:opacity-90"
+                        }`}
+                      >
+                        Passer au gestionnaire
+                      </button>
+                      {!guardState.canAdvance && (
+                        <span className="text-xs text-muted-foreground">{helperText}</span>
+                      )}
+                    </div>
+                  );
+                })()}
+                {selectedOperation?.statut === "En attente de validation" && (() => {
+                  const guardState = getOperationGuardState(selectedOperation);
+                  const helperText = guardState.isEmpty 
+                    ? "Ajoutez au moins une ligne" 
+                    : guardState.uninspectedCount > 0 
+                    ? `${guardState.uninspectedCount} ligne(s) restent à contrôler` 
+                    : "";
+                  
+                  return (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleValidateOperation}
+                        disabled={!guardState.canAdvance}
+                        title={helperText}
+                        className={`h-9 px-4 rounded text-sm font-medium transition-colors ${
+                          !guardState.canAdvance
+                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                            : "bg-primary text-primary-foreground hover:opacity-90"
+                        }`}
+                      >
+                        Valider
+                      </button>
+                      {!guardState.canAdvance && (
+                        <span className="text-xs text-muted-foreground">{helperText}</span>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Status Bar - Right */}
