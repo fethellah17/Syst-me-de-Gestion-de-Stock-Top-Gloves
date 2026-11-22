@@ -10,7 +10,7 @@ import { generateAdministrativeErrorPDF, generateDefectiveItemsPDF } from "@/lib
 import { format } from "date-fns";
 
 const MouvementsPage = () => {
-  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination, createOperation, createOperationFull, updateOperationFields, operations } = useData();
+  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination, createOperation, createOperationFull, updateOperationFields, updateOperationStatus, operations } = useData();
   const [selectedType, setSelectedType] = useState<"Entrée" | "Sortie" | "Transfert" | null>(null);
   const [selectedOperationId, setSelectedOperationId] = useState<number | null>(null);
   const [selectedArticleId, setSelectedArticleId] = useState<string>("");
@@ -638,6 +638,25 @@ const MouvementsPage = () => {
     setDraftError("");
   };
 
+  // Workflow status transition handlers
+  const handleSubmitForInspection = () => {
+    if (!selectedOperation) return;
+    updateOperationStatus(selectedOperation.id, "En inspection");
+    setToast({ message: "Opération soumise pour inspection", type: "success" });
+  };
+
+  const handlePassToManager = () => {
+    if (!selectedOperation) return;
+    updateOperationStatus(selectedOperation.id, "En attente de validation");
+    setToast({ message: "Opération transmise au gestionnaire", type: "success" });
+  };
+
+  const handleValidateOperation = () => {
+    if (!selectedOperation) return;
+    updateOperationStatus(selectedOperation.id, "Terminé");
+    setToast({ message: "Opération validée", type: "success" });
+  };
+
   // Save new operation
   const handleSaveOperation = () => {
     if (!draftOperateur.trim()) {
@@ -1022,17 +1041,82 @@ const MouvementsPage = () => {
               <span className="text-gray-900 font-medium">{selectedOperation?.reference}</span>
             </div>
 
-            {/* Action row with status bar */}
-            <div className="flex items-center justify-end mb-6">
-              {/* Status Bar */}
+            {/* Action row with workflow buttons and status bar */}
+            <div className="flex items-center justify-between mb-6">
+              {/* Workflow Buttons - Left */}
+              <div className="flex items-center gap-2">
+                {selectedOperation?.statut === "Brouillon" && (
+                  <button
+                    type="button"
+                    onClick={handleSubmitForInspection}
+                    disabled={mouvements.filter(m => m.operationId === selectedOperationId).length === 0}
+                    title={mouvements.filter(m => m.operationId === selectedOperationId).length === 0 ? "Ajoutez au moins une ligne" : ""}
+                    className={`h-9 px-4 rounded text-sm font-medium transition-colors ${
+                      mouvements.filter(m => m.operationId === selectedOperationId).length === 0
+                        ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                        : "bg-primary text-primary-foreground hover:opacity-90"
+                    }`}
+                  >
+                    Soumettre pour inspection
+                  </button>
+                )}
+                {selectedOperation?.statut === "En inspection" && (
+                  <button
+                    type="button"
+                    onClick={handlePassToManager}
+                    className="h-9 px-4 bg-primary text-primary-foreground rounded text-sm font-medium hover:opacity-90 transition-colors"
+                  >
+                    Passer au gestionnaire
+                  </button>
+                )}
+                {selectedOperation?.statut === "En attente de validation" && (
+                  <button
+                    type="button"
+                    onClick={handleValidateOperation}
+                    className="h-9 px-4 bg-primary text-primary-foreground rounded text-sm font-medium hover:opacity-90 transition-colors"
+                  >
+                    Valider
+                  </button>
+                )}
+              </div>
+
+              {/* Status Bar - Right */}
               <div className="flex items-center gap-2 text-xs">
-                <span className={`px-3 py-1 rounded ${selectedOperation?.statut === "Brouillon" ? "bg-primary/10 text-primary font-medium" : "text-gray-600"}`}>Brouillon</span>
+                <span className={`px-3 py-1 rounded ${
+                  selectedOperation?.statut === "Brouillon" 
+                    ? "bg-primary/10 text-primary font-medium" 
+                    : "text-gray-600"
+                }`}>
+                  {selectedOperation?.statut !== "Brouillon" && "✓ "}Brouillon
+                </span>
                 <span className="text-gray-400">›</span>
-                <span className={`px-3 py-1 rounded ${selectedOperation?.statut === "En inspection" ? "bg-primary/10 text-primary font-medium" : "text-gray-400"}`}>En inspection</span>
+                <span className={`px-3 py-1 rounded ${
+                  selectedOperation?.statut === "En inspection" 
+                    ? "bg-primary/10 text-primary font-medium" 
+                    : selectedOperation?.statut === "En attente de validation" || selectedOperation?.statut === "Terminé"
+                    ? "text-gray-600"
+                    : "text-gray-400"
+                }`}>
+                  {(selectedOperation?.statut === "En attente de validation" || selectedOperation?.statut === "Terminé") && "✓ "}En inspection
+                </span>
                 <span className="text-gray-400">›</span>
-                <span className={`px-3 py-1 rounded ${selectedOperation?.statut === "En attente de validation" ? "bg-primary/10 text-primary font-medium" : "text-gray-400"}`}>En attente de validation</span>
+                <span className={`px-3 py-1 rounded ${
+                  selectedOperation?.statut === "En attente de validation" 
+                    ? "bg-primary/10 text-primary font-medium" 
+                    : selectedOperation?.statut === "Terminé"
+                    ? "text-gray-600"
+                    : "text-gray-400"
+                }`}>
+                  {selectedOperation?.statut === "Terminé" && "✓ "}En attente de validation
+                </span>
                 <span className="text-gray-400">›</span>
-                <span className={`px-3 py-1 rounded ${selectedOperation?.statut === "Terminé" ? "bg-primary/10 text-primary font-medium" : "text-gray-400"}`}>Terminé</span>
+                <span className={`px-3 py-1 rounded ${
+                  selectedOperation?.statut === "Terminé" 
+                    ? "bg-primary/10 text-primary font-medium" 
+                    : "text-gray-400"
+                }`}>
+                  Terminé
+                </span>
               </div>
             </div>
           </div>
@@ -1101,16 +1185,18 @@ const MouvementsPage = () => {
           <div>
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-xs uppercase text-gray-500">Articles à traiter</h4>
-              <button
-                onClick={() => {
-                  setDuplicateData(null);
-                  setIsBulkModalOpen(true);
-                }}
-                className="h-9 px-4 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:opacity-90 transition-opacity flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                Ajouter ligne
-              </button>
+              {selectedOperation?.statut === "Brouillon" && (
+                <button
+                  onClick={() => {
+                    setDuplicateData(null);
+                    setIsBulkModalOpen(true);
+                  }}
+                  className="h-9 px-4 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:opacity-90 transition-opacity flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Ajouter ligne
+                </button>
+              )}
             </div>
 
             {/* Article Filter - only if more than 1 line */}

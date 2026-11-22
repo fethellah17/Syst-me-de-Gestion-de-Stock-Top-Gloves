@@ -469,11 +469,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateOperationStatus = (operationId: number, statut: OperationStatus): void => {
-    setOperations(operations.map(op => op.id === operationId ? { ...op, statut } : op));
+    setOperations(prev => prev.map(op => op.id === operationId ? { ...op, statut } : op));
   };
 
   const updateOperationFields = (operationId: number, fields: { operateur?: string; documentOrigine?: string }): void => {
-    setOperations(operations.map(op => {
+    setOperations(prev => prev.map(op => {
       if (op.id === operationId && op.statut === "Brouillon") {
         return { ...op, ...fields };
       }
