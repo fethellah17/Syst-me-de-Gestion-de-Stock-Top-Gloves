@@ -10,7 +10,7 @@ import { generateAdministrativeErrorPDF, generateDefectiveItemsPDF } from "@/lib
 import { format } from "date-fns";
 
 const MouvementsPage = () => {
-  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination, createOperation, createOperationFull, updateOperationFields, updateOperationStatus, operations } = useData();
+  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination, createOperation, createOperationFull, updateOperationFields, updateOperationStatus, applyOperationStock, operations } = useData();
   const [selectedType, setSelectedType] = useState<"Entrée" | "Sortie" | "Transfert" | null>(null);
   const [selectedOperationId, setSelectedOperationId] = useState<number | null>(null);
   const [selectedArticleId, setSelectedArticleId] = useState<string>("");
@@ -163,8 +163,13 @@ const MouvementsPage = () => {
           ? "Erreur Administrative" 
           : "Article Défectueux";
         
+        // Phase 7b: different message if stock deferred
+        const stockMessage = mouvement.operationId && data.refusalType === "defective"
+          ? " Le stock sera mis à jour à la validation de l'opération."
+          : "";
+        
         setToast({
-          message: `✗ Mouvement refusé - ${refusalTypeLabel} (${mouvement.qte} ${mouvement.uniteSortie})`,
+          message: `✗ Mouvement refusé - ${refusalTypeLabel} (${mouvement.qte} ${mouvement.uniteSortie}).${stockMessage}`,
           type: "success"
         });
       }
@@ -212,8 +217,12 @@ const MouvementsPage = () => {
       );
 
       const successMessage = mouvement.type === "Sortie"
-        ? `✓ Sortie approuvée. Stock mis à jour avec succès (Qté: ${data.qteValide} ${mouvement.uniteSortie})`
-        : `✓ Stock mis à jour avec succès (Qté: ${data.qteValide} ${mouvement.uniteSortie})`;
+        ? (mouvement.operationId 
+          ? `✓ Sortie approuvée. Le stock sera mis à jour à la validation de l'opération (Qté: ${data.qteValide} ${mouvement.uniteSortie})`
+          : `✓ Sortie approuvée. Stock mis à jour avec succès (Qté: ${data.qteValide} ${mouvement.uniteSortie})`)
+        : (mouvement.operationId && data.qteValide > 0
+          ? `✓ Qualité validée. Le stock sera mis à jour à la validation de l'opération (Qté: ${data.qteValide} ${mouvement.uniteSortie})`
+          : `✓ Stock mis à jour avec succès (Qté: ${data.qteValide} ${mouvement.uniteSortie})`);
 
       setToast({
         message: successMessage,
@@ -277,7 +286,13 @@ const MouvementsPage = () => {
         }
         
         approveQualityControl(qcMouvementId, qcFormData.controleur, qcFormData.etatArticles, qcFormData.unitesDefectueuses);
-        setToast({ message: "✓ Qualité validée. Stock mis à jour avec succès.", type: "success" });
+        
+        // Phase 7b: different message if stock deferred
+        const stockMessage = mouvement?.operationId 
+          ? "Qualité validée. Le stock sera mis à jour à la validation de l'opération."
+          : "✓ Qualité validée. Stock mis à jour avec succès.";
+        
+        setToast({ message: stockMessage, type: "success" });
       } else {
         rejectQualityControl(qcMouvementId, qcFormData.controleur, qcFormData.raison);
         setToast({ message: "✗ Sortie rejetée. Opération annulée.", type: "success" });
@@ -653,6 +668,21 @@ const MouvementsPage = () => {
 
   const handleValidateOperation = () => {
     if (!selectedOperation) return;
+    
+    // Phase 7b: prevent double-click
+    if (selectedOperation.statut === "Terminé") return;
+    
+    // Phase 7b: apply deferred stock first
+    const result = applyOperationStock(selectedOperation.id);
+    
+    if (!result.success) {
+      setToast({ 
+        message: `❌ ${result.error || "Stock insuffisant"}. ${result.failedLines?.join("; ") || ""}`, 
+        type: "error" 
+      });
+      return;
+    }
+    
     updateOperationStatus(selectedOperation.id, "Terminé");
     setToast({ message: "Opération validée", type: "success" });
   };

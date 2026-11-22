@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState } from "react";
-import { applyEntreeStock, applySortieStock } from "@/lib/stock-effects";
+import { applyEntreeStock, applySortieStock, computeOperationStockEffect } from "@/lib/stock-effects";
 
 export interface InventoryEntry {
   zone: string;
@@ -103,6 +103,7 @@ export interface Mouvement {
   motifErreur?: string;         // For administrative error refusal
   nomControleur?: string;       // For defective items refusal
   motifRejet?: string;          // For defective items refusal
+  stockApplied?: boolean;       // Phase 7b: undefined = legacy/already applied; false = deferred; true = applied at Valider
 }
 
 export interface InventoryRecord {
@@ -158,6 +159,7 @@ interface DataContextType {
   getOperationMovements: (operationId: number) => Mouvement[];
   updateOperationStatus: (operationId: number, statut: OperationStatus) => void;
   updateOperationFields: (operationId: number, fields: { operateur?: string; documentOrigine?: string }) => void;
+  applyOperationStock: (operationId: number) => { success: boolean; error?: string; failedLines?: string[] };
   
   addInventoryRecord: (record: Omit<InventoryRecord, "id">) => void;
   applyInventoryAdjustment: (articleId: number, emplacementNom: string, ecart: number) => void;
@@ -482,6 +484,44 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   };
 
+  const applyOperationStock = (operationId: number): { success: boolean; error?: string; failedLines?: string[] } => {
+    // Get movements for this operation that need stock applied
+    const movementsToApply = mouvements.filter(m => 
+      m.operationId === operationId && 
+      m.stockApplied === false && 
+      (m.type === "Entrée" || m.type === "Sortie")
+    );
+
+    // If no movements to apply, return success (idempotent)
+    if (movementsToApply.length === 0) {
+      return { success: true };
+    }
+
+    // Use pure function to compute stock effects
+    const result = computeOperationStockEffect(articles, movementsToApply);
+
+    if (!result.success) {
+      return {
+        success: false,
+        error: result.error,
+        failedLines: result.failedLines
+      };
+    }
+
+    // Apply the computed stock updates
+    setArticles(result.updatedArticles);
+
+    // Mark movements as stockApplied: true
+    setMouvements(prev => prev.map(m => {
+      if (m.operationId === operationId && m.stockApplied === false) {
+        return { ...m, stockApplied: true };
+      }
+      return m;
+    }));
+
+    return { success: true };
+  };
+
   const addMouvement = (mouvement: Omit<Mouvement, "id">) => {
     // Generate unique UUID for the movement
     const newId = crypto.randomUUID();
@@ -715,7 +755,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log(`  Error Reason: ${motifErreur}`);
           
           // Administrative error: NO stock deduction (goods return to stock)
-          setMouvements(mouvements.map(m =>
+          setMouvements(prev => prev.map(m =>
             m.id === id
               ? {
                   ...m,
@@ -742,7 +782,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log(`  Rejection Reason: ${motifRejet}`);
           
           // Defective items: MUST deduct from stock (permanent loss)
-          setMouvements(mouvements.map(m =>
+          setMouvements(prev => prev.map(m =>
             m.id === id
               ? {
                   ...m,
@@ -759,37 +799,44 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   noteControle: motifRejet || "",
                   verificationPoints: verificationPoints || {},
                   wasDelayed,
-                  lotDate: lotDate || m.lotDate
+                  lotDate: lotDate || m.lotDate,
+                  // Phase 7b: defer stock if operationId present
+                  stockApplied: mouvement.operationId ? false : undefined
                 }
               : m
           ));
           
-          // CRITICAL: Deduct ALL units from stock (permanent loss)
-          setArticles(prevArticles => {
-            return prevArticles.map(article => {
-              if (article.ref !== mouvement.ref) {
-                return article;
-              }
+          // Phase 7b: defer stock update if operationId present
+          if (!mouvement.operationId) {
+            // CRITICAL: Deduct ALL units from stock (permanent loss) - LEGACY PATH
+            setArticles(prevArticles => {
+              return prevArticles.map(article => {
+                if (article.ref !== mouvement.ref) {
+                  return article;
+                }
 
-              if (!mouvement.emplacementSource) {
-                return article;
-              }
+                if (!mouvement.emplacementSource) {
+                  return article;
+                }
 
-              console.log(`[REFUS DÉFECTUEUX] Article: ${article.nom} | Zone: ${mouvement.emplacementSource} | Qty to deduct: ${mouvement.qte}`);
+                console.log(`[REFUS DÉFECTUEUX] Article: ${article.nom} | Zone: ${mouvement.emplacementSource} | Qty to deduct: ${mouvement.qte}`);
 
-              // Use applySortieStock helper (same math as Sortie approval)
-              const updatedArticle = applySortieStock(article, mouvement.emplacementSource, mouvement.qte);
+                // Use applySortieStock helper (same math as Sortie approval)
+                const updatedArticle = applySortieStock(article, mouvement.emplacementSource, mouvement.qte);
 
-              console.log(`[REFUS DÉFECTUEUX] Zone: ${mouvement.emplacementSource} | Before: ${article.inventory.find(l => l.zone === mouvement.emplacementSource)?.quantity || 0} | After: ${updatedArticle.inventory.find(l => l.zone === mouvement.emplacementSource)?.quantity || 0}`);
-              console.log(`[REFUS DÉFECTUEUX] Article: ${article.nom} | Total stock: ${article.stock} → ${updatedArticle.stock}`);
+                console.log(`[REFUS DÉFECTUEUX] Zone: ${mouvement.emplacementSource} | Before: ${article.inventory.find(l => l.zone === mouvement.emplacementSource)?.quantity || 0} | After: ${updatedArticle.inventory.find(l => l.zone === mouvement.emplacementSource)?.quantity || 0}`);
+                console.log(`[REFUS DÉFECTUEUX] Article: ${article.nom} | Total stock: ${article.stock} → ${updatedArticle.stock}`);
 
-              return updatedArticle;
+                return updatedArticle;
+              });
             });
-          });
+          } else {
+            console.log(`[REFUS DÉFECTUEUX - DEFERRED] Stock update deferred to Valider (operationId: ${mouvement.operationId})`);
+          }
         }
       } else {
         // ENTRÉE ONLY: Simple refusal logic (no stock impact)
-        setMouvements(mouvements.map(m =>
+        setMouvements(prev => prev.map(m =>
           m.id === id
             ? {
                 ...m,
@@ -829,7 +876,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log(`  Valid Qty: ${validQuantity} | Defective Qty: ${defectiveQuantity}`);
 
       // Update mouvement status to "Terminé"
-      setMouvements(mouvements.map(m =>
+      setMouvements(prev => prev.map(m =>
         m.id === id
           ? {
               ...m,
@@ -844,7 +891,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               noteControle: noteControle || m.noteControle || "",
               verificationPoints: verificationPoints || {},
               wasDelayed,
-              lotDate: lotDate || m.lotDate
+              lotDate: lotDate || m.lotDate,
+              // Phase 7b: defer stock if operationId present AND validQuantity > 0
+              stockApplied: (mouvement.operationId && validQuantity > 0) ? false : undefined
             }
           : m
       ));
@@ -884,30 +933,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log(`  Status: NOT LINKED (because accepted qty = 0)`);
       }
 
-      // Update article stock and inventory
-      setArticles(prevArticles => {
-        return prevArticles.map(article => {
-          if (article.ref !== mouvement.ref) {
-            return article;
-          }
+      // Phase 7b: defer stock update if operationId present AND validQuantity > 0
+      if (!mouvement.operationId || validQuantity === 0) {
+        // Update article stock and inventory - LEGACY PATH or no stock effect
+        setArticles(prevArticles => {
+          return prevArticles.map(article => {
+            if (article.ref !== mouvement.ref) {
+              return article;
+            }
 
-          const destinationZone = mouvement.emplacementDestination;
+            const destinationZone = mouvement.emplacementDestination;
 
-          // Use applyEntreeStock helper
-          const updatedArticle = applyEntreeStock(article, destinationZone, validQuantity);
+            // Use applyEntreeStock helper
+            const updatedArticle = applyEntreeStock(article, destinationZone, validQuantity);
 
-          console.log(`[ENTRÉE APPROVAL] Zone ${destinationZone}: ${article.inventory.find(loc => loc.zone === destinationZone)?.quantity || 0} + ${validQuantity} = ${updatedArticle.inventory.find(loc => loc.zone === destinationZone)?.quantity || 0}`);
-          if (!article.inventory.some(loc => loc.zone === destinationZone)) {
-            console.log(`[ENTRÉE APPROVAL] Zone ${destinationZone} is NEW: +${validQuantity}`);
-          }
+            console.log(`[ENTRÉE APPROVAL] Zone ${destinationZone}: ${article.inventory.find(loc => loc.zone === destinationZone)?.quantity || 0} + ${validQuantity} = ${updatedArticle.inventory.find(loc => loc.zone === destinationZone)?.quantity || 0}`);
+            if (!article.inventory.some(loc => loc.zone === destinationZone)) {
+              console.log(`[ENTRÉE APPROVAL] Zone ${destinationZone} is NEW: +${validQuantity}`);
+            }
 
-          console.log(`[ENTRÉE APPROVAL] Article: ${article.nom}`);
-          console.log(`  Total Stock: ${article.stock} → ${updatedArticle.stock}`);
-          console.log(`  Zones: ${updatedArticle.inventory.map(z => `${z.zone}(${z.quantity})`).join(', ')}`);
+            console.log(`[ENTRÉE APPROVAL] Article: ${article.nom}`);
+            console.log(`  Total Stock: ${article.stock} → ${updatedArticle.stock}`);
+            console.log(`  Zones: ${updatedArticle.inventory.map(z => `${z.zone}(${z.quantity})`).join(', ')}`);
 
-          return updatedArticle;
+            return updatedArticle;
+          });
         });
-      });
+      } else {
+        console.log(`[ENTRÉE APPROVAL - DEFERRED] Stock update deferred to Valider (operationId: ${mouvement.operationId})`);
+      }
 
     } else if (mouvement.type === "Sortie") {
       // ========================================================================
@@ -930,7 +984,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log(`  Total Qty to deduct: ${totalQtyToDeduct}`);
 
       // Update mouvement status to "Terminé"
-      setMouvements(mouvements.map(m =>
+      setMouvements(prev => prev.map(m =>
         m.id === id
           ? {
               ...m,
@@ -945,37 +999,44 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               noteControle: noteControle || m.noteControle || "",
               verificationPoints: verificationPoints || {},
               wasDelayed,
-              lotDate: lotDate || m.lotDate
+              lotDate: lotDate || m.lotDate,
+              // Phase 7b: defer stock if operationId present
+              stockApplied: mouvement.operationId ? false : undefined
             }
           : m
       ));
 
-      // Update article stock and inventory
-      setArticles(prevArticles => {
-        return prevArticles.map(article => {
-          if (article.ref !== mouvement.ref) {
-            return article;
-          }
+      // Phase 7b: defer stock update if operationId present
+      if (!mouvement.operationId) {
+        // Update article stock and inventory - LEGACY PATH
+        setArticles(prevArticles => {
+          return prevArticles.map(article => {
+            if (article.ref !== mouvement.ref) {
+              return article;
+            }
 
-          if (!mouvement.emplacementSource) {
-            return article;
-          }
+            if (!mouvement.emplacementSource) {
+              return article;
+            }
 
-          console.log(`[SORTIE APPROVAL] Article: ${article.nom} | Zone: ${mouvement.emplacementSource} | Qty to deduct: ${totalQtyToDeduct}`);
+            console.log(`[SORTIE APPROVAL] Article: ${article.nom} | Zone: ${mouvement.emplacementSource} | Qty to deduct: ${totalQtyToDeduct}`);
 
-          // Use applySortieStock helper
-          const updatedArticle = applySortieStock(article, mouvement.emplacementSource, totalQtyToDeduct);
+            // Use applySortieStock helper
+            const updatedArticle = applySortieStock(article, mouvement.emplacementSource, totalQtyToDeduct);
 
-          const oldZoneQty = article.inventory.find(loc => loc.zone === mouvement.emplacementSource)?.quantity || 0;
-          const newZoneQty = updatedArticle.inventory.find(loc => loc.zone === mouvement.emplacementSource)?.quantity || 0;
-          console.log(`[SORTIE APPROVAL] Zone: ${mouvement.emplacementSource} | Before: ${oldZoneQty} | After: ${newZoneQty}`);
+            const oldZoneQty = article.inventory.find(loc => loc.zone === mouvement.emplacementSource)?.quantity || 0;
+            const newZoneQty = updatedArticle.inventory.find(loc => loc.zone === mouvement.emplacementSource)?.quantity || 0;
+            console.log(`[SORTIE APPROVAL] Zone: ${mouvement.emplacementSource} | Before: ${oldZoneQty} | After: ${newZoneQty}`);
 
-          console.log(`[SORTIE APPROVAL] Article: ${article.nom} | Total stock: ${article.stock} → ${updatedArticle.stock}`);
-          console.log(`[SORTIE APPROVAL] Remaining zones: ${updatedArticle.inventory.map(z => `${z.zone}(${z.quantity})`).join(', ')}`);
+            console.log(`[SORTIE APPROVAL] Article: ${article.nom} | Total stock: ${article.stock} → ${updatedArticle.stock}`);
+            console.log(`[SORTIE APPROVAL] Remaining zones: ${updatedArticle.inventory.map(z => `${z.zone}(${z.quantity})`).join(', ')}`);
 
-          return updatedArticle;
+            return updatedArticle;
+          });
         });
-      });
+      } else {
+        console.log(`[SORTIE APPROVAL - DEFERRED] Stock update deferred to Valider (operationId: ${mouvement.operationId})`);
+      }
     }
   };
 
@@ -984,7 +1045,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!mouvement || mouvement.type !== "Sortie") return;
 
     // Mettre à jour le mouvement avec le statut "Rejeté"
-    setMouvements(mouvements.map(m => 
+    setMouvements(prev => prev.map(m => 
       m.id === id 
         ? { 
             ...m, 
@@ -1117,6 +1178,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getOperationMovements,
       updateOperationStatus,
       updateOperationFields,
+      applyOperationStock,
       addInventoryRecord,
       applyInventoryAdjustment,
       batchUpdateArticles,
