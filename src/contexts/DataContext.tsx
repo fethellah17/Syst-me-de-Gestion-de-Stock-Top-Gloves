@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState } from "react";
+import { applyEntreeStock, applySortieStock } from "@/lib/stock-effects";
 
 export interface InventoryEntry {
   zone: string;
@@ -776,24 +777,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
               console.log(`[REFUS DÉFECTUEUX] Article: ${article.nom} | Zone: ${mouvement.emplacementSource} | Qty to deduct: ${mouvement.qte}`);
 
-              const updatedInventory = article.inventory.map(loc => {
-                if (loc.zone === mouvement.emplacementSource) {
-                  const currentQty = Number(loc.quantity);
-                  const newQty = Math.max(0, currentQty - mouvement.qte);
-                  console.log(`[REFUS DÉFECTUEUX] Zone: ${loc.zone} | Before: ${currentQty} | After: ${newQty}`);
-                  return { ...loc, quantity: newQty };
-                }
-                return loc;
-              }).filter(l => Number(l.quantity) > 0);
+              // Use applySortieStock helper (same math as Sortie approval)
+              const updatedArticle = applySortieStock(article, mouvement.emplacementSource, mouvement.qte);
 
-              const newTotalStock = Math.max(0, article.stock - mouvement.qte);
-              console.log(`[REFUS DÉFECTUEUX] Article: ${article.nom} | Total stock: ${article.stock} → ${newTotalStock}`);
+              console.log(`[REFUS DÉFECTUEUX] Zone: ${mouvement.emplacementSource} | Before: ${article.inventory.find(l => l.zone === mouvement.emplacementSource)?.quantity || 0} | After: ${updatedArticle.inventory.find(l => l.zone === mouvement.emplacementSource)?.quantity || 0}`);
+              console.log(`[REFUS DÉFECTUEUX] Article: ${article.nom} | Total stock: ${article.stock} → ${updatedArticle.stock}`);
 
-              return {
-                ...article,
-                stock: newTotalStock,
-                inventory: updatedInventory
-              };
+              return updatedArticle;
             });
           });
         }
@@ -903,34 +893,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           const destinationZone = mouvement.emplacementDestination;
 
-          // Update inventory: Add valid quantity to destination zone
-          const updatedInventory = article.inventory.map(loc => {
-            if (loc.zone === destinationZone) {
-              const newQty = Number(loc.quantity) + validQuantity;
-              console.log(`[ENTRÉE APPROVAL] Zone ${destinationZone}: ${loc.quantity} + ${validQuantity} = ${newQty}`);
-              return { ...loc, quantity: newQty };
-            }
-            return loc;
-          });
+          // Use applyEntreeStock helper
+          const updatedArticle = applyEntreeStock(article, destinationZone, validQuantity);
 
-          // If destination zone doesn't exist, create it
-          if (!updatedInventory.some(loc => loc.zone === destinationZone)) {
+          console.log(`[ENTRÉE APPROVAL] Zone ${destinationZone}: ${article.inventory.find(loc => loc.zone === destinationZone)?.quantity || 0} + ${validQuantity} = ${updatedArticle.inventory.find(loc => loc.zone === destinationZone)?.quantity || 0}`);
+          if (!article.inventory.some(loc => loc.zone === destinationZone)) {
             console.log(`[ENTRÉE APPROVAL] Zone ${destinationZone} is NEW: +${validQuantity}`);
-            updatedInventory.push({ zone: destinationZone, quantity: validQuantity });
           }
 
-          // Update total stock
-          const newTotalStock = article.stock + validQuantity;
-
           console.log(`[ENTRÉE APPROVAL] Article: ${article.nom}`);
-          console.log(`  Total Stock: ${article.stock} → ${newTotalStock}`);
-          console.log(`  Zones: ${updatedInventory.map(z => `${z.zone}(${z.quantity})`).join(', ')}`);
+          console.log(`  Total Stock: ${article.stock} → ${updatedArticle.stock}`);
+          console.log(`  Zones: ${updatedArticle.inventory.map(z => `${z.zone}(${z.quantity})`).join(', ')}`);
 
-          return {
-            ...article,
-            stock: newTotalStock,
-            inventory: updatedInventory
-          };
+          return updatedArticle;
         });
       });
 
@@ -988,30 +963,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           console.log(`[SORTIE APPROVAL] Article: ${article.nom} | Zone: ${mouvement.emplacementSource} | Qty to deduct: ${totalQtyToDeduct}`);
 
-          // Find the inventory entry for this specific zone
-          const updatedInventory = article.inventory.map(loc => {
-            if (loc.zone === mouvement.emplacementSource) {
-              const currentQty = Number(loc.quantity);
-              const newQty = Math.max(0, currentQty - totalQtyToDeduct);
+          // Use applySortieStock helper
+          const updatedArticle = applySortieStock(article, mouvement.emplacementSource, totalQtyToDeduct);
 
-              console.log(`[SORTIE APPROVAL] Zone: ${loc.zone} | Before: ${currentQty} | After: ${newQty}`);
+          const oldZoneQty = article.inventory.find(loc => loc.zone === mouvement.emplacementSource)?.quantity || 0;
+          const newZoneQty = updatedArticle.inventory.find(loc => loc.zone === mouvement.emplacementSource)?.quantity || 0;
+          console.log(`[SORTIE APPROVAL] Zone: ${mouvement.emplacementSource} | Before: ${oldZoneQty} | After: ${newZoneQty}`);
 
-              return { ...loc, quantity: newQty };
-            }
-            return loc;
-          }).filter(l => Number(l.quantity) > 0); // Remove zones with 0 quantity
+          console.log(`[SORTIE APPROVAL] Article: ${article.nom} | Total stock: ${article.stock} → ${updatedArticle.stock}`);
+          console.log(`[SORTIE APPROVAL] Remaining zones: ${updatedArticle.inventory.map(z => `${z.zone}(${z.quantity})`).join(', ')}`);
 
-          // Calculate new total stock
-          const newTotalStock = Math.max(0, article.stock - totalQtyToDeduct);
-
-          console.log(`[SORTIE APPROVAL] Article: ${article.nom} | Total stock: ${article.stock} → ${newTotalStock}`);
-          console.log(`[SORTIE APPROVAL] Remaining zones: ${updatedInventory.map(z => `${z.zone}(${z.quantity})`).join(', ')}`);
-
-          return {
-            ...article,
-            stock: newTotalStock,
-            inventory: updatedInventory
-          };
+          return updatedArticle;
         });
       });
     }
