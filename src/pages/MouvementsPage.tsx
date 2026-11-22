@@ -108,6 +108,15 @@ const MouvementsPage = () => {
     const mouvement = mouvements.find(m => m.id === id);
     if (!mouvement || (mouvement.type !== "Entrée" && mouvement.type !== "Sortie")) return;
     
+    // Defense in depth: only allow inspection if operation is in "En inspection"
+    if (mouvement.operationId) {
+      const operation = operations.find(op => op.id === mouvement.operationId);
+      if (operation && operation.statut !== "En inspection") {
+        setToast({ message: "Soumettez l'opération pour inspection avant de contrôler les lignes", type: "error" });
+        return;
+      }
+    }
+    
     setInspectionMouvementId(id);
     setIsInspectionModalOpen(true);
   };
@@ -307,7 +316,7 @@ const MouvementsPage = () => {
     // Defense in depth: only allow deletion if operation is in "Brouillon"
     const mouvement = mouvements.find(m => m.id === id);
     if (mouvement?.operationId) {
-      const operation = operations.find(op => op.numero === mouvement.operationId);
+      const operation = operations.find(op => op.id === mouvement.operationId);
       if (operation && operation.statut !== "Brouillon") {
         setToast({ message: "Les lignes ne peuvent être supprimées que dans l'état Brouillon", type: "error" });
         return;
@@ -323,7 +332,7 @@ const MouvementsPage = () => {
       // Defense in depth: double-check operation status before deleting
       const mouvement = mouvements.find(m => m.id === deleteConfirmId);
       if (mouvement?.operationId) {
-        const operation = operations.find(op => op.numero === mouvement.operationId);
+        const operation = operations.find(op => op.id === mouvement.operationId);
         if (operation && operation.statut !== "Brouillon") {
           setToast({ message: "Les lignes ne peuvent être supprimées que dans l'état Brouillon", type: "error" });
           setIsDeleteConfirmOpen(false);
@@ -1416,7 +1425,7 @@ const MouvementsPage = () => {
                 onDuplicate={handleDuplicate}
                 onQualityControl={handleOpenQCModal}
                 onReject={handleOpenRejectModal}
-                onInspect={handleOpenInspectionModal}
+                onInspect={selectedOperation?.statut === "En inspection" ? handleOpenInspectionModal : undefined}
                 onDelete={selectedOperation?.statut === "Brouillon" ? handleDeleteClick : undefined}
                 showActions={true}
                 compact={false}

@@ -392,7 +392,7 @@ export const MovementTable = ({
                   {showActions && (
                     <td className="py-3 px-3 text-center">
                       <div className="flex items-center justify-center gap-1">
-                      {(m.type === "Entrée" || m.type === "Sortie") && m.statut === "En attente" && (
+                      {onInspect && (m.type === "Entrée" || m.type === "Sortie") && m.statut === "En attente" && (
                         <button
                           onClick={() => onInspect?.(m.id)}
                           className="p-1.5 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
@@ -687,7 +687,7 @@ export const MovementTable = ({
                     <div className="border-t border-gray-200" />
                     <div className="flex items-center justify-end gap-2 pt-2">
                       {/* Inspecter Button for Pending Entrée/Sortie */}
-                      {(m.type === "Entrée" || m.type === "Sortie") && m.statut === "En attente" && (
+                      {onInspect && (m.type === "Entrée" || m.type === "Sortie") && m.statut === "En attente" && (
                         <button
                           onClick={() => onInspect?.(m.id)}
                           className="p-2 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
