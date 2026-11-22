@@ -304,14 +304,36 @@ const MouvementsPage = () => {
   };
 
   const handleDeleteClick = (id: string) => {
+    // Defense in depth: only allow deletion if operation is in "Brouillon"
+    const mouvement = mouvements.find(m => m.id === id);
+    if (mouvement?.operationId) {
+      const operation = operations.find(op => op.numero === mouvement.operationId);
+      if (operation && operation.statut !== "Brouillon") {
+        setToast({ message: "Les lignes ne peuvent être supprimées que dans l'état Brouillon", type: "error" });
+        return;
+      }
+    }
+    
     setDeleteConfirmId(id);
     setIsDeleteConfirmOpen(true);
   };
 
   const handleConfirmDelete = () => {
     if (deleteConfirmId) {
+      // Defense in depth: double-check operation status before deleting
+      const mouvement = mouvements.find(m => m.id === deleteConfirmId);
+      if (mouvement?.operationId) {
+        const operation = operations.find(op => op.numero === mouvement.operationId);
+        if (operation && operation.statut !== "Brouillon") {
+          setToast({ message: "Les lignes ne peuvent être supprimées que dans l'état Brouillon", type: "error" });
+          setIsDeleteConfirmOpen(false);
+          setDeleteConfirmId(null);
+          return;
+        }
+      }
+      
       deleteMouvement(deleteConfirmId);
-      setToast({ message: "Mouvement supprimé avec succès", type: "success" });
+      setToast({ message: "Ligne supprimée avec succès", type: "success" });
       setIsDeleteConfirmOpen(false);
       setDeleteConfirmId(null);
       recalculateAllOccupancies();
@@ -1395,6 +1417,7 @@ const MouvementsPage = () => {
                 onQualityControl={handleOpenQCModal}
                 onReject={handleOpenRejectModal}
                 onInspect={handleOpenInspectionModal}
+                onDelete={selectedOperation?.statut === "Brouillon" ? handleDeleteClick : undefined}
                 showActions={true}
                 compact={false}
               />
@@ -1568,7 +1591,7 @@ const MouvementsPage = () => {
       {/* Delete Confirmation Modal */}
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)} title="Confirmer la suppression">
         <div className="space-y-4">
-          <p className="text-sm text-foreground">Êtes-vous sûr de vouloir supprimer ce mouvement ?</p>
+          <p className="text-sm text-foreground">Êtes-vous sûr de vouloir supprimer cette ligne ?</p>
           <div className="flex gap-2">
             <button
               onClick={() => setIsDeleteConfirmOpen(false)}

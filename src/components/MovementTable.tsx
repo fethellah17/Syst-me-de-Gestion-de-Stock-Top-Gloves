@@ -1,4 +1,4 @@
-import { FileText, ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, FileEdit, CheckCircle2, AlertCircle, Clock, Copy, CheckIcon, XIcon, ClipboardCheck, Timer } from "lucide-react";
+import { FileText, ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, FileEdit, CheckCircle2, AlertCircle, Clock, Copy, CheckIcon, XIcon, ClipboardCheck, Timer, Trash2 } from "lucide-react";
 import { 
   generateInboundPDF, 
   generateOutboundPDF, 
@@ -18,6 +18,7 @@ interface MovementTableProps {
   onReject?: (id: string) => void;
   onInspect?: (id: string) => void;
   onDuplicate?: (mouvement: Mouvement) => void;
+  onDelete?: (id: string) => void;
   showActions?: boolean;
   compact?: boolean;
 }
@@ -29,6 +30,7 @@ export const MovementTable = ({
   onReject,
   onInspect,
   onDuplicate,
+  onDelete,
   showActions = true,
   compact = false
 }: MovementTableProps) => {
@@ -471,6 +473,15 @@ export const MovementTable = ({
                           <Copy className="w-4 h-4" />
                         </button>
                       )}
+                      {onDelete && (
+                        <button
+                          onClick={() => onDelete(m.id)}
+                          className="p-1.5 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-red-600"
+                          title="Supprimer la ligne"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                   )}
@@ -757,6 +768,16 @@ export const MovementTable = ({
                           title="Dupliquer ce mouvement"
                         >
                           <Copy className="w-4 h-4" />
+                        </button>
+                      )}
+                      {/* Delete Button */}
+                      {onDelete && (
+                        <button
+                          onClick={() => onDelete(m.id)}
+                          className="p-2 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-red-600"
+                          title="Supprimer la ligne"
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       )}
                     </div>

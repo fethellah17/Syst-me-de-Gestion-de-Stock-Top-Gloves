@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyEntreeStock, applySortieStock } from "./stock-effects";
+import { applyEntreeStock, applySortieStock, shouldReverseStockOnDelete } from "./stock-effects";
 import type { Article } from "@/contexts/DataContext";
 
 describe("Stock Effect Helpers", () => {
@@ -258,5 +258,42 @@ describe("Stock Effect Helpers", () => {
       expect(result.inventory.find(z => z.zone === "Zone B - Rack 03")?.quantity).toBe(1000); // unchanged
       expect(result.inventory).toHaveLength(2); // no zones removed
     });
+  });
+});
+
+describe("shouldReverseStockOnDelete", () => {
+  it("should return false for operation line with stockApplied undefined", () => {
+    const movement = { operationId: 123 };
+    expect(shouldReverseStockOnDelete(movement)).toBe(false);
+  });
+
+  it("should return false for operation line with stockApplied false", () => {
+    const movement = { operationId: 123, stockApplied: false };
+    expect(shouldReverseStockOnDelete(movement)).toBe(false);
+  });
+
+  it("should return true for operation line with stockApplied true", () => {
+    const movement = { operationId: 123, stockApplied: true };
+    expect(shouldReverseStockOnDelete(movement)).toBe(true);
+  });
+
+  it("should return true for non-operation line with stockApplied undefined", () => {
+    const movement = {};
+    expect(shouldReverseStockOnDelete(movement)).toBe(true);
+  });
+
+  it("should return true for non-operation line with stockApplied false", () => {
+    const movement = { stockApplied: false };
+    expect(shouldReverseStockOnDelete(movement)).toBe(true);
+  });
+
+  it("should return true for non-operation line with stockApplied true", () => {
+    const movement = { stockApplied: true };
+    expect(shouldReverseStockOnDelete(movement)).toBe(true);
+  });
+
+  it("should return true for legacy line (no operationId, no stockApplied)", () => {
+    const movement = { operationId: undefined, stockApplied: undefined };
+    expect(shouldReverseStockOnDelete(movement)).toBe(true);
   });
 });

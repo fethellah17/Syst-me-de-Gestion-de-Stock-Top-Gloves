@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState } from "react";
-import { applyEntreeStock, applySortieStock, computeOperationStockEffect } from "@/lib/stock-effects";
+import { applyEntreeStock, applySortieStock, computeOperationStockEffect, shouldReverseStockOnDelete } from "@/lib/stock-effects";
 
 export interface InventoryEntry {
   zone: string;
@@ -650,22 +650,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const mouvement = mouvements.find(m => m.id === id);
     if (!mouvement) return;
 
-    // Reverse the movement effect on stock
-    const article = articles.find(a => a.ref === mouvement.ref);
-    if (article) {
-      let newStock = article.stock;
-      
-      if (mouvement.type === "Entrée") {
-        newStock = article.stock - mouvement.qte;
-      } else if (mouvement.type === "Sortie") {
-        newStock = article.stock + mouvement.qte;
+    if (shouldReverseStockOnDelete(mouvement)) {
+      // Reverse the movement effect on stock
+      const article = articles.find(a => a.ref === mouvement.ref);
+      if (article) {
+        let newStock = article.stock;
+        
+        if (mouvement.type === "Entrée") {
+          newStock = article.stock - mouvement.qte;
+        } else if (mouvement.type === "Sortie") {
+          newStock = article.stock + mouvement.qte;
+        }
+        // Transfert ne change pas le stock total
+        
+        updateArticle(article.id, { stock: Math.max(0, newStock) });
       }
-      // Transfert ne change pas le stock total
-      
-      updateArticle(article.id, { stock: Math.max(0, newStock) });
     }
 
-    setMouvements(mouvements.filter(m => m.id !== id));
+    setMouvements(prev => prev.filter(m => m.id !== id));
   };
 
   const addInventoryRecord = (record: Omit<InventoryRecord, "id">) => {

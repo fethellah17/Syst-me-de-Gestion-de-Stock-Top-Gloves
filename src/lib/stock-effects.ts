@@ -306,3 +306,16 @@ export const computeOperationStockEffect = (
     updatedArticles
   };
 };
+
+/**
+ * Phase 7d: Determine if stock should be reversed when deleting a movement
+ * 
+ * Operation lines have deferred stock (stockApplied field tracks whether applied).
+ * Non-operation lines apply stock immediately (legacy behavior).
+ * 
+ * @param m - Movement with optional operationId and stockApplied fields
+ * @returns true if stock should be reversed, false if stock was never applied
+ */
+export function shouldReverseStockOnDelete(m: { operationId?: unknown; stockApplied?: boolean }): boolean {
+  return m.operationId ? m.stockApplied === true : true;
+}
