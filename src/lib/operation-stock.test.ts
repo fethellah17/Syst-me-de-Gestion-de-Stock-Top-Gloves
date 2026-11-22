@@ -85,7 +85,9 @@ describe("Operation Stock Effect (Phase 7b)", () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain("Insufficient stock");
       expect(result.failedLines).toHaveLength(1);
-      expect(result.failedLines![0]).toContain("need 1100, have 1000");
+      // Phase 7c: fold-based validation (line order matters)
+      // After first Sortie of 600, only 400 remains. Second Sortie of 500 fails.
+      expect(result.failedLines![0]).toContain("need 500, have 400");
       // Articles unchanged
       expect(result.updatedArticles[0].stock).toBe(1000);
     });

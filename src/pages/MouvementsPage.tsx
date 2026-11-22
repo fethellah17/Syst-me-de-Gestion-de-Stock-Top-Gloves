@@ -10,7 +10,7 @@ import { generateAdministrativeErrorPDF, generateDefectiveItemsPDF } from "@/lib
 import { format } from "date-fns";
 
 const MouvementsPage = () => {
-  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination, createOperation, createOperationFull, updateOperationFields, updateOperationStatus, applyOperationStock, operations } = useData();
+  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, getArticleStockByLocation, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination, createOperation, createOperationFull, updateOperationFields, updateOperationStatus, applyOperationStock, operations } = useData();
   const [selectedType, setSelectedType] = useState<"Entrée" | "Sortie" | "Transfert" | null>(null);
   const [selectedOperationId, setSelectedOperationId] = useState<number | null>(null);
   const [selectedArticleId, setSelectedArticleId] = useState<string>("");
@@ -452,15 +452,21 @@ const MouvementsPage = () => {
           operationId: operation.id,
         });
       } else if (movementType === "Transfert") {
-        const transferResult = processTransfer(
-          article.ref,
-          item.emplacementSource,
-          qtyInExitUnit,
-          item.emplacementDestination,
-          operation.id
-        );
+        // Phase 7c: defer stock if operationId present
+        if (operation) {
+          // Pre-validate for immediate user feedback (UI layer only)
+          if (article) {
+            const sourceStock = getArticleStockByLocation(article.ref, item.emplacementSource);
+            if (qtyInExitUnit > sourceStock) {
+              setToast({
+                message: `❌ Quantité insuffisante dans ${item.emplacementSource}. Disponible: ${sourceStock}`,
+                type: "error"
+              });
+              return; // Stop the operation
+            }
+          }
 
-        if (transferResult.success) {
+          // Do NOT call processTransfer - defer stock to Valider
           addMouvement({
             date: dateStr,
             article: article.nom,
@@ -477,7 +483,45 @@ const MouvementsPage = () => {
             commentaire: item.commentaire || "",
             operateur: effectiveOperateur,
             operationId: operation.id,
+            statut: "Terminé" as const,
+            status: "approved" as const,
+            stockApplied: false
           });
+        } else {
+          // Legacy path: no operationId, call processTransfer immediately
+          const transferResult = processTransfer(
+            article.ref,
+            item.emplacementSource,
+            qtyInExitUnit,
+            item.emplacementDestination
+          );
+
+          if (transferResult.success) {
+            addMouvement({
+              date: dateStr,
+              article: article.nom,
+              ref: article.ref,
+              type: "Transfert",
+              qte: qtyInExitUnit,
+              qteOriginale: qty,
+              uniteUtilisee: item.selectedUnit,
+              uniteSortie: article.uniteSortie,
+              lotNumber: item.lotNumber,
+              lotDate: item.lotDate ? format(item.lotDate, "yyyy-MM-dd") : "",
+              emplacementSource: item.emplacementSource,
+              emplacementDestination: item.emplacementDestination,
+              commentaire: item.commentaire || "",
+              operateur: effectiveOperateur,
+              statut: "Terminé" as const,
+              status: "approved" as const
+            });
+          } else {
+            setToast({
+              message: `❌ ${transferResult.error}`,
+              type: "error"
+            });
+            return; // Stop the operation
+          }
         }
       }
     });
@@ -485,7 +529,8 @@ const MouvementsPage = () => {
     // Step 2: SMART MERGE - Update articles state with strict zone logic
     // CRITICAL: SKIP this step entirely for Entrée AND Sortie movements with "En attente" status
     // Stock must NOT be updated for pending movements - it will be updated only upon QC approval
-    if (movementType !== "Entrée" && movementType !== "Sortie") {
+    // Phase 7c: ALSO SKIP Transfert movements that belong to an operation (stockApplied deferred)
+    if (movementType !== "Entrée" && movementType !== "Sortie" && !(movementType === "Transfert" && operation)) {
       // Group items by article ID
       const itemsByArticle: Record<number, any[]> = {};
       items.forEach(item => {
@@ -562,6 +607,7 @@ const MouvementsPage = () => {
     } else {
       // For Entrée and Sortie movements: ZERO stock updates
       // Stock will be updated only upon QC approval
+      // Phase 7c: For Transfert in operation: stock deferred to Valider
       console.log(`[PENDING QC] Step 2 SKIPPED - Stock will NOT be updated until QC approval`);
     }
 
@@ -571,7 +617,9 @@ const MouvementsPage = () => {
     const message = movementType === "Sortie"
       ? `✓ ${totalItems} sortie(s) enregistrée(s) en attente de validation qualité.`
       : movementType === "Transfert"
-      ? `✓ ${totalItems} transfert(s) effectué(s) avec succès.`
+      ? (operation 
+        ? `✓ ${totalItems} transfert(s) enregistré(s). Le stock sera mis à jour à la validation.`
+        : `✓ ${totalItems} transfert(s) effectué(s) avec succès.`)
       : `✓ ${totalItems} entrée(s) enregistrée(s) en attente de validation qualité.`;
     
     setToast({ message, type: "success" });
@@ -1076,19 +1124,38 @@ const MouvementsPage = () => {
               {/* Workflow Buttons - Left */}
               <div className="flex items-center gap-2">
                 {selectedOperation?.statut === "Brouillon" && (
-                  <button
-                    type="button"
-                    onClick={handleSubmitForInspection}
-                    disabled={mouvements.filter(m => m.operationId === selectedOperationId).length === 0}
-                    title={mouvements.filter(m => m.operationId === selectedOperationId).length === 0 ? "Ajoutez au moins une ligne" : ""}
-                    className={`h-9 px-4 rounded text-sm font-medium transition-colors ${
-                      mouvements.filter(m => m.operationId === selectedOperationId).length === 0
-                        ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                        : "bg-primary text-primary-foreground hover:opacity-90"
-                    }`}
-                  >
-                    Soumettre pour inspection
-                  </button>
+                  <>
+                    {/* Phase 7c: Transfert operations skip "Soumettre pour inspection" */}
+                    {selectedOperation.type === "Transfert" ? (
+                      <button
+                        type="button"
+                        onClick={handlePassToManager}
+                        disabled={mouvements.filter(m => m.operationId === selectedOperationId).length === 0}
+                        title={mouvements.filter(m => m.operationId === selectedOperationId).length === 0 ? "Ajoutez au moins une ligne" : ""}
+                        className={`h-9 px-4 rounded text-sm font-medium transition-colors ${
+                          mouvements.filter(m => m.operationId === selectedOperationId).length === 0
+                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                            : "bg-primary text-primary-foreground hover:opacity-90"
+                        }`}
+                      >
+                        Passer au gestionnaire
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleSubmitForInspection}
+                        disabled={mouvements.filter(m => m.operationId === selectedOperationId).length === 0}
+                        title={mouvements.filter(m => m.operationId === selectedOperationId).length === 0 ? "Ajoutez au moins une ligne" : ""}
+                        className={`h-9 px-4 rounded text-sm font-medium transition-colors ${
+                          mouvements.filter(m => m.operationId === selectedOperationId).length === 0
+                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                            : "bg-primary text-primary-foreground hover:opacity-90"
+                        }`}
+                      >
+                        Soumettre pour inspection
+                      </button>
+                    )}
+                  </>
                 )}
                 {selectedOperation?.statut === "En inspection" && (
                   <button
@@ -1119,16 +1186,21 @@ const MouvementsPage = () => {
                 }`}>
                   {selectedOperation?.statut !== "Brouillon" && "✓ "}Brouillon
                 </span>
-                <span className="text-gray-400">›</span>
-                <span className={`px-3 py-1 rounded ${
-                  selectedOperation?.statut === "En inspection" 
-                    ? "bg-primary/10 text-primary font-medium" 
-                    : selectedOperation?.statut === "En attente de validation" || selectedOperation?.statut === "Terminé"
-                    ? "text-gray-600"
-                    : "text-gray-400"
-                }`}>
-                  {(selectedOperation?.statut === "En attente de validation" || selectedOperation?.statut === "Terminé") && "✓ "}En inspection
-                </span>
+                {/* Phase 7c: Hide "En inspection" step for Transfert operations */}
+                {selectedOperation?.type !== "Transfert" && (
+                  <>
+                    <span className="text-gray-400">›</span>
+                    <span className={`px-3 py-1 rounded ${
+                      selectedOperation?.statut === "En inspection" 
+                        ? "bg-primary/10 text-primary font-medium" 
+                        : selectedOperation?.statut === "En attente de validation" || selectedOperation?.statut === "Terminé"
+                        ? "text-gray-600"
+                        : "text-gray-400"
+                    }`}>
+                      {(selectedOperation?.statut === "En attente de validation" || selectedOperation?.statut === "Terminé") && "✓ "}En inspection
+                    </span>
+                  </>
+                )}
                 <span className="text-gray-400">›</span>
                 <span className={`px-3 py-1 rounded ${
                   selectedOperation?.statut === "En attente de validation" 

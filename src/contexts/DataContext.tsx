@@ -489,7 +489,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const movementsToApply = mouvements.filter(m => 
       m.operationId === operationId && 
       m.stockApplied === false && 
-      (m.type === "Entrée" || m.type === "Sortie")
+      (m.type === "Entrée" || m.type === "Sortie" || m.type === "Transfert")
     );
 
     // If no movements to apply, return success (idempotent)
