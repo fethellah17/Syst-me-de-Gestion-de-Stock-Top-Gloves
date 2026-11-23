@@ -1,41 +1,18 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Check, Shield } from "lucide-react";
+import { ArrowLeft, Shield } from "lucide-react";
 import { Toast } from "@/components/Toast";
+import {
+  PERMISSIONS,
+  ROLES,
+  getRoleTemplate,
+  isCustomized,
+  withViewDependency,
+  getPermissionMatrix,
+  normalizePermissions,
+} from "@/lib/permissions";
 
 const STORAGE_KEY = 'staff_members';
-
-interface Permission {
-  id: string;
-  label: string;
-  description: string;
-  category: string;
-}
-
-const AVAILABLE_PERMISSIONS: Permission[] = [
-  { id: "dashboard", label: "Tableau de Bord", description: "Accès au tableau de bord", category: "Général" },
-  
-  { id: "articles", label: "Voir Articles", description: "Consulter la liste des articles", category: "Articles" },
-  { id: "articles.create", label: "Créer Articles", description: "Créer de nouveaux articles", category: "Articles" },
-  { id: "articles.edit", label: "Modifier Articles", description: "Modifier les articles existants", category: "Articles" },
-  { id: "articles.delete", label: "Supprimer Articles", description: "Supprimer des articles", category: "Articles" },
-  
-  { id: "categories", label: "Gérer Catégories", description: "Voir et gérer les catégories", category: "Catégories" },
-  
-  { id: "emplacements", label: "Gérer Emplacements", description: "Voir et gérer les emplacements", category: "Emplacements" },
-  
-  { id: "mouvements", label: "Voir Mouvements", description: "Consulter les mouvements de stock", category: "Mouvements" },
-  { id: "mouvements.create", label: "Créer Mouvements", description: "Créer des mouvements", category: "Mouvements" },
-  { id: "mouvements.edit", label: "Modifier Mouvements", description: "Modifier les mouvements", category: "Mouvements" },
-  { id: "mouvements.delete", label: "Supprimer Mouvements", description: "Supprimer des mouvements", category: "Mouvements" },
-  { id: "mouvements.qc", label: "Contrôle Qualité", description: "Valider les sorties", category: "Mouvements" },
-  
-  { id: "inventaire", label: "Voir Inventaire", description: "Accès à l'inventaire", category: "Inventaire" },
-  { id: "inventaire.adjust", label: "Ajuster Inventaire", description: "Effectuer des ajustements", category: "Inventaire" },
-  
-  { id: "staff", label: "Gérer Personnel", description: "Voir et gérer le personnel", category: "Administration" },
-  { id: "admin", label: "Administration", description: "Accès complet à l'administration", category: "Administration" },
-];
 
 const StaffFormPage = () => {
   const navigate = useNavigate();
@@ -160,19 +137,41 @@ const StaffFormPage = () => {
     }
   };
 
-  const togglePermission = (permissionId: string) => {
+  const togglePermission = (permissionId: string, checked: boolean) => {
     setFormData(prev => ({
       ...prev,
-      permissions: prev.permissions.includes(permissionId)
-        ? prev.permissions.filter(p => p !== permissionId)
-        : [...prev.permissions, permissionId],
+      permissions: withViewDependency(prev.permissions, permissionId, checked),
     }));
+  };
+
+  const toggleAllForRow = (rowPermissions: string[]) => {
+    setFormData(prev => {
+      const allSelected = rowPermissions.every(id => prev.permissions.includes(id));
+      let updated = [...prev.permissions];
+      
+      if (allSelected) {
+        // Remove all
+        updated = updated.filter(id => !rowPermissions.includes(id));
+      } else {
+        // Add all missing
+        for (const id of rowPermissions) {
+          if (!updated.includes(id)) {
+            updated.push(id);
+          }
+        }
+      }
+      
+      return {
+        ...prev,
+        permissions: normalizePermissions(updated),
+      };
+    });
   };
 
   const selectAllPermissions = () => {
     setFormData(prev => ({
       ...prev,
-      permissions: AVAILABLE_PERMISSIONS.map(p => p.id),
+      permissions: PERMISSIONS.map(p => p.id),
     }));
   };
 
@@ -183,7 +182,29 @@ const StaffFormPage = () => {
     }));
   };
 
-  const categories = Array.from(new Set(AVAILABLE_PERMISSIONS.map(p => p.category)));
+  const handleRoleChange = (newRole: string) => {
+    if (isEditing && formData.role) {
+      // In edit mode, apply template when role changes
+      const template = getRoleTemplate(newRole);
+      setFormData(prev => ({
+        ...prev,
+        role: newRole,
+        permissions: template,
+      }));
+    } else {
+      // In create mode, always apply template
+      const template = getRoleTemplate(newRole);
+      setFormData(prev => ({
+        ...prev,
+        role: newRole,
+        permissions: template,
+      }));
+    }
+  };
+
+  const matrix = getPermissionMatrix();
+  const customized = formData.role && isCustomized(formData.role, formData.permissions);
+  const hasStaffWithoutAdmin = formData.permissions.some(id => id.startsWith("staff")) && !formData.permissions.includes("admin");
 
   return (
     <div className="space-y-6 w-full">
@@ -268,17 +289,20 @@ const StaffFormPage = () => {
                 </label>
                 <select
                   value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  onChange={(e) => handleRoleChange(e.target.value)}
                   className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
                   required
                 >
                   <option value="">Sélectionner un rôle</option>
-                  <option value="Administrateur">Administrateur</option>
-                  <option value="Gestionnaire">Gestionnaire</option>
-                  <option value="Opérateur">Opérateur</option>
-                  <option value="Contrôleur Qualité">Contrôleur Qualité</option>
-                  <option value="Magasinier">Magasinier</option>
+                  {ROLES.map(role => (
+                    <option key={role} value={role}>{role}</option>
+                  ))}
                 </select>
+                {isEditing && formData.role && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Changer le rôle appliquera le modèle de permissions correspondant.
+                  </p>
+                )}
               </div>
 
               <div className="flex items-center gap-2">
@@ -320,55 +344,139 @@ const StaffFormPage = () => {
               </div>
             </div>
 
-            <div className="p-3 bg-muted/30 rounded-md">
+            <div className="p-3 bg-muted/30 rounded-md flex items-center gap-2">
               <p className="text-xs text-muted-foreground">
-                {formData.permissions.length} permission{formData.permissions.length > 1 ? 's' : ''} sélectionnée{formData.permissions.length > 1 ? 's' : ''} sur {AVAILABLE_PERMISSIONS.length}
+                {formData.permissions.length} permission{formData.permissions.length > 1 ? 's' : ''} sélectionnée{formData.permissions.length > 1 ? 's' : ''} sur {PERMISSIONS.length}
               </p>
+              {customized && (
+                <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded">
+                  Personnalisé
+                </span>
+              )}
             </div>
 
-            {/* Permissions by Category */}
-            <div className="space-y-4">
-              {categories.map((category) => {
-                const categoryPermissions = AVAILABLE_PERMISSIONS.filter(p => p.category === category);
-                const selectedCount = categoryPermissions.filter(p => formData.permissions.includes(p.id)).length;
-                
-                return (
-                  <div key={category} className="border rounded-lg overflow-hidden">
-                    <div className="bg-muted/50 px-4 py-2 border-b">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-sm font-medium text-foreground">{category}</h4>
-                        <span className="text-xs text-muted-foreground">
-                          {selectedCount} / {categoryPermissions.length}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="p-3 space-y-2">
-                      {categoryPermissions.map((permission) => (
-                        <div
-                          key={permission.id}
-                          onClick={() => togglePermission(permission.id)}
-                          className="flex items-start gap-3 p-3 rounded hover:bg-muted/50 cursor-pointer transition-colors"
-                        >
-                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
-                            formData.permissions.includes(permission.id)
-                              ? "bg-primary border-primary"
-                              : "border-border bg-background"
-                          }`}>
-                            {formData.permissions.includes(permission.id) && (
-                              <Check className="w-3 h-3 text-white" />
-                            )}
+            {/* Permission Matrix */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm bg-white border border-gray-200 rounded-md">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Page</th>
+                    <th className="text-center py-2 px-3 text-xs font-medium text-gray-500">Voir</th>
+                    <th className="text-center py-2 px-3 text-xs font-medium text-gray-500">Créer</th>
+                    <th className="text-center py-2 px-3 text-xs font-medium text-gray-500">Modifier</th>
+                    <th className="text-center py-2 px-3 text-xs font-medium text-gray-500">Supprimer</th>
+                    <th className="text-left py-2 px-3 text-xs font-medium text-gray-500">Actions spéciales</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {matrix.map((row) => {
+                    const rowPermissions: string[] = [];
+                    if (row.view) rowPermissions.push(row.view.id);
+                    if (row.create) rowPermissions.push(row.create.id);
+                    if (row.edit) rowPermissions.push(row.edit.id);
+                    if (row.delete) rowPermissions.push(row.delete.id);
+                    rowPermissions.push(...row.specials.map(s => s.id));
+                    
+                    return (
+                      <tr key={row.group} className="border-t border-gray-100">
+                        <td className="py-2 px-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">{row.label}</span>
+                            <button
+                              type="button"
+                              onClick={() => toggleAllForRow(rowPermissions)}
+                              className="text-xs text-primary hover:underline"
+                            >
+                              Tout
+                            </button>
                           </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-foreground">{permission.label}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">{permission.description}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          {row.view ? (
+                            <input
+                              type="checkbox"
+                              checked={formData.permissions.includes(row.view.id)}
+                              onChange={(e) => togglePermission(row.view!.id, e.target.checked)}
+                              className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
+                              title={row.view.description}
+                            />
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          {row.create ? (
+                            <input
+                              type="checkbox"
+                              checked={formData.permissions.includes(row.create.id)}
+                              onChange={(e) => togglePermission(row.create!.id, e.target.checked)}
+                              className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
+                              title={row.create.description}
+                            />
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          {row.edit ? (
+                            <input
+                              type="checkbox"
+                              checked={formData.permissions.includes(row.edit.id)}
+                              onChange={(e) => togglePermission(row.edit!.id, e.target.checked)}
+                              className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
+                              title={row.edit.description}
+                            />
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-center">
+                          {row.delete ? (
+                            <input
+                              type="checkbox"
+                              checked={formData.permissions.includes(row.delete.id)}
+                              onChange={(e) => togglePermission(row.delete!.id, e.target.checked)}
+                              className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
+                              title={row.delete.description}
+                            />
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3">
+                          {row.specials.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {row.specials.map(special => (
+                                <label key={special.id} className="flex items-center gap-1 cursor-pointer" title={special.description}>
+                                  <input
+                                    type="checkbox"
+                                    checked={formData.permissions.includes(special.id)}
+                                    onChange={(e) => togglePermission(special.id, e.target.checked)}
+                                    className="h-4 w-4 rounded border-gray-300 accent-primary cursor-pointer"
+                                  />
+                                  <span className="text-xs text-gray-700">{special.label}</span>
+                                </label>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
+
+            {/* Warning for staff permissions without admin */}
+            {hasStaffWithoutAdmin && (
+              <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
+                <p className="text-xs text-gray-600">
+                  Le personnel n'est accessible que depuis l'Administration : cochez aussi « Administration ».
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
