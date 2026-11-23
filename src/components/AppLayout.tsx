@@ -123,7 +123,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           }`}
         >
           {/* Logo */}
-          <div className="flex items-center gap-3 px-4 py-4 border-b border-sidebar-border shrink-0">
+          <div className="h-16 flex items-center gap-3 px-4 border-b border-sidebar-border shrink-0">
             {!sidebarCollapsed && (
               <>
                 <img src={logoImg} alt="Top Gloves Logo" className="w-8 h-8 rounded object-cover shrink-0" />
@@ -146,14 +146,18 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           </div>
 
           {/* Nav */}
-          <nav className={`flex-1 px-2 overflow-y-auto sidebar-scrollbar ${sidebarCollapsed ? "flex flex-col gap-2 py-3" : "py-3 space-y-0.5"}`}>
+          <nav className={`flex-1 overflow-y-auto sidebar-scrollbar ${sidebarCollapsed ? "flex flex-col items-center gap-1 py-3 px-2" : "px-2 py-3 space-y-0.5"}`}>
             {navItems.map((item) => {
               const content = (
                 <NavLink
                   key={item.to}
                   to={item.to}
                   onClick={() => setMobileOpen(false)}
-                  className={({ isActive }) => `sidebar-link ${isActive ? "sidebar-link-active" : ""} ${sidebarCollapsed ? "sidebar-link-collapsed" : ""}`}
+                  className={({ isActive }) => 
+                    sidebarCollapsed 
+                      ? `w-10 h-10 mx-auto flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900 ${isActive ? "bg-primary/10 text-primary" : ""}`
+                      : `sidebar-link ${isActive ? "sidebar-link-active" : ""}`
+                  }
                 >
                   <item.icon className="w-5 h-5 shrink-0" strokeWidth={1.5} />
                   {!sidebarCollapsed && <span className="truncate">{item.label}</span>}
@@ -178,7 +182,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           </nav>
 
           {/* Admin + Logout */}
-          <div className={`mt-auto border-t border-sidebar-border shrink-0 ${sidebarCollapsed ? "flex flex-col gap-2 py-3 items-center" : "px-2 py-3 space-y-0.5"}`}>
+          <div className={`mt-auto border-t border-gray-200 shrink-0 ${sidebarCollapsed ? "flex flex-col items-center gap-1 py-3" : "px-2 py-3 space-y-0.5"}`}>
             {sidebarCollapsed ? (
               <>
                 <Tooltip>
@@ -186,7 +190,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                     <NavLink
                       to="/admin"
                       onClick={() => setMobileOpen(false)}
-                      className={({ isActive }) => `sidebar-link sidebar-link-collapsed ${isActive ? "sidebar-link-active" : ""}`}
+                      className={({ isActive }) => `w-10 h-10 mx-auto flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900 relative ${isActive ? "bg-primary/10 text-primary" : ""}`}
                     >
                       <ShieldCheck className="w-5 h-5 shrink-0" strokeWidth={1.5} />
                       {isAdmin && (
@@ -200,7 +204,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <button onClick={handleLogout} className="sidebar-link sidebar-link-collapsed sidebar-link-logout">
+                    <button onClick={handleLogout} className="w-10 h-10 mx-auto flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900">
                       <LogOut className="w-5 h-5 shrink-0" strokeWidth={1.5} />
                     </button>
                   </TooltipTrigger>
@@ -231,7 +235,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
           </div>
 
           {/* User */}
-          <div className={`border-t border-sidebar-border shrink-0 ${sidebarCollapsed ? "flex items-center justify-center py-3" : "px-4 py-3"}`}>
+          <div className={`border-t border-gray-200 shrink-0 ${sidebarCollapsed ? "flex items-center justify-center py-3 pb-1" : "px-4 py-3"}`}>
             {sidebarCollapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
