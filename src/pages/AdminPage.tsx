@@ -103,15 +103,16 @@ const AdminPage = () => {
           <ChevronRight className="w-4 h-4 text-gray-400" />
         </button>
         
-        <div className="w-full px-5 py-4 flex items-center justify-between border-t border-gray-100">
+        <button 
+          onClick={() => navigate("/admin/historique")}
+          className="w-full px-5 py-4 flex items-center justify-between border-t border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors"
+        >
           <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-medium text-gray-400">Historique Complet</h3>
-              <span className="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded">Bientôt</span>
-            </div>
-            <p className="text-sm text-gray-500 mt-0.5">Audit de toutes les actions</p>
+            <h3 className="text-sm font-medium text-gray-900">Historique Complet</h3>
+            <p className="text-sm text-gray-500 mt-0.5">Historique des connexions</p>
           </div>
-        </div>
+          <ChevronRight className="w-4 h-4 text-gray-400" />
+        </button>
         
         {/* TODO 12f: Import/Export - non-functional, hidden */}
         {false && (

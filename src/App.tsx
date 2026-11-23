@@ -16,6 +16,7 @@ import InventairePage from "@/pages/InventairePage";
 import AdminPage from "@/pages/AdminPage";
 import StaffPage from "@/pages/StaffPage";
 import StaffFormPage from "@/pages/StaffFormPage";
+import LoginHistoryPage from "@/pages/LoginHistoryPage";
 import UnitesPage from "@/pages/UnitesPage";
 import DestinationsPage from "@/pages/DestinationsPage";
 import FournisseursPage from "@/pages/FournisseursPage";
@@ -51,6 +52,7 @@ const AppRoutes = () => (
     <Route path="/staff/new" element={<ProtectedRoute><StaffFormPage /></ProtectedRoute>} />
     <Route path="/staff/edit/:id" element={<ProtectedRoute><StaffFormPage /></ProtectedRoute>} />
     <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
+    <Route path="/admin/historique" element={<ProtectedRoute><LoginHistoryPage /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );
