@@ -4,7 +4,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   ShieldCheck,
   Lock,
-  Users,
   LogOut,
   ChevronRight,
 } from "lucide-react";
@@ -66,7 +65,7 @@ const AdminPage = () => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-primary" />
+            <ShieldCheck className="w-5 h-5 text-gray-500" />
             Zone Administration
           </h2>
           <p className="text-sm text-muted-foreground">Gestion avancée de la base de données</p>
@@ -81,7 +80,7 @@ const AdminPage = () => {
       </div>
 
       {/* Admin modules */}
-      <div className="grid grid-cols-1 md:grid-cols-2 max-w-3xl gap-4">
+      <div className="bg-white border border-gray-200 rounded-md overflow-hidden max-w-3xl">
         {/* TODO 12f: Paramètres Système - non-functional, hidden */}
         {false && (
           <button className="bg-card border rounded-lg p-5 text-left hover:shadow-md hover:border-primary/30 transition-all group">
@@ -95,23 +94,24 @@ const AdminPage = () => {
         
         <button 
           onClick={() => navigate("/staff")}
-          className="relative bg-card border rounded-lg p-5 text-left cursor-pointer hover:border-gray-300 hover:bg-gray-50 transition-colors group"
+          className="w-full px-5 py-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
         >
-          <ChevronRight className="absolute top-5 right-5 w-4 h-4 text-gray-400" />
-          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/20 transition-colors">
-            <Users className="w-5 h-5 text-primary" />
+          <div>
+            <h3 className="text-sm font-medium text-gray-900">Gestion Utilisateurs</h3>
+            <p className="text-sm text-gray-500 mt-0.5">Rôles et permissions</p>
           </div>
-          <h3 className="font-semibold text-foreground text-sm">Gestion Utilisateurs</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Rôles et permissions</p>
+          <ChevronRight className="w-4 h-4 text-gray-400" />
         </button>
         
-        <button className="bg-card border rounded-lg p-5 text-left hover:shadow-md hover:border-primary/30 transition-all group">
-          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/20 transition-colors">
-            <ShieldCheck className="w-5 h-5 text-primary" />
+        <div className="w-full px-5 py-4 flex items-center justify-between border-t border-gray-100">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-medium text-gray-400">Historique Complet</h3>
+              <span className="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded">Bientôt</span>
+            </div>
+            <p className="text-sm text-gray-500 mt-0.5">Audit de toutes les actions</p>
           </div>
-          <h3 className="font-semibold text-foreground text-sm">Historique Complet</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Audit de toutes les actions</p>
-        </button>
+        </div>
         
         {/* TODO 12f: Import/Export - non-functional, hidden */}
         {false && (
