@@ -281,7 +281,7 @@ export const InspectionModal = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-lg max-w-4xl w-[95vw] max-h-[92vh] flex flex-col border border-gray-200">
+      <div className="bg-white rounded-lg shadow-lg max-w-5xl w-[95vw] max-h-[calc(100vh-2rem)] flex flex-col border border-gray-200 overflow-y-auto">
         {/* Header */}
         <div className="px-6 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
           <div>
@@ -300,9 +300,9 @@ export const InspectionModal = ({
           </button>
         </div>
 
-        {/* Content - Scrollable */}
-        <div className="px-6 py-4 overflow-y-auto overflow-x-hidden flex-1">
-          <div className="space-y-5">
+        {/* Content */}
+        <div className="px-6 py-4 flex-1">
+          <div className="space-y-4">
             {/* Refus Total Toggle - Full width compact row */}
             <div className="md:col-span-2 border border-gray-200 rounded py-2 px-3">
               <label className="flex items-center gap-3 cursor-pointer">
@@ -451,66 +451,34 @@ export const InspectionModal = ({
               </div>
             ) : (
               <>
-                {/* Two-column layout for normal approval */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
-                  {/* Left Column: Détails du mouvement */}
-                  <div className="space-y-5">
-                    <div>
-                      <h3 className="text-xs uppercase tracking-wide font-medium text-gray-500 border-b border-gray-200 pb-2 mb-3">
-                        Détails du mouvement
-                      </h3>
-                      <div className="space-y-0">
-                        <div className="flex items-start gap-3 py-1.5 border-b border-dotted border-gray-200">
-                          <span className="text-[13px] text-gray-500 w-36 flex-shrink-0">Article</span>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm text-gray-900">{article.nom}</div>
-                            <div className="text-xs text-gray-500">{article.ref}</div>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-3 py-1.5 border-b border-dotted border-gray-200">
-                          <span className="text-[13px] text-gray-500 w-36 flex-shrink-0">Quantité reçue</span>
-                          <span className="text-sm text-gray-900">{mouvement.qte.toLocaleString("fr-FR")} {article.uniteSortie}</span>
-                        </div>
-                        <div className="flex items-start gap-3 py-1.5 border-b border-dotted border-gray-200">
-                          <span className="text-[13px] text-gray-500 w-36 flex-shrink-0">Zone</span>
-                          <span className="text-sm text-gray-900">{mouvement.emplacementDestination || mouvement.emplacementSource}</span>
-                        </div>
-                        <div className="flex items-start gap-3 py-1.5 border-b border-dotted border-gray-200">
-                          <span className="text-[13px] text-gray-500 w-36 flex-shrink-0">Opérateur</span>
-                          <span className="text-sm text-gray-900">{mouvement.operateur}</span>
-                        </div>
-                        <div className="flex items-start gap-3 py-1.5 border-b border-dotted border-gray-200">
-                          <span className="text-[13px] text-gray-500 w-36 flex-shrink-0">Numéro de lot</span>
-                          <span className="text-sm text-gray-900">{mouvement.lotNumber}</span>
-                        </div>
-                        <div className="flex items-start gap-3 py-1.5 border-b border-dotted border-gray-200">
-                          <span className="text-[13px] text-gray-500 w-36 flex-shrink-0">Date</span>
-                          <span className="text-sm text-gray-900">{mouvement.date}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Date d'expiration - inline with other fields */}
+                {/* Three-band compact layout for normal approval */}
+                <div className="space-y-4">
+                  {/* Band 1: Movement info */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-2">
                     <div className="min-w-0">
-                      <label className="block text-[13px] font-medium text-gray-600 mb-1">
-                        Date d'expiration (optionnel)
-                      </label>
-                      <input
-                        type="date"
-                        value={lotDate}
-                        onChange={(e) => setLotDate(e.target.value)}
-                        className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Date limite de consommation ou d'utilisation
-                      </p>
+                      <div className="text-xs text-gray-500 mb-0.5">Article</div>
+                      <div className="text-sm text-gray-900">{article.nom}</div>
+                      <div className="text-xs text-gray-500">{article.ref}</div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs text-gray-500 mb-0.5">Quantité reçue</div>
+                      <div className="text-sm text-gray-900">{mouvement.qte.toLocaleString("fr-FR")} {article.uniteSortie}</div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs text-gray-500 mb-0.5">Zone</div>
+                      <div className="text-sm text-gray-900">{mouvement.emplacementDestination || mouvement.emplacementSource}</div>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs text-gray-500 mb-0.5">Numéro de lot</div>
+                      <div className="text-sm text-gray-900">{mouvement.lotNumber}</div>
                     </div>
                   </div>
 
-                  {/* Right Column: Points de vérification */}
-                  <div className="space-y-5">
+                  {/* Band 2: Verification + expiration */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-3">
+                    {/* Left: Points de vérification */}
                     <div>
-                      <div className="flex items-center justify-between border-b border-gray-200 pb-2 mb-3">
+                      <div className="flex items-center justify-between border-b border-gray-200 pb-1.5 mb-2">
                         <h3 className="text-xs uppercase tracking-wide font-medium text-gray-500">
                           Points de vérification
                         </h3>
@@ -523,10 +491,10 @@ export const InspectionModal = ({
                         </button>
                       </div>
                       <div className="space-y-0">
-                        {checklist.map(({ key, label, description }) => (
+                        {checklist.map(({ key, label }) => (
                           <label
                             key={key}
-                            className="flex items-start gap-3 py-2 border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                            className="flex items-center gap-3 py-1.5 border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
                           >
                             <input
                               type="checkbox"
@@ -537,182 +505,143 @@ export const InspectionModal = ({
                                   [key]: e.target.checked,
                                 })
                               }
-                              className="w-4 h-4 rounded border-gray-300 mt-0.5 cursor-pointer accent-primary"
+                              className="w-4 h-4 rounded border-gray-300 cursor-pointer accent-primary"
                             />
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm text-gray-900">
-                                {label}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {description}
-                              </div>
+                            <div className="text-sm text-gray-900">
+                              {label}
                             </div>
                           </label>
                         ))}
                       </div>
                     </div>
-                  </div>
 
-                  {/* Full width: Saisie des quantités */}
-                  <div className="md:col-span-2 space-y-5">
+                    {/* Right: Date d'expiration */}
                     <div>
-                      <h3 className="text-xs uppercase tracking-wide font-medium text-gray-500 border-b border-gray-200 pb-2 mb-3">
-                        Saisie des quantités
-                      </h3>
-
-                      {/* Three-column row on desktop */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        {/* Total */}
-                        <div className="min-w-0">
-                          <label className="block text-[13px] font-medium text-gray-600 mb-1">
-                            Quantité à traiter (total)
-                          </label>
-                          <div className="w-full h-9 px-3 rounded border border-gray-300 bg-gray-50 flex items-center text-sm text-gray-900 font-medium">
-                            {mouvement.qte.toLocaleString("fr-FR")} {article.uniteSortie}
-                          </div>
-                          <p className="text-xs text-gray-500 mt-1">
-                            Référence maître (lecture seule)
-                          </p>
-                        </div>
-
-                        {/* Defective with unit toggle */}
-                        <div className="min-w-0">
-                          <label className="block text-[13px] font-medium text-gray-600 mb-1">
-                            Quantité non-conforme <span className="text-red-600">*</span>
-                          </label>
-                          
-                          {/* Unit Toggle - segmented control */}
-                          <div className="flex gap-0.5 mb-2 border border-gray-300 rounded overflow-hidden">
-                            <button
-                              type="button"
-                              onClick={() => setQteDefectueuseUnit("sortie")}
-                              className={`flex-1 h-9 text-xs font-medium transition-colors ${
-                                qteDefectueuseUnit === "sortie"
-                                  ? "bg-primary/10 text-primary"
-                                  : "bg-white text-gray-600 hover:bg-gray-50"
-                              }`}
-                            >
-                              En {article.uniteSortie}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setQteDefectueuseUnit("entree")}
-                              className={`flex-1 h-9 text-xs font-medium transition-colors ${
-                                qteDefectueuseUnit === "entree"
-                                  ? "bg-primary/10 text-primary"
-                                  : "bg-white text-gray-600 hover:bg-gray-50"
-                              }`}
-                            >
-                              En {article.uniteEntree}
-                            </button>
-                          </div>
-
-                          <input
-                            type="number"
-                            value={
-                              qteDefectueuse === 0
-                                ? ""
-                                : qteDefectueuseUnit === "sortie"
-                                ? qteDefectueuse
-                                : qteDefectueuse / article.facteurConversion
-                            }
-                            onChange={(e) => handleDefectuousChange(e.target.value, qteDefectueuseUnit)}
-                            className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary no-spinner"
-                            min="0"
-                            step="0.01"
-                            placeholder="0"
-                          />
-                          {/* Conversion hint */}
-                          {qteDefectueuse > 0 && (
-                            <p className="text-xs text-gray-500 mt-1">
-                              {qteDefectueuseUnit === "sortie" ? (
-                                <>{qteDefectueuse.toLocaleString("fr-FR")} {article.uniteSortie} = {(qteDefectueuse / article.facteurConversion).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {article.uniteEntree}</>
-                              ) : (
-                                <>{(qteDefectueuse / article.facteurConversion).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {article.uniteEntree} = {qteDefectueuse.toLocaleString("fr-FR")} {article.uniteSortie}</>
-                              )}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Valid (auto-calculated) */}
-                        <div className="min-w-0">
-                          <label className="block text-[13px] font-medium text-gray-600 mb-1">
-                            Quantité conforme (auto)
-                          </label>
-                          <div className="w-full h-9 px-3 rounded border border-gray-300 bg-gray-50 flex items-center text-sm text-gray-900 font-medium">
-                            {qteValide.toLocaleString("fr-FR")} {article.uniteSortie}
-                          </div>
-                          <p className="text-xs text-gray-500 mt-1">
-                            Calculée: Total - Défectueuse
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Summary stats - single inline row */}
-                      <div className="flex items-center justify-around py-2 border-t border-b border-gray-200">
-                        <div className="text-center">
-                          <div className="text-xs text-gray-500 mb-0.5">Total</div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {mouvement.qte.toLocaleString("fr-FR")}
-                          </div>
-                        </div>
-                        <div className="w-px h-6 bg-gray-200"></div>
-                        <div className="text-center">
-                          <div className="text-xs text-gray-500 mb-0.5">Conforme</div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {qteValide.toLocaleString("fr-FR")}
-                          </div>
-                        </div>
-                        <div className="w-px h-6 bg-gray-200"></div>
-                        <div className="text-center">
-                          <div className="text-xs text-gray-500 mb-0.5">Non-Conforme</div>
-                          <div className={`text-sm font-medium ${
-                            qteDefectueuse > 0 ? "text-red-600" : "text-gray-900"
-                          }`}>
-                            {qteDefectueuse.toLocaleString("fr-FR")}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Warning: units excluded from stock */}
-                      {qteDefectueuse > 0 && (
-                        <div className="flex items-center gap-2 text-xs text-red-600 mt-2">
-                          <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                          <span>{qteDefectueuse.toLocaleString("fr-FR")} unité{qteDefectueuse > 1 ? "s" : ""} exclue{qteDefectueuse > 1 ? "s" : ""} du stock</span>
-                        </div>
-                      )}
+                      <label className="block text-xs uppercase tracking-wide font-medium text-gray-500 border-b border-gray-200 pb-1.5 mb-2">
+                        Date d'expiration (optionnel)
+                      </label>
+                      <input
+                        type="date"
+                        value={lotDate}
+                        onChange={(e) => setLotDate(e.target.value)}
+                        className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
+                      />
                     </div>
                   </div>
 
-                  {/* Full width: Contrôle section */}
-                  <div className="md:col-span-2 space-y-5">
-                    <div>
-                      <h3 className="text-xs uppercase tracking-wide font-medium text-gray-500 border-b border-gray-200 pb-2 mb-3">
-                        Contrôle
-                      </h3>
+                  {/* Band 3: Saisie des quantités */}
+                  <div>
+                    <h3 className="text-xs uppercase tracking-wide font-medium text-gray-500 border-b border-gray-200 pb-1.5 mb-2">
+                      Saisie des quantités
+                    </h3>
+                    <div className="grid grid-cols-3 gap-3">
+                      {/* Total */}
+                      <div className="min-w-0">
+                        <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                          Quantité à traiter (total)
+                        </label>
+                        <div className="w-full h-9 px-3 rounded border border-gray-300 bg-gray-50 flex items-center text-sm text-gray-900 font-medium">
+                          {mouvement.qte.toLocaleString("fr-FR")} {article.uniteSortie}
+                        </div>
+                      </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
-                        {/* Note de Contrôle - Mandatory when defective items, full width */}
+                      {/* Defective with unit toggle */}
+                      <div className="min-w-0">
+                        <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                          Quantité non-conforme <span className="text-red-600">*</span>
+                        </label>
+                        
+                        {/* Unit Toggle - segmented control */}
+                        <div className="flex gap-0.5 mb-2 border border-gray-300 rounded overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setQteDefectueuseUnit("sortie")}
+                            className={`flex-1 h-9 text-xs font-medium transition-colors ${
+                              qteDefectueuseUnit === "sortie"
+                                ? "bg-primary/10 text-primary"
+                                : "bg-white text-gray-600 hover:bg-gray-50"
+                            }`}
+                          >
+                            En {article.uniteSortie}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setQteDefectueuseUnit("entree")}
+                            className={`flex-1 h-9 text-xs font-medium transition-colors ${
+                              qteDefectueuseUnit === "entree"
+                                ? "bg-primary/10 text-primary"
+                                : "bg-white text-gray-600 hover:bg-gray-50"
+                            }`}
+                          >
+                            En {article.uniteEntree}
+                          </button>
+                        </div>
+
+                        <input
+                          type="number"
+                          value={
+                            qteDefectueuse === 0
+                              ? ""
+                              : qteDefectueuseUnit === "sortie"
+                              ? qteDefectueuse
+                              : qteDefectueuse / article.facteurConversion
+                          }
+                          onChange={(e) => handleDefectuousChange(e.target.value, qteDefectueuseUnit)}
+                          className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary no-spinner"
+                          min="0"
+                          step="0.01"
+                          placeholder="0"
+                        />
+                        {/* Conversion hint */}
                         {qteDefectueuse > 0 && (
-                          <div className="md:col-span-2 min-w-0">
-                            <label className="block text-[13px] font-medium text-gray-600 mb-1">
-                              Note de Contrôle <span className="text-xs text-red-600">(Obligatoire)</span>
-                            </label>
-                            <textarea
-                              value={noteControle}
-                              onChange={(e) => setNoteControle(e.target.value)}
-                              placeholder="Décrivez les défauts détectés..."
-                              className="w-full px-3 py-2 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
-                              rows={2}
-                            />
-                            <p className="text-xs text-gray-500 mt-1">
-                              Détails sur les articles défectueux
-                            </p>
-                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {qteDefectueuseUnit === "sortie" ? (
+                              <>{qteDefectueuse.toLocaleString("fr-FR")} {article.uniteSortie} = {(qteDefectueuse / article.facteurConversion).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {article.uniteEntree}</>
+                            ) : (
+                              <>{(qteDefectueuse / article.facteurConversion).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {article.uniteEntree} = {qteDefectueuse.toLocaleString("fr-FR")} {article.uniteSortie}</>
+                            )}
+                          </p>
                         )}
                       </div>
+
+                      {/* Valid (auto-calculated) */}
+                      <div className="min-w-0">
+                        <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                          Quantité conforme (auto)
+                        </label>
+                        <div className="w-full h-9 px-3 rounded border border-gray-300 bg-gray-50 flex items-center text-sm text-gray-900 font-medium">
+                          {qteValide.toLocaleString("fr-FR")} {article.uniteSortie}
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Warning: units excluded from stock */}
+                    {qteDefectueuse > 0 && (
+                      <div className="flex items-center gap-2 text-xs text-red-600 mt-2">
+                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span>{qteDefectueuse.toLocaleString("fr-FR")} unité{qteDefectueuse > 1 ? "s" : ""} exclue{qteDefectueuse > 1 ? "s" : ""} du stock</span>
+                      </div>
+                    )}
                   </div>
+
+                  {/* Note de Contrôle - Mandatory when defective items, full width */}
+                  {qteDefectueuse > 0 && (
+                    <div className="min-w-0">
+                      <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                        Note de Contrôle <span className="text-xs text-red-600">(Obligatoire)</span>
+                      </label>
+                      <textarea
+                        value={noteControle}
+                        onChange={(e) => setNoteControle(e.target.value)}
+                        placeholder="Décrivez les défauts détectés..."
+                        className="w-full px-3 py-2 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
+                        rows={2}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Détails sur les articles défectueux
+                      </p>
+                    </div>
+                  )}
                 </div>
               </>
             )}
