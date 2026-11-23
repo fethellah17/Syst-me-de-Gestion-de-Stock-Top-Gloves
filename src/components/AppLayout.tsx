@@ -37,7 +37,6 @@ const navItems = [
   { to: "/mouvements", label: "Mouvements", icon: ArrowLeftRight },
   { to: "/inventaire", label: "Inventaire", icon: ClipboardCheck },
   { to: "/unites", label: "Unités de Mesure", icon: Ruler },
-  { to: "/staff", label: "Personnel", icon: Users },
 ];
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => {

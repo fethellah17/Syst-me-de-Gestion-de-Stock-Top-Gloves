@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Users, Plus, Edit, Trash2, Shield } from "lucide-react";
+import { Users, Plus, Edit, Trash2, Shield, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Toast } from "@/components/Toast";
 
@@ -68,6 +68,15 @@ const StaffPage = () => {
 
   return (
     <div className="space-y-6 w-full">
+      {/* Back to Admin */}
+      <button
+        onClick={() => navigate("/admin")}
+        className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900 transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Administration
+      </button>
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-foreground">Personnel</h2>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   ShieldCheck,
@@ -10,6 +11,7 @@ import {
   Upload,
   FileSpreadsheet,
   LogOut,
+  ChevronRight,
 } from "lucide-react";
 
 const auditLogs = [
@@ -22,6 +24,7 @@ const auditLogs = [
 
 const AdminPage = () => {
   const { isAdmin, adminLogin, logoutAdmin } = useAuth();
+  const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
@@ -92,20 +95,41 @@ const AdminPage = () => {
 
       {/* Admin modules */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { icon: Settings, label: "Paramètres Système", desc: "Configuration générale" },
-          { icon: Users, label: "Gestion Utilisateurs", desc: "Rôles et permissions" },
-          { icon: History, label: "Historique Complet", desc: "Audit de toutes les actions" },
-          { icon: FileSpreadsheet, label: "Import/Export", desc: "CSV et Excel" },
-        ].map((mod) => (
-          <button key={mod.label} className="bg-card border rounded-lg p-5 text-left hover:shadow-md hover:border-primary/30 transition-all group">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/20 transition-colors">
-              <mod.icon className="w-5 h-5 text-primary" />
-            </div>
-            <h3 className="font-semibold text-foreground text-sm">{mod.label}</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">{mod.desc}</p>
-          </button>
-        ))}
+        <button className="bg-card border rounded-lg p-5 text-left hover:shadow-md hover:border-primary/30 transition-all group">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/20 transition-colors">
+            <Settings className="w-5 h-5 text-primary" />
+          </div>
+          <h3 className="font-semibold text-foreground text-sm">Paramètres Système</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Configuration générale</p>
+        </button>
+        
+        <button 
+          onClick={() => navigate("/staff")}
+          className="relative bg-card border rounded-lg p-5 text-left cursor-pointer hover:border-gray-300 hover:bg-gray-50 transition-colors group"
+        >
+          <ChevronRight className="absolute top-5 right-5 w-4 h-4 text-gray-400" />
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/20 transition-colors">
+            <Users className="w-5 h-5 text-primary" />
+          </div>
+          <h3 className="font-semibold text-foreground text-sm">Gestion Utilisateurs</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Rôles et permissions</p>
+        </button>
+        
+        <button className="bg-card border rounded-lg p-5 text-left hover:shadow-md hover:border-primary/30 transition-all group">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/20 transition-colors">
+            <History className="w-5 h-5 text-primary" />
+          </div>
+          <h3 className="font-semibold text-foreground text-sm">Historique Complet</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Audit de toutes les actions</p>
+        </button>
+        
+        <button className="bg-card border rounded-lg p-5 text-left hover:shadow-md hover:border-primary/30 transition-all group">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/20 transition-colors">
+            <FileSpreadsheet className="w-5 h-5 text-primary" />
+          </div>
+          <h3 className="font-semibold text-foreground text-sm">Import/Export</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">CSV et Excel</p>
+        </button>
       </div>
 
       {/* Quick actions */}
