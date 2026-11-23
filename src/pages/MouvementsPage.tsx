@@ -6,12 +6,13 @@ import { Toast } from "@/components/Toast";
 import { MovementTable } from "@/components/MovementTable";
 import { BulkMovementModal } from "@/components/BulkMovementModal";
 import { InspectionModal, type InspectionData } from "@/components/InspectionModal";
+import { OperationDiscussion } from "@/components/OperationDiscussion";
 import { generateAdministrativeErrorPDF, generateDefectiveItemsPDF } from "@/lib/pdf-generator";
 import { generateOperationPDF } from "@/lib/operation-pdf";
 import { format } from "date-fns";
 
 const MouvementsPage = () => {
-  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, getArticleStockByLocation, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination, createOperation, createOperationFull, updateOperationFields, setOperationController, updateOperationStatus, applyOperationStock, revertOperation, resetLineQc, operations } = useData();
+  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, getArticleStockByLocation, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination, createOperation, createOperationFull, updateOperationFields, setOperationController, updateOperationStatus, applyOperationStock, revertOperation, resetLineQc, operations, addOperationMessage, getOperationMessages } = useData();
   const [selectedType, setSelectedType] = useState<"Entrée" | "Sortie" | "Transfert" | null>(null);
   const [selectedOperationId, setSelectedOperationId] = useState<number | null>(null);
   const [selectedArticleId, setSelectedArticleId] = useState<string>("");
@@ -1594,6 +1595,15 @@ const MouvementsPage = () => {
                 hideLinePdf={true}
                 showActions={true}
                 compact={false}
+              />
+            </div>
+
+            {/* Discussion section */}
+            <div className="mt-6">
+              <OperationDiscussion
+                messages={getOperationMessages(selectedOperation.id)}
+                onSend={(text, author) => addOperationMessage(selectedOperation.id, text, author, "note")}
+                formatDate={formatDateTime}
               />
             </div>
           </div>
