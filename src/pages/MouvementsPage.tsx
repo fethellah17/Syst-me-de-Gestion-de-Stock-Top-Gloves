@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, ArrowLeftRight, Plus, ChevronLeft } from "lucide-react";
+import { ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, ArrowLeftRight, Plus, ChevronLeft, Download } from "lucide-react";
 import { useData } from "@/contexts/DataContext";
 import { Modal } from "@/components/Modal";
 import { Toast } from "@/components/Toast";
@@ -7,6 +7,7 @@ import { MovementTable } from "@/components/MovementTable";
 import { BulkMovementModal } from "@/components/BulkMovementModal";
 import { InspectionModal, type InspectionData } from "@/components/InspectionModal";
 import { generateAdministrativeErrorPDF, generateDefectiveItemsPDF } from "@/lib/pdf-generator";
+import { generateOperationPDF } from "@/lib/operation-pdf";
 import { format } from "date-fns";
 
 const MouvementsPage = () => {
@@ -434,6 +435,13 @@ const MouvementsPage = () => {
     }
     setIsRedoConfirmOpen(false);
     setRedoLineId(null);
+  };
+
+  const handleDownloadOperationPDF = async () => {
+    if (!selectedOperationId || !selectedOperation) return;
+
+    const operationLines = mouvements.filter(m => m.operationId === selectedOperationId);
+    await generateOperationPDF(selectedOperation, operationLines, articles, suppliers);
   };
 
   const handleDuplicate = (mouvement: any) => {
@@ -1380,6 +1388,17 @@ const MouvementsPage = () => {
                     </div>
                   );
                 })()}
+                {selectedOperation?.statut === "Terminé" && mouvements.filter(m => m.operationId === selectedOperationId).length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleDownloadOperationPDF}
+                    className="h-9 px-4 rounded text-sm font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors flex items-center gap-2"
+                    title="Télécharger PDF de l'opération"
+                  >
+                    <Download className="w-4 h-4" />
+                    Télécharger PDF
+                  </button>
+                )}
               </div>
 
               {/* Status Bar - Right */}
@@ -1535,6 +1554,7 @@ const MouvementsPage = () => {
                 onInspect={selectedOperation?.statut === "En inspection" ? handleOpenInspectionModal : undefined}
                 onRedoInspection={selectedOperation?.statut === "En inspection" ? handleOpenRedo : undefined}
                 onDelete={selectedOperation?.statut === "Brouillon" ? handleDeleteClick : undefined}
+                hideLinePdf={selectedOperation?.statut === "Terminé"}
                 showActions={true}
                 compact={false}
               />

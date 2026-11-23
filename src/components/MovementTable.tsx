@@ -21,6 +21,7 @@ interface MovementTableProps {
   onRedoInspection?: (id: string) => void;
   onDuplicate?: (mouvement: Mouvement) => void;
   onDelete?: (id: string) => void;
+  hideLinePdf?: boolean;
   showActions?: boolean;
   compact?: boolean;
 }
@@ -34,6 +35,7 @@ export const MovementTable = ({
   onRedoInspection,
   onDuplicate,
   onDelete,
+  hideLinePdf = false,
   showActions = true,
   compact = false
 }: MovementTableProps) => {
@@ -414,7 +416,7 @@ export const MovementTable = ({
                           <RotateCcw className="w-4 h-4" />
                         </button>
                       )}
-                      {m.type === "Sortie" && m.statut === "Terminé" && m.status === "approved" && (
+                      {m.type === "Sortie" && m.statut === "Terminé" && m.status === "approved" && !hideLinePdf && (
                         <button
                           onClick={() => generateOutboundPDF(m, articles)}
                           className="p-1.5 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
@@ -423,7 +425,7 @@ export const MovementTable = ({
                           <FileText className="w-4 h-4" />
                         </button>
                       )}
-                      {m.type === "Sortie" && m.statut === "Refusé" && m.refusalType === "administrative" && (
+                      {m.type === "Sortie" && m.statut === "Refusé" && m.refusalType === "administrative" && !hideLinePdf && (
                         <button
                           onClick={() => generateAdministrativeErrorPDF(m)}
                           className="p-1.5 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
@@ -432,7 +434,7 @@ export const MovementTable = ({
                           <FileText className="w-4 h-4" />
                         </button>
                       )}
-                      {m.type === "Sortie" && m.statut === "Refusé" && m.refusalType === "defective" && (
+                      {m.type === "Sortie" && m.statut === "Refusé" && m.refusalType === "defective" && !hideLinePdf && (
                         <button
                           onClick={() => generateDefectiveItemsPDF(m)}
                           className="p-1.5 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
@@ -441,7 +443,7 @@ export const MovementTable = ({
                           <FileText className="w-4 h-4" />
                         </button>
                       )}
-                      {m.type === "Entrée" && m.statut !== "En attente" && (
+                      {m.type === "Entrée" && m.statut !== "En attente" && !hideLinePdf && (
                         <button
                           onClick={() => generateInboundPDF(m, articles)}
                           className="p-1.5 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
@@ -450,7 +452,7 @@ export const MovementTable = ({
                           <FileText className="w-4 h-4" />
                         </button>
                       )}
-                      {m.type === "Transfert" && (
+                      {m.type === "Transfert" && !hideLinePdf && (
                         <button
                           onClick={() => generateTransferPDF(m)}
                           className="p-1.5 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
@@ -459,7 +461,7 @@ export const MovementTable = ({
                           <FileText className="w-4 h-4" />
                         </button>
                       )}
-                      {m.type === "Ajustement" && (
+                      {m.type === "Ajustement" && !hideLinePdf && (
                         <button
                           onClick={() => generateAdjustmentPDF(m)}
                           className="p-1.5 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
@@ -468,7 +470,7 @@ export const MovementTable = ({
                           <FileText className="w-4 h-4" />
                         </button>
                       )}
-                      {m.status === "rejected" && m.rejectionReason && (
+                      {m.status === "rejected" && m.rejectionReason && !hideLinePdf && (
                         <button
                           onClick={() => generateRejectionPDF(m)}
                           className="p-1.5 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
@@ -720,7 +722,7 @@ export const MovementTable = ({
                         </button>
                       )}
                       {/* PDF Download Buttons */}
-                      {m.type === "Sortie" && m.statut === "Terminé" && m.status === "approved" && (
+                      {m.type === "Sortie" && m.statut === "Terminé" && m.status === "approved" && !hideLinePdf && (
                         <button
                           onClick={() => generateOutboundPDF(m)}
                           className="p-2 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
@@ -729,7 +731,7 @@ export const MovementTable = ({
                           <FileText className="w-4 h-4" />
                         </button>
                       )}
-                      {m.type === "Sortie" && m.statut === "Refusé" && m.refusalType === "administrative" && (
+                      {m.type === "Sortie" && m.statut === "Refusé" && m.refusalType === "administrative" && !hideLinePdf && (
                         <button
                           onClick={() => generateAdministrativeErrorPDF(m)}
                           className="p-2 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
@@ -738,7 +740,7 @@ export const MovementTable = ({
                           <FileText className="w-4 h-4" />
                         </button>
                       )}
-                      {m.type === "Sortie" && m.statut === "Refusé" && m.refusalType === "defective" && (
+                      {m.type === "Sortie" && m.statut === "Refusé" && m.refusalType === "defective" && !hideLinePdf && (
                         <button
                           onClick={() => generateDefectiveItemsPDF(m)}
                           className="p-2 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
@@ -747,7 +749,7 @@ export const MovementTable = ({
                           <FileText className="w-4 h-4" />
                         </button>
                       )}
-                      {m.type === "Entrée" && m.statut !== "En attente" && (
+                      {m.type === "Entrée" && m.statut !== "En attente" && !hideLinePdf && (
                         <button
                           onClick={() => generateInboundPDF(m, articles)}
                           className="p-2 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
@@ -756,7 +758,7 @@ export const MovementTable = ({
                           <FileText className="w-4 h-4" />
                         </button>
                       )}
-                      {m.type === "Transfert" && (
+                      {m.type === "Transfert" && !hideLinePdf && (
                         <button
                           onClick={() => generateTransferPDF(m)}
                           className="p-2 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
@@ -765,7 +767,7 @@ export const MovementTable = ({
                           <FileText className="w-4 h-4" />
                         </button>
                       )}
-                      {m.type === "Ajustement" && (
+                      {m.type === "Ajustement" && !hideLinePdf && (
                         <button
                           onClick={() => generateAdjustmentPDF(m)}
                           className="p-2 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
@@ -774,7 +776,7 @@ export const MovementTable = ({
                           <FileText className="w-4 h-4" />
                         </button>
                       )}
-                      {m.status === "rejected" && m.rejectionReason && (
+                      {m.status === "rejected" && m.rejectionReason && !hideLinePdf && (
                         <button
                           onClick={() => generateRejectionPDF(m)}
                           className="p-2 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
