@@ -10,7 +10,7 @@ import { generateAdministrativeErrorPDF, generateDefectiveItemsPDF } from "@/lib
 import { format } from "date-fns";
 
 const MouvementsPage = () => {
-  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, getArticleStockByLocation, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination, createOperation, createOperationFull, updateOperationFields, updateOperationStatus, applyOperationStock, revertOperation, operations } = useData();
+  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, getArticleStockByLocation, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination, createOperation, createOperationFull, updateOperationFields, updateOperationStatus, applyOperationStock, revertOperation, resetLineQc, operations } = useData();
   const [selectedType, setSelectedType] = useState<"Entrée" | "Sortie" | "Transfert" | null>(null);
   const [selectedOperationId, setSelectedOperationId] = useState<number | null>(null);
   const [selectedArticleId, setSelectedArticleId] = useState<string>("");
@@ -25,11 +25,13 @@ const MouvementsPage = () => {
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isRevertConfirmOpen, setIsRevertConfirmOpen] = useState(false);
+  const [isRedoConfirmOpen, setIsRedoConfirmOpen] = useState(false);
   const [isInspectionModalOpen, setIsInspectionModalOpen] = useState(false);
   const [inspectionMouvementId, setInspectionMouvementId] = useState<string | null>(null);
   const [qcMouvementId, setQCMouvementId] = useState<string | null>(null);
   const [rejectMouvementId, setRejectMouvementId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [redoLineId, setRedoLineId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [duplicateData, setDuplicateData] = useState<any>(null);
   const [qcFormData, setQCFormData] = useState({
@@ -400,6 +402,38 @@ const MouvementsPage = () => {
       });
     }
     setIsRevertConfirmOpen(false);
+  };
+
+  const handleOpenRedo = (id: string) => {
+    // Guard: only allow redo during "En inspection"
+    if (selectedOperation?.statut !== "En inspection") {
+      setToast({ 
+        message: "Le contrôle ne peut être refait que pendant l'inspection", 
+        type: "error" 
+      });
+      return;
+    }
+    setRedoLineId(id);
+    setIsRedoConfirmOpen(true);
+  };
+
+  const handleConfirmRedo = () => {
+    if (!redoLineId) return;
+
+    const result = resetLineQc(redoLineId);
+    if (result.success) {
+      setToast({ 
+        message: "Contrôle réinitialisé : la ligne peut être inspectée de nouveau", 
+        type: "success" 
+      });
+    } else {
+      setToast({ 
+        message: result.error || "Erreur lors de la réinitialisation", 
+        type: "error" 
+      });
+    }
+    setIsRedoConfirmOpen(false);
+    setRedoLineId(null);
   };
 
   const handleDuplicate = (mouvement: any) => {
@@ -1499,6 +1533,7 @@ const MouvementsPage = () => {
                 onQualityControl={handleOpenQCModal}
                 onReject={handleOpenRejectModal}
                 onInspect={selectedOperation?.statut === "En inspection" ? handleOpenInspectionModal : undefined}
+                onRedoInspection={selectedOperation?.statut === "En inspection" ? handleOpenRedo : undefined}
                 onDelete={selectedOperation?.statut === "Brouillon" ? handleDeleteClick : undefined}
                 showActions={true}
                 compact={false}
@@ -1706,6 +1741,29 @@ const MouvementsPage = () => {
             </button>
             <button
               onClick={executeRevert}
+              className="flex-1 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              Confirmer
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Redo Inspection Confirmation Modal */}
+      <Modal isOpen={isRedoConfirmOpen} onClose={() => setIsRedoConfirmOpen(false)} title="Refaire le contrôle">
+        <div className="space-y-4">
+          <p className="text-sm text-foreground">
+            Refaire le contrôle de cette ligne ? Les résultats actuels seront effacés.
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setIsRedoConfirmOpen(false)}
+              className="flex-1 h-9 rounded-md border text-sm font-medium text-foreground hover:bg-muted transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={handleConfirmRedo}
               className="flex-1 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
             >
               Confirmer

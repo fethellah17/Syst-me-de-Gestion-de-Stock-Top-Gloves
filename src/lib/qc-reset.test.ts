@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resetQcFields } from "./qc-reset";
+import { resetQcFields, canRedoInspection } from "./qc-reset";
 import type { Mouvement } from "@/contexts/DataContext";
 
 describe("resetQcFields", () => {
@@ -352,5 +352,47 @@ describe("resetQcFields", () => {
     
     // The filter `m.stockApplied === false` will not match this line
     // because result.stockApplied is undefined, not false
+  });
+});
+
+describe("canRedoInspection", () => {
+  it("should return true for an approved Entrée line in 'En inspection'", () => {
+    const line = { type: "Entrée" as const, status: "approved" as const };
+    expect(canRedoInspection(line, "En inspection")).toBe(true);
+  });
+
+  it("should return true for a rejected Sortie line in 'En inspection'", () => {
+    const line = { type: "Sortie" as const, status: "rejected" as const };
+    expect(canRedoInspection(line, "En inspection")).toBe(true);
+  });
+
+  it("should return false for a pending line", () => {
+    const line = { type: "Entrée" as const, status: "pending" as const };
+    expect(canRedoInspection(line, "En inspection")).toBe(false);
+  });
+
+  it("should return false for a Transfert line even if approved", () => {
+    const line = { type: "Transfert" as const, status: "approved" as const };
+    expect(canRedoInspection(line, "En inspection")).toBe(false);
+  });
+
+  it("should return false when operationStatut is 'Brouillon'", () => {
+    const line = { type: "Entrée" as const, status: "approved" as const };
+    expect(canRedoInspection(line, "Brouillon")).toBe(false);
+  });
+
+  it("should return false when operationStatut is 'En attente de validation'", () => {
+    const line = { type: "Sortie" as const, status: "approved" as const };
+    expect(canRedoInspection(line, "En attente de validation")).toBe(false);
+  });
+
+  it("should return false when operationStatut is 'Terminé'", () => {
+    const line = { type: "Entrée" as const, status: "approved" as const };
+    expect(canRedoInspection(line, "Terminé")).toBe(false);
+  });
+
+  it("should return false when operationStatut is undefined", () => {
+    const line = { type: "Sortie" as const, status: "rejected" as const };
+    expect(canRedoInspection(line, undefined)).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState } from "react";
 import { applyEntreeStock, applySortieStock, computeOperationStockEffect, shouldReverseStockOnDelete } from "@/lib/stock-effects";
-import { resetQcFields } from "@/lib/qc-reset";
+import { resetQcFields, canRedoInspection } from "@/lib/qc-reset";
 
 export interface InventoryEntry {
   zone: string;
@@ -162,6 +162,7 @@ interface DataContextType {
   updateOperationFields: (operationId: number, fields: { operateur?: string; documentOrigine?: string }) => void;
   applyOperationStock: (operationId: number) => { success: boolean; error?: string; failedLines?: string[] };
   revertOperation: (operationId: number) => { success: boolean; error?: string };
+  resetLineQc: (id: string) => { success: boolean; error?: string };
   
   addInventoryRecord: (record: Omit<InventoryRecord, "id">) => void;
   applyInventoryAdjustment: (articleId: number, emplacementNom: string, ecart: number) => void;
@@ -567,6 +568,32 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         error: `Impossible de revenir en arrière depuis le statut "${statut}"` 
       };
     }
+  };
+
+  const resetLineQc = (id: string): { success: boolean; error?: string } => {
+    // Find the line
+    const line = mouvements.find(m => m.id === id);
+    if (!line) {
+      return { success: false, error: "Ligne introuvable" };
+    }
+
+    // Find its operation
+    const operation = operations.find(op => op.id === line.operationId);
+    if (!operation) {
+      return { success: false, error: "Opération introuvable" };
+    }
+
+    // Check if redo is allowed
+    if (!canRedoInspection(line, operation.statut)) {
+      return { 
+        success: false, 
+        error: "Le contrôle ne peut être refait que pendant l'inspection" 
+      };
+    }
+
+    // Reset the line using resetQcFields
+    setMouvements(prev => prev.map(m => m.id === id ? resetQcFields(m) : m));
+    return { success: true };
   };
 
   const addMouvement = (mouvement: Omit<Mouvement, "id">) => {
@@ -1229,6 +1256,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateOperationFields,
       applyOperationStock,
       revertOperation,
+      resetLineQc,
       addInventoryRecord,
       applyInventoryAdjustment,
       batchUpdateArticles,

@@ -45,3 +45,25 @@ export function resetQcFields<T extends Mouvement>(line: T): T {
     status: "pending" as const,
   } as T;
 }
+
+/**
+ * Check if a line can be re-inspected (redo QC)
+ * 
+ * A line can be re-inspected only when:
+ * - Its operation is in "En inspection" status
+ * - The line type is Entrée or Sortie (Transfert skips QC)
+ * - The line has already been inspected (status is "approved" or "rejected")
+ * 
+ * @param line - Movement to check (needs type and status fields)
+ * @param operationStatut - Current operation status
+ * @returns true if the line can be re-inspected
+ */
+export function canRedoInspection(
+  line: Pick<Mouvement, "type" | "status">,
+  operationStatut?: string
+): boolean {
+  if (operationStatut !== "En inspection") return false;
+  if (line.type !== "Entrée" && line.type !== "Sortie") return false;
+  if (line.status !== "approved" && line.status !== "rejected") return false;
+  return true;
+}

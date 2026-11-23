@@ -1,4 +1,4 @@
-import { FileText, ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, FileEdit, CheckCircle2, AlertCircle, Clock, Copy, CheckIcon, XIcon, ClipboardCheck, Timer, Trash2 } from "lucide-react";
+import { FileText, ArrowDownToLine, ArrowUpFromLine, ArrowRightLeft, FileEdit, CheckCircle2, AlertCircle, Clock, Copy, CheckIcon, XIcon, ClipboardCheck, Timer, Trash2, RotateCcw } from "lucide-react";
 import { 
   generateInboundPDF, 
   generateOutboundPDF, 
@@ -9,6 +9,7 @@ import {
   generateDefectiveItemsPDF
 } from "@/lib/pdf-generator";
 import { UnitBadge } from "@/components/UnitBadge";
+import { canRedoInspection } from "@/lib/qc-reset";
 import type { Mouvement, Article } from "@/contexts/DataContext";
 
 interface MovementTableProps {
@@ -17,6 +18,7 @@ interface MovementTableProps {
   onQualityControl?: (id: string) => void;
   onReject?: (id: string) => void;
   onInspect?: (id: string) => void;
+  onRedoInspection?: (id: string) => void;
   onDuplicate?: (mouvement: Mouvement) => void;
   onDelete?: (id: string) => void;
   showActions?: boolean;
@@ -29,6 +31,7 @@ export const MovementTable = ({
   onQualityControl,
   onReject,
   onInspect,
+  onRedoInspection,
   onDuplicate,
   onDelete,
   showActions = true,
@@ -401,6 +404,16 @@ export const MovementTable = ({
                           <ClipboardCheck className="w-4 h-4" />
                         </button>
                       )}
+                      {onRedoInspection && canRedoInspection(m, "En inspection") && (
+                        <button
+                          onClick={() => onRedoInspection(m.id)}
+                          className="p-1.5 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
+                          title="Refaire le contrôle"
+                          aria-label="Refaire le contrôle"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                        </button>
+                      )}
                       {m.type === "Sortie" && m.statut === "Terminé" && m.status === "approved" && (
                         <button
                           onClick={() => generateOutboundPDF(m, articles)}
@@ -694,6 +707,16 @@ export const MovementTable = ({
                           title="Contrôle Qualité"
                         >
                           <ClipboardCheck className="w-5 h-5" />
+                        </button>
+                      )}
+                      {onRedoInspection && canRedoInspection(m, "En inspection") && (
+                        <button
+                          onClick={() => onRedoInspection(m.id)}
+                          className="p-2 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
+                          title="Refaire le contrôle"
+                          aria-label="Refaire le contrôle"
+                        >
+                          <RotateCcw className="w-5 h-5" />
                         </button>
                       )}
                       {/* PDF Download Buttons */}
