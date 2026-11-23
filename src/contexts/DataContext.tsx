@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState } from "react";
 import { applyEntreeStock, applySortieStock, computeOperationStockEffect, shouldReverseStockOnDelete } from "@/lib/stock-effects";
 import { resetQcFields, canRedoInspection } from "@/lib/qc-reset";
+import { buildOperationMessage, sortMessagesAsc, type OperationMessage, type OperationMessageKind } from "@/lib/operation-messages";
+
+export type { OperationMessage, OperationMessageKind };
 
 export interface InventoryEntry {
   zone: string;
@@ -177,6 +180,9 @@ interface DataContextType {
   getArticleCurrentLocation: (articleRef: string) => string | null;
   processTransfer: (articleRef: string, sourceLocation: string, quantity: number, destinationLocation: string, operationId?: number) => { success: boolean; error?: string };
   recalculateAllOccupancies: () => void;
+  
+  addOperationMessage: (operationId: number, text: string, author?: string, kind?: OperationMessageKind) => { success: boolean; error?: string };
+  getOperationMessages: (operationId: number) => OperationMessage[];
 }
 
 /**
@@ -323,6 +329,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [mouvements, setMouvements] = useState<Mouvement[]>(seedMovements);
   const [operations, setOperations] = useState<Operation[]>(seedOperations);
   const [inventoryHistory, setInventoryHistory] = useState<InventoryRecord[]>(initialHistory);
+  const [operationMessages, setOperationMessages] = useState<OperationMessage[]>([]);
 
   const addArticle = (article: Omit<Article, "id">) => {
     const newId = Math.max(...articles.map(a => a.id), 0) + 1;
@@ -1246,6 +1253,32 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // No-op: Capacity tracking has been removed
   };
 
+  const addOperationMessage = (
+    operationId: number,
+    text: string,
+    author?: string,
+    kind?: OperationMessageKind
+  ): { success: boolean; error?: string } => {
+    // Check if operation exists
+    const operation = operations.find(op => op.id === operationId);
+    if (!operation) {
+      return { success: false, error: "Opération introuvable" };
+    }
+
+    const msg = buildOperationMessage({ operationId, text, author, kind });
+    if (!msg) {
+      return { success: false, error: "Message vide" };
+    }
+
+    setOperationMessages(prev => [...prev, msg]);
+    return { success: true };
+  };
+
+  const getOperationMessages = (operationId: number): OperationMessage[] => {
+    const messages = operationMessages.filter(m => m.operationId === operationId);
+    return sortMessagesAsc(messages);
+  };
+
   return (
     <DataContext.Provider value={{
       articles,
@@ -1295,6 +1328,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getArticleCurrentLocation,
       processTransfer,
       recalculateAllOccupancies,
+      addOperationMessage,
+      getOperationMessages,
     }}>
       {children}
     </DataContext.Provider>
