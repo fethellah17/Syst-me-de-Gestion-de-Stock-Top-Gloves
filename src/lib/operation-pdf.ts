@@ -53,38 +53,30 @@ const getDestinationLabel = (mouvement: Mouvement): string => {
 };
 
 /**
- * Get logo as base64 - same as pdf-generator.ts
+ * Get logo as base64 - same mechanism as pdf-generator.ts
  */
 let cachedLogoBase64: string | null | undefined = undefined;
 
 const loadLogoAsBase64 = async (): Promise<string | null> => {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0);
-          const dataURL = canvas.toDataURL('image/jpeg');
-          resolve(dataURL);
-        } else {
-          resolve(null);
-        }
-      } catch (error) {
-        console.error('Error converting logo to base64:', error);
-        resolve(null);
-      }
-    };
-    img.onerror = () => {
-      console.error('Failed to load logo image');
-      resolve(null);
-    };
-    img.src = '/logo-topgloves.jpg';
-  });
+  try {
+    // Try to load from public folder - same path as pdf-generator.ts
+    const response = await fetch('/logo.jpg');
+    if (!response.ok) {
+      console.warn('Logo file not found at /logo.jpg');
+      return null;
+    }
+    
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error('Failed to load logo:', error);
+    return null;
+  }
 };
 
 const getLogoBase64 = async (): Promise<string | null> => {
@@ -92,6 +84,9 @@ const getLogoBase64 = async (): Promise<string | null> => {
     return cachedLogoBase64;
   }
   cachedLogoBase64 = await loadLogoAsBase64();
+  if (!cachedLogoBase64) {
+    console.warn('Logo could not be loaded - PDFs will be generated without logo');
+  }
   return cachedLogoBase64;
 };
 
@@ -158,6 +153,7 @@ export function buildOperationPdfRows(
     headers = [
       "Article",
       "N° Lot",
+      "Date d'expiration",
       "Qté Saisie",
       "Impact Stock",
       "Qté Valide",
@@ -170,6 +166,7 @@ export function buildOperationPdfRows(
     headers = [
       "Article",
       "N° Lot",
+      "Date d'expiration",
       "Qté Saisie",
       "Impact Stock",
       "Qté Valide",
@@ -188,6 +185,23 @@ export function buildOperationPdfRows(
     
     // Lot number
     const lotNumber = emergencyClean(line.lotNumber || "—");
+    
+    // Date d'expiration (lotDate formatted as dd/MM/yyyy)
+    let dateExpiration = "—";
+    if (line.lotDate) {
+      try {
+        const date = new Date(line.lotDate);
+        // Check if date is valid
+        if (!isNaN(date.getTime())) {
+          const day = String(date.getDate()).padStart(2, '0');
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const year = date.getFullYear();
+          dateExpiration = `${day}/${month}/${year}`;
+        }
+      } catch (error) {
+        // Invalid date, keep "—"
+      }
+    }
     
     // Qté Saisie (original quantity with entry unit)
     const qtySaisie = line.qteOriginale !== undefined 
@@ -222,6 +236,7 @@ export function buildOperationPdfRows(
     return [
       articleName,
       lotNumber,
+      dateExpiration,
       qtySaisie,
       impactStock,
       qtyValide,
@@ -261,10 +276,17 @@ export const generateOperationPDF = async (
   } else if (operation.type === "Transfert") {
     titleText = "BON DE TRANSFERT";
   }
-  titleText += ` - ${operation.reference}`;
+  // Title does NOT include reference anymore
   
   const contentStartY = renderHeader(doc, titleText, logoBase64);
   let yPos = contentStartY;
+  
+  // Big reference number under header
+  doc.setFontSize(24);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(0, 0, 0);
+  doc.text(emergencyClean(operation.reference), 10, yPos);
+  yPos += 15;
   
   // Operation details section
   doc.setFontSize(10);
@@ -282,11 +304,7 @@ export const generateOperationPDF = async (
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   
-  // Reference
-  doc.text("Reference: " + emergencyClean(operation.reference), 15, yPos);
-  yPos += 5;
-  
-  // Document d'origine
+  // Document d'origine (Reference line removed)
   doc.text("Document d'origine: " + emergencyClean(operation.documentOrigine || "—"), 15, yPos);
   yPos += 5;
   
@@ -390,6 +408,89 @@ export const generateOperationPDF = async (
     });
     yPos += 6;
   });
+  
+  // Signature blocks - add new page if needed
+  if (yPos > 170) {
+    doc.addPage();
+    yPos = 15;
+  } else {
+    yPos += 15; // Space before signatures
+  }
+
+  if (operation.type === "Entrée" || operation.type === "Sortie") {
+    // Side-by-side signatures: Operator (left) + QC Controller (right)
+    
+    // Collect unique non-empty controleur values from lines
+    const controleurSet = new Set<string>();
+    if (lines && lines.length > 0) {
+      lines.forEach(line => {
+        if (line.controleur && line.controleur.trim() !== '') {
+          controleurSet.add(line.controleur.trim());
+        }
+      });
+    }
+    const controleurNames = Array.from(controleurSet).join(', ');
+    
+    const leftX = 15;
+    const rightX = 115;
+    const signatureHeight = 18;
+    const columnWidth = 70;
+    
+    // LEFT COLUMN: OPERATOR SIGNATURE
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0, 0, 0);
+    doc.text("Signature de l'Operateur:", leftX, yPos);
+    let leftYPos = yPos + 6;
+    
+    // Empty space for signature (horizontal line)
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.line(leftX, leftYPos + signatureHeight, leftX + columnWidth, leftYPos + signatureHeight);
+    leftYPos += signatureHeight + 5;
+    
+    // Printed name
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text("Nom: " + emergencyClean(operation.operateur), leftX, leftYPos);
+    
+    // RIGHT COLUMN: QC CONTROLLER SIGNATURE (aligned with left start)
+    let rightYPos = yPos;
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text("Signature du Controleur Qualite:", rightX, rightYPos);
+    rightYPos += 6;
+    
+    // Empty space for signature (horizontal line)
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.line(rightX, rightYPos + signatureHeight, rightX + columnWidth, rightYPos + signatureHeight);
+    rightYPos += signatureHeight + 5;
+    
+    // Printed name(s)
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    const qcName = controleurNames || 'N/A';
+    doc.text("Nom: " + emergencyClean(qcName), rightX, rightYPos);
+    
+    yPos = leftYPos + 10;
+    
+  } else if (operation.type === "Transfert") {
+    // Single centered signature: Responsable Stock
+    const centerX = 120;
+    
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0, 0, 0);
+    doc.text("Signature du Responsable Stock:", centerX, yPos, { align: "left" });
+    yPos += 8;
+    
+    // Horizontal line for signature
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
+    doc.line(centerX, yPos + 10, centerX + 70, yPos + 10);
+    yPos += 20;
+  }
   
   // Footer
   doc.setFontSize(7);

@@ -60,6 +60,7 @@ describe("buildOperationPdfRows", () => {
     expect(result.headers).toEqual([
       "Article",
       "N° Lot",
+      "Date d'expiration",
       "Qté Saisie",
       "Impact Stock",
       "Qté Valide",
@@ -70,7 +71,7 @@ describe("buildOperationPdfRows", () => {
 
     // Check row data
     expect(result.rows).toHaveLength(1);
-    expect(result.rows[0][6]).toBe("Fournisseur A"); // Fournisseur column
+    expect(result.rows[0][7]).toBe("Fournisseur A"); // Fournisseur column
   });
 
   it("should include Source column for Sortie and no Fournisseur column", () => {
@@ -111,6 +112,7 @@ describe("buildOperationPdfRows", () => {
     expect(result.headers).toEqual([
       "Article",
       "N° Lot",
+      "Date d'expiration",
       "Qté Saisie",
       "Impact Stock",
       "Qté Valide",
@@ -121,7 +123,7 @@ describe("buildOperationPdfRows", () => {
 
     // Check row data
     expect(result.rows).toHaveLength(1);
-    expect(result.rows[0][6]).toBe("Zone A"); // Source column
+    expect(result.rows[0][7]).toBe("Zone A"); // Source column
   });
 
   it("should include Source column for Transfert and no Fournisseur column", () => {
@@ -160,6 +162,7 @@ describe("buildOperationPdfRows", () => {
     expect(result.headers).toEqual([
       "Article",
       "N° Lot",
+      "Date d'expiration",
       "Qté Saisie",
       "Impact Stock",
       "Qté Valide",
@@ -170,7 +173,7 @@ describe("buildOperationPdfRows", () => {
 
     // Check row data
     expect(result.rows).toHaveLength(1);
-    expect(result.rows[0][6]).toBe("Zone A"); // Source column
+    expect(result.rows[0][7]).toBe("Zone A"); // Source column
   });
 
   it("should NOT include Date, Type, Date Lot, or Commentaire columns", () => {
@@ -239,8 +242,8 @@ describe("buildOperationPdfRows", () => {
 
     // Check that QC columns show "—" for Transfert
     expect(result.rows).toHaveLength(1);
-    expect(result.rows[0][4]).toBe("—"); // Qté Valide
-    expect(result.rows[0][5]).toBe("—"); // Qté Défect.
+    expect(result.rows[0][5]).toBe("—"); // Qté Valide
+    expect(result.rows[0][6]).toBe("—"); // Qté Défect.
   });
 
   it("should handle missing fournisseur with '—'", () => {
@@ -272,7 +275,7 @@ describe("buildOperationPdfRows", () => {
 
     // Check that missing fournisseur shows "—"
     expect(result.rows).toHaveLength(1);
-    expect(result.rows[0][6]).toBe("—"); // Fournisseur column
+    expect(result.rows[0][7]).toBe("—"); // Fournisseur column
   });
 
   it("should handle empty document d'origine (not needed in rows, only in PDF header)", () => {
@@ -306,7 +309,7 @@ describe("buildOperationPdfRows", () => {
     // Document d'origine is not in rows, only in PDF header section
     // This test just confirms the function doesn't crash with missing documentOrigine
     expect(result.rows).toHaveLength(1);
-    expect(result.headers).toHaveLength(8);
+    expect(result.headers).toHaveLength(9);
   });
 
   it("should format quantities with French locale", () => {
@@ -342,9 +345,68 @@ describe("buildOperationPdfRows", () => {
     const result = buildOperationPdfRows(operation, lines, mockArticles);
 
     // Check French number formatting (space as thousand separator, comma for decimal)
-    expect(result.rows[0][2]).toContain("123,45"); // Qté Saisie
-    expect(result.rows[0][3]).toContain("1 234,56"); // Impact Stock (note: has space for thousands)
-    expect(result.rows[0][4]).toContain("1 234,56"); // Qté Valide
-    expect(result.rows[0][5]).toContain("10,5"); // Qté Défect.
+    expect(result.rows[0][3]).toContain("123,45"); // Qté Saisie
+    expect(result.rows[0][4]).toContain("1 234,56"); // Impact Stock (note: has space for thousands)
+    expect(result.rows[0][5]).toContain("1 234,56"); // Qté Valide
+    expect(result.rows[0][6]).toContain("10,5"); // Qté Défect.
+  });
+
+  it("should format Date d'expiration as dd/MM/yyyy or '—' for empty/invalid dates", () => {
+    const operation: Operation = {
+      id: 9,
+      type: "Entrée",
+      reference: "ENT-004",
+      datePlanifiee: "2026-04-10 10:00:00",
+      operateur: "Alice",
+      statut: "Terminé"
+    };
+
+    const lines: Mouvement[] = [
+      {
+        id: "9a",
+        date: "10/04/2026 10:00",
+        article: "Article A",
+        ref: "ART-A",
+        type: "Entrée",
+        qte: 100,
+        lotNumber: "LOT009A",
+        lotDate: "2027-05-15", // Valid date
+        emplacementDestination: "Zone A",
+        operateur: "Alice"
+      },
+      {
+        id: "9b",
+        date: "10/04/2026 10:00",
+        article: "Article B",
+        ref: "ART-B",
+        type: "Entrée",
+        qte: 50,
+        lotNumber: "LOT009B",
+        // lotDate is missing
+        emplacementDestination: "Zone A",
+        operateur: "Alice"
+      },
+      {
+        id: "9c",
+        date: "10/04/2026 10:00",
+        article: "Article C",
+        ref: "ART-C",
+        type: "Entrée",
+        qte: 75,
+        lotNumber: "LOT009C",
+        lotDate: "invalid-date", // Invalid date
+        emplacementDestination: "Zone A",
+        operateur: "Alice"
+      }
+    ];
+
+    const result = buildOperationPdfRows(operation, lines, mockArticles);
+
+    // Check Date d'expiration formatting
+    expect(result.headers).toContain("Date d'expiration");
+    expect(result.rows).toHaveLength(3);
+    expect(result.rows[0][2]).toBe("15/05/2027"); // Valid date formatted as dd/MM/yyyy
+    expect(result.rows[1][2]).toBe("—"); // Missing date
+    expect(result.rows[2][2]).toBe("—"); // Invalid date
   });
 });

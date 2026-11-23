@@ -237,11 +237,8 @@ export const MovementTable = ({
         <table className="w-full text-sm border-collapse">
         <thead>
           <tr className="bg-white border-b border-gray-200">
-            <th className="text-left py-2.5 px-3 text-xs font-medium text-gray-500">Date</th>
             <th className="text-left py-2.5 px-3 text-xs font-medium text-gray-500">Article</th>
-            <th className="text-center py-2.5 px-3 text-xs font-medium text-gray-500">Type</th>
             <th className="hidden lg:table-cell text-left py-2.5 px-3 text-xs font-medium text-gray-500">N° Lot</th>
-            <th className="hidden lg:table-cell text-left py-2.5 px-3 text-xs font-medium text-gray-500">Date Lot</th>
             <th className="hidden md:table-cell text-center py-2.5 px-3 text-xs font-medium text-gray-500">Qté Saisie</th>
             <th className="hidden lg:table-cell text-center py-2.5 px-3 text-xs font-medium text-gray-500">Impact Stock</th>
             <th className="hidden lg:table-cell text-right py-2.5 px-3 text-xs font-medium text-gray-500">Qté Valide</th>
@@ -251,14 +248,13 @@ export const MovementTable = ({
             <th className="text-center py-2.5 px-3 text-xs font-medium text-gray-500">Statut</th>
             <th className="hidden md:table-cell text-left py-2.5 px-3 text-xs font-medium text-gray-500">Opérateur</th>
             <th className="hidden lg:table-cell text-left py-2.5 px-3 text-xs font-medium text-gray-500">Approuvé par</th>
-            <th className="hidden lg:table-cell text-left py-2.5 px-3 text-xs font-medium text-gray-500">Commentaire</th>
             {showActions && <th className="text-center py-2.5 px-3 text-xs font-medium text-gray-500">Actions</th>}
           </tr>
         </thead>
         <tbody>
           {movements.length === 0 ? (
             <tr>
-              <td colSpan={showActions ? 16 : 15} className="py-8 text-center text-sm text-gray-500">
+              <td colSpan={showActions ? 12 : 11} className="py-8 text-center text-sm text-gray-500">
                 Aucun mouvement récent
               </td>
             </tr>
@@ -269,28 +265,13 @@ export const MovementTable = ({
               
               return (
                 <tr key={m.id} className="bg-white border-b border-gray-200 hover:bg-gray-50 transition-colors">
-                  <td className="py-3 px-3 font-mono text-xs text-gray-600 tabular-nums">{m.date}</td>
                   <td className="py-3 px-3">
                     <span className="font-medium text-gray-900 text-sm">{m.article}</span>
                     <span className="block text-xs text-gray-500 font-mono">{m.ref}</span>
                   </td>
-                  <td className="py-3 px-3 text-center">
-                    <span className="inline-flex items-center gap-1.5 text-xs font-normal text-gray-700">
-                      {getMovementIcon(m.type)}
-                      {m.type === "Ajustement" 
-                        ? `${m.typeAjustement === "Surplus" ? "+" : "-"}`
-                        : m.type
-                      }
-                    </span>
-                  </td>
                   <td className="hidden lg:table-cell py-3 px-3">
                     <span className="font-mono text-xs text-gray-900">
                       {m.lotNumber || "—"}
-                    </span>
-                  </td>
-                  <td className="hidden lg:table-cell py-3 px-3">
-                    <span className="font-mono text-xs text-gray-600 tabular-nums">
-                      {m.lotDate ? new Date(m.lotDate).toLocaleDateString('fr-FR') : "—"}
                     </span>
                   </td>
                   
@@ -378,21 +359,6 @@ export const MovementTable = ({
                   <td className="hidden md:table-cell py-3 px-3 text-gray-600 text-xs">{m.operateur}</td>
                   <td className="hidden lg:table-cell py-3 px-3 text-gray-600 text-xs">
                     {getApprovedByLabel(m)}
-                  </td>
-                  <td className="hidden lg:table-cell py-3 px-3 text-gray-600 text-xs">
-                    {m.commentaire ? (
-                      <div className="relative group">
-                        <span className="inline-flex items-center gap-1 text-xs text-gray-700 cursor-help">
-                          <FileText className="w-3.5 h-3.5" />
-                          Note
-                        </span>
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded whitespace-normal max-w-xs opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 break-words">
-                          {m.commentaire}
-                        </div>
-                      </div>
-                    ) : (
-                      <span className="text-gray-300">—</span>
-                    )}
                   </td>
                   {showActions && (
                     <td className="py-3 px-3 text-center">

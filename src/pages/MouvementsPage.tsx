@@ -1554,7 +1554,7 @@ const MouvementsPage = () => {
                 onInspect={selectedOperation?.statut === "En inspection" ? handleOpenInspectionModal : undefined}
                 onRedoInspection={selectedOperation?.statut === "En inspection" ? handleOpenRedo : undefined}
                 onDelete={selectedOperation?.statut === "Brouillon" ? handleDeleteClick : undefined}
-                hideLinePdf={selectedOperation?.statut === "Terminé"}
+                hideLinePdf={true}
                 showActions={true}
                 compact={false}
               />
