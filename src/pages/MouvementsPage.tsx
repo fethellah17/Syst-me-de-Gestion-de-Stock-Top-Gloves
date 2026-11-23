@@ -10,9 +10,10 @@ import { OperationDiscussion } from "@/components/OperationDiscussion";
 import { generateAdministrativeErrorPDF, generateDefectiveItemsPDF } from "@/lib/pdf-generator";
 import { generateOperationPDF } from "@/lib/operation-pdf";
 import { format } from "date-fns";
+import { AUTO_MESSAGES, redoMessage } from "@/lib/operation-messages";
 
 const MouvementsPage = () => {
-  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, getArticleStockByLocation, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination, createOperation, createOperationFull, updateOperationFields, setOperationController, updateOperationStatus, applyOperationStock, revertOperation, resetLineQc, operations, addOperationMessage, getOperationMessages } = useData();
+  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, getArticleStockByLocation, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination, createOperation, createOperationFull, updateOperationFields, setOperationController, setOperationManager, updateOperationStatus, applyOperationStock, revertOperation, resetLineQc, operations, addOperationMessage, getOperationMessages } = useData();
   const [selectedType, setSelectedType] = useState<"Entrée" | "Sortie" | "Transfert" | null>(null);
   const [selectedOperationId, setSelectedOperationId] = useState<number | null>(null);
   const [selectedArticleId, setSelectedArticleId] = useState<string>("");
@@ -406,6 +407,22 @@ const MouvementsPage = () => {
         message: `Opération revenue à l'état "${targetStatus}"`, 
         type: "success" 
       });
+      
+      // Automatic message
+      let author = "";
+      if (operation?.statut === "En inspection") {
+        author = operation.controleur?.trim() || operation.operateur?.trim() || "";
+      } else if (operation?.statut === "En attente de validation") {
+        author = operation.gestionnaire?.trim() || "";
+      }
+      
+      const messageText = targetStatus === "Brouillon" 
+        ? AUTO_MESSAGES.revertedToDraft 
+        : AUTO_MESSAGES.revertedToInspection;
+      
+      if (author) {
+        addOperationMessage(selectedOperationId, messageText, author, "auto");
+      }
     } else {
       setToast({ 
         message: result.error || "Erreur lors du retour", 
@@ -431,12 +448,21 @@ const MouvementsPage = () => {
   const handleConfirmRedo = () => {
     if (!redoLineId) return;
 
+    const mouvement = mouvements.find(m => m.id === redoLineId);
+    const article = mouvement ? articles.find(a => a.ref === mouvement.ref) : null;
+    const author = selectedOperation?.controleur?.trim() || "";
+
     const result = resetLineQc(redoLineId);
     if (result.success) {
       setToast({ 
         message: "Contrôle réinitialisé : la ligne peut être inspectée de nouveau", 
         type: "success" 
       });
+      
+      // Automatic message
+      if (author && article && selectedOperation) {
+        addOperationMessage(selectedOperation.id, redoMessage(article.nom), author, "auto");
+      }
     } else {
       setToast({ 
         message: result.error || "Erreur lors de la réinitialisation", 
@@ -858,8 +884,15 @@ const MouvementsPage = () => {
 
   const handleSubmitForInspection = () => {
     if (!selectedOperation) return;
+    
+    const author = selectedOperation.operateur?.trim() || "";
     updateOperationStatus(selectedOperation.id, "En inspection");
     setToast({ message: "Opération soumise pour inspection", type: "success" });
+    
+    // Automatic message
+    if (author) {
+      addOperationMessage(selectedOperation.id, AUTO_MESSAGES.submitted, author, "auto");
+    }
   };
 
   const handlePassToManager = () => {
@@ -869,8 +902,17 @@ const MouvementsPage = () => {
     const guardState = getOperationGuardState(selectedOperation);
     if (!guardState.canAdvance) return;
     
+    const author = selectedOperation.type === "Transfert" 
+      ? (selectedOperation.operateur?.trim() || "")
+      : (selectedOperation.controleur?.trim() || "");
+    
     updateOperationStatus(selectedOperation.id, "En attente de validation");
     setToast({ message: "Opération transmise au gestionnaire", type: "success" });
+    
+    // Automatic message
+    if (author) {
+      addOperationMessage(selectedOperation.id, AUTO_MESSAGES.sentToManager, author, "auto");
+    }
   };
 
   const handleValidateOperation = () => {
@@ -879,9 +921,17 @@ const MouvementsPage = () => {
     // Phase 7b: prevent double-click
     if (selectedOperation.statut === "Terminé") return;
     
+    // Phase 9c: Check gestionnaire before validation
+    if (!selectedOperation.gestionnaire || selectedOperation.gestionnaire.trim() === "") {
+      setToast({ message: "Saisissez le nom du gestionnaire avant de valider", type: "error" });
+      return;
+    }
+    
     // Phase 7d: Guard check
     const guardState = getOperationGuardState(selectedOperation);
     if (!guardState.canAdvance) return;
+    
+    const author = selectedOperation.gestionnaire?.trim() || "";
     
     // Phase 7b: apply deferred stock first
     const result = applyOperationStock(selectedOperation.id);
@@ -896,6 +946,11 @@ const MouvementsPage = () => {
     
     updateOperationStatus(selectedOperation.id, "Terminé");
     setToast({ message: "Opération validée", type: "success" });
+    
+    // Automatic message (only if stock was applied successfully)
+    if (author) {
+      addOperationMessage(selectedOperation.id, AUTO_MESSAGES.validated, author, "auto");
+    }
   };
 
   // Save new operation
@@ -995,6 +1050,18 @@ const MouvementsPage = () => {
       });
     } catch {
       return isoDate;
+    }
+  };
+
+  // Get discussion author based on operation status
+  const getDiscussionAuthor = (op: Operation): string => {
+    if (op.statut === "Brouillon") {
+      return op.operateur?.trim() || "";
+    } else if (op.statut === "En inspection") {
+      return op.controleur?.trim() || "";
+    } else {
+      // En attente de validation or Terminé
+      return op.gestionnaire?.trim() || "";
     }
   };
 
@@ -1497,6 +1564,32 @@ const MouvementsPage = () => {
                   </div>
                 )}
 
+                {/* Nom du gestionnaire - only during validation or completed */}
+                {(selectedOperation.statut === "En attente de validation" || (selectedOperation.statut === "Terminé" && selectedOperation.gestionnaire)) && (
+                  <div className="flex items-start">
+                    <label className="w-40 text-sm text-gray-500 pt-2 flex-shrink-0">
+                      Nom du gestionnaire
+                      {selectedOperation.statut === "En attente de validation" && <span className="text-red-500"> *</span>}
+                    </label>
+                    {selectedOperation.statut === "En attente de validation" ? (
+                      <input
+                        type="text"
+                        value={selectedOperation.gestionnaire || ""}
+                        onChange={(e) => {
+                          const result = setOperationManager(selectedOperation.id, e.target.value);
+                          if (!result.success && result.error) {
+                            setToast({ message: result.error, type: "error" });
+                          }
+                        }}
+                        className="flex-1 h-9 px-3 border border-gray-300 rounded bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                        placeholder="Entrez le nom du gestionnaire"
+                      />
+                    ) : (
+                      <div className="flex-1 pt-2 text-sm text-gray-900">{selectedOperation.gestionnaire || "—"}</div>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex items-start">
                   <label className="w-40 text-sm text-gray-500 pt-2 flex-shrink-0">
                     Opérateur {selectedOperation.statut === "Brouillon" && <span className="text-red-500">*</span>}
@@ -1602,7 +1695,20 @@ const MouvementsPage = () => {
             <div className="mt-6">
               <OperationDiscussion
                 messages={getOperationMessages(selectedOperation.id)}
-                onSend={(text, author) => addOperationMessage(selectedOperation.id, text, author, "note")}
+                onSend={(text) => {
+                  const author = getDiscussionAuthor(selectedOperation);
+                  if (!author) {
+                    let errorMsg = "Renseignez le nom du gestionnaire";
+                    if (selectedOperation.statut === "Brouillon") {
+                      errorMsg = "Renseignez le nom de l'opérateur";
+                    } else if (selectedOperation.statut === "En inspection") {
+                      errorMsg = "Renseignez le nom du contrôleur";
+                    }
+                    return { success: false, error: errorMsg };
+                  }
+                  return addOperationMessage(selectedOperation.id, text, author, "note");
+                }}
+                authorLabel={getDiscussionAuthor(selectedOperation) || "—"}
                 formatDate={formatDateTime}
               />
             </div>

@@ -65,6 +65,7 @@ export interface Operation {
   statut: OperationStatus;
   documentOrigine?: string; // Optional reference document
   controleur?: string;      // QC controller name (Entrée/Sortie only, during inspection)
+  gestionnaire?: string;    // Manager name (all types, during validation)
 }
 
 export interface Mouvement {
@@ -165,6 +166,7 @@ interface DataContextType {
   updateOperationStatus: (operationId: number, statut: OperationStatus) => void;
   updateOperationFields: (operationId: number, fields: { operateur?: string; documentOrigine?: string }) => void;
   setOperationController: (operationId: number, name: string) => { success: boolean; error?: string };
+  setOperationManager: (operationId: number, name: string) => { success: boolean; error?: string };
   applyOperationStock: (operationId: number) => { success: boolean; error?: string; failedLines?: string[] };
   revertOperation: (operationId: number) => { success: boolean; error?: string };
   resetLineQc: (id: string) => { success: boolean; error?: string };
@@ -514,6 +516,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setOperations(prev => prev.map(op => {
       if (op.id === operationId) {
         return { ...op, controleur: name };
+      }
+      return op;
+    }));
+    
+    return { success: true };
+  };
+
+  const setOperationManager = (operationId: number, name: string): { success: boolean; error?: string } => {
+    const operation = operations.find(op => op.id === operationId);
+    
+    if (!operation) {
+      return { success: false, error: "Opération introuvable" };
+    }
+    
+    if (operation.statut !== "En attente de validation") {
+      return { success: false, error: "Le gestionnaire ne peut être modifié que lorsque l'opération est en attente de validation" };
+    }
+    
+    setOperations(prev => prev.map(op => {
+      if (op.id === operationId) {
+        return { ...op, gestionnaire: name };
       }
       return op;
     }));
@@ -1315,6 +1338,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateOperationStatus,
       updateOperationFields,
       setOperationController,
+      setOperationManager,
       applyOperationStock,
       revertOperation,
       resetLineQc,

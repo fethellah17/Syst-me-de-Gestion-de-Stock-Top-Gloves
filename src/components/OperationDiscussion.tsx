@@ -3,19 +3,17 @@ import type { OperationMessage } from "@/contexts/DataContext";
 
 interface OperationDiscussionProps {
   messages: OperationMessage[];
-  onSend: (text: string, author: string) => { success: boolean; error?: string };
+  onSend: (text: string) => { success: boolean; error?: string };
+  authorLabel: string;
   formatDate: (iso: string) => string;
 }
-
-// Module-level variable to persist author name across renders
-let persistedAuthor = "";
 
 export const OperationDiscussion: React.FC<OperationDiscussionProps> = ({
   messages,
   onSend,
+  authorLabel,
   formatDate,
 }) => {
-  const [author, setAuthor] = useState(persistedAuthor);
   const [text, setText] = useState("");
   const [error, setError] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -27,19 +25,16 @@ export const OperationDiscussion: React.FC<OperationDiscussionProps> = ({
 
   const handleSend = () => {
     const trimmedText = text.trim();
-    const trimmedAuthor = author.trim();
 
     if (!trimmedText) {
       return;
     }
 
-    const result = onSend(trimmedText, trimmedAuthor);
+    const result = onSend(trimmedText);
     
     if (result.success) {
       setText("");
       setError("");
-      // Persist author name
-      persistedAuthor = trimmedAuthor;
     } else {
       setError(result.error || "Erreur lors de l'envoi");
     }
@@ -50,11 +45,6 @@ export const OperationDiscussion: React.FC<OperationDiscussionProps> = ({
       e.preventDefault();
       handleSend();
     }
-  };
-
-  const handleAuthorChange = (value: string) => {
-    setAuthor(value);
-    persistedAuthor = value;
   };
 
   return (
@@ -108,14 +98,12 @@ export const OperationDiscussion: React.FC<OperationDiscussionProps> = ({
 
         {/* Composer */}
         <div className="border-t border-gray-200 pt-4">
+          <div className="mb-2">
+            <span className="text-xs text-gray-500">
+              Vous écrivez en tant que : <span className="font-medium">{authorLabel}</span>
+            </span>
+          </div>
           <div className="flex gap-3 mb-3">
-            <input
-              type="text"
-              value={author}
-              onChange={(e) => handleAuthorChange(e.target.value)}
-              placeholder="Votre nom"
-              className="w-40 h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
-            />
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
