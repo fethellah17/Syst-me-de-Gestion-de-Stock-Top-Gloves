@@ -136,32 +136,34 @@ const DestinationsPage = () => {
         </div>
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingId ? "Modifier la destination" : "Ajouter une destination"}>
+      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingId ? "Modifier la destination" : "Ajouter une destination"} hideCloseButton={true} bodyClassName="px-6 py-4">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Nom de la Destination</label>
+            <label className="block text-[13px] font-medium text-gray-600 mb-1">
+              Nom de la Destination<span className="text-red-500 ml-0.5">*</span>
+            </label>
             <input
               type="text"
               value={formData.nom}
               onChange={(e) => setFormData({ nom: e.target.value })}
-              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
               placeholder="Ex: Client X, Département Production"
               autoFocus
             />
           </div>
-          <div className="flex gap-2 justify-end pt-4">
+          <div className="flex justify-end gap-2 px-6 py-3 -mx-6 -mb-4 border-t border-gray-200 bg-gray-50">
             <button
               type="button"
               onClick={handleCloseModal}
-              className="h-9 px-4 rounded-md border text-sm font-medium text-foreground hover:bg-muted transition-colors"
+              className="h-9 px-4 rounded border border-gray-300 bg-white text-sm hover:bg-gray-50 transition-colors"
             >
               Annuler
             </button>
             <button
               type="submit"
-              className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+              className="h-9 px-4 rounded bg-primary text-white text-sm font-medium hover:opacity-90 transition-opacity"
             >
-              {editingId ? "Modifier" : "Ajouter"}
+              {editingId ? "Enregistrer" : "Ajouter"}
             </button>
           </div>
         </form>

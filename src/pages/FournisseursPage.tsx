@@ -216,54 +216,58 @@ const FournisseursPage = () => {
       </div>
 
       {/* Modal - Responsive sizing */}
-      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingId ? "Modifier le fournisseur" : "Ajouter un fournisseur"}>
-        <form onSubmit={handleSubmit} className="space-y-4 max-h-[80vh] overflow-y-auto">
+      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingId ? "Modifier le fournisseur" : "Ajouter un fournisseur"} hideCloseButton={true} bodyClassName="px-6 py-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Nom du Fournisseur</label>
+            <label className="block text-[13px] font-medium text-gray-600 mb-1">
+              Nom du Fournisseur<span className="text-red-500 ml-0.5">*</span>
+            </label>
             <input
               type="text"
               value={formData.nom}
               onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
-              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
               placeholder="Ex: Fournisseur A"
               autoFocus
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Téléphone 1 *</label>
+            <label className="block text-[13px] font-medium text-gray-600 mb-1">
+              Téléphone 1<span className="text-red-500 ml-0.5">*</span>
+            </label>
             <input
               type="text"
               value={formData.contact1}
               onChange={(e) => setFormData({ ...formData, contact1: e.target.value })}
-              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
               placeholder="Ex: +213 5XX XX XX XX"
             />
-            <p className="text-xs text-muted-foreground mt-1">Format: +213 suivi de 9 chiffres (ex: +213 555 12 34 56)</p>
+            <p className="text-xs text-gray-500 mt-1">Format: +213 suivi de 9 chiffres (ex: +213 555 12 34 56)</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Téléphone 2 (optionnel)</label>
+            <label className="block text-[13px] font-medium text-gray-600 mb-1">Téléphone 2 (optionnel)</label>
             <input
               type="text"
               value={formData.contact2}
               onChange={(e) => setFormData({ ...formData, contact2: e.target.value })}
-              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
               placeholder="Ex: +213 5XX XX XX XX"
             />
-            <p className="text-xs text-muted-foreground mt-1">Format: +213 suivi de 9 chiffres (ex: +213 556 23 45 67)</p>
+            <p className="text-xs text-gray-500 mt-1">Format: +213 suivi de 9 chiffres (ex: +213 556 23 45 67)</p>
           </div>
-          <div className="flex flex-col-reverse sm:flex-row gap-2 justify-end pt-4">
+          <div className="flex justify-end gap-2 px-6 py-3 -mx-6 -mb-4 border-t border-gray-200 bg-gray-50">
             <button
               type="button"
               onClick={handleCloseModal}
-              className="h-9 px-4 rounded-md border text-sm font-medium text-foreground hover:bg-muted transition-colors"
+              className="h-9 px-4 rounded border border-gray-300 bg-white text-sm hover:bg-gray-50 transition-colors"
             >
               Annuler
             </button>
             <button
               type="submit"
-              className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+              className="h-9 px-4 rounded bg-primary text-white text-sm font-medium hover:opacity-90 transition-opacity"
             >
-              {editingId ? "Modifier" : "Ajouter"}
+              {editingId ? "Enregistrer" : "Ajouter"}
             </button>
           </div>
         </form>

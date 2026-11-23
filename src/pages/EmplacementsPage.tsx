@@ -1,4 +1,4 @@
-import { MapPin, Plus, Edit, Trash2, X } from "lucide-react";
+import { Plus, Edit, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useData } from "@/contexts/DataContext";
 import { Modal } from "@/components/Modal";
@@ -120,85 +120,94 @@ const EmplacementsPage = () => {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-        {emplacements.map((loc) => (
-          <div 
-            key={loc.id} 
-            className="bg-card border rounded-lg p-5 hover:shadow-md transition-shadow cursor-pointer hover:border-primary/30"
-            onClick={() => setSelectedLocation(loc.nom)}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <MapPin className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-foreground text-sm">{loc.nom}</h3>
-                  <span className="text-xs font-mono text-muted-foreground">{loc.code}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                <button
-                  onClick={() => handleOpenModal(loc)}
-                  className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-                >
-                  <Edit className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => handleDelete(loc.id)}
-                  className="p-1.5 rounded hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-            <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium mt-3 ${
-              loc.type === "Quarantaine" ? "bg-muted text-muted-foreground border border-border" : 
-              loc.type === "Expédition" ? "bg-muted text-muted-foreground border border-border" : 
-              "bg-muted text-muted-foreground border border-border"
-            }`}>
-              {loc.type}
-            </span>
-          </div>
-        ))}
-      </div>
+      {emplacements.length === 0 ? (
+        <div className="bg-white border border-gray-200 rounded-md py-12 text-center">
+          <p className="text-sm text-gray-500">Aucun emplacement</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Code</th>
+                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Nom</th>
+                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Type</th>
+                <th className="text-right text-xs font-medium text-gray-500 px-4 py-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {emplacements.map((loc) => (
+                <tr key={loc.id} className="border-t border-gray-100 hover:bg-gray-50">
+                  <td className="py-3 px-4 font-mono text-xs text-gray-600">{loc.code}</td>
+                  <td className="py-3 px-4 text-sm font-medium text-gray-900">{loc.nom}</td>
+                  <td className="py-3 px-4">
+                    <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded">
+                      {loc.type}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => handleOpenModal(loc)}
+                        className="p-1.5 rounded text-gray-500 hover:text-gray-900 transition-colors"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(loc.id)}
+                        className="p-1.5 rounded text-gray-500 hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingId ? "Modifier l'emplacement" : "Ajouter un emplacement"}>
+      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingId ? "Modifier l'emplacement" : "Ajouter un emplacement"} hideCloseButton={true} bodyClassName="px-6 py-4">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Code</label>
+            <label className="block text-[13px] font-medium text-gray-600 mb-1">
+              Code<span className="text-red-500 ml-0.5">*</span>
+            </label>
             <input
               type="text"
               value={formData.code}
               onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
               placeholder="Ex: A-12"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Nom</label>
+            <label className="block text-[13px] font-medium text-gray-600 mb-1">
+              Nom<span className="text-red-500 ml-0.5">*</span>
+            </label>
             <input
               type="text"
               value={formData.nom}
               onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
-              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
               placeholder="Ex: Zone A - Rack 12"
             />
           </div>
 
-          <div className="flex gap-2 pt-4">
+          <div className="flex justify-end gap-2 px-6 py-3 -mx-6 -mb-4 border-t border-gray-200 bg-gray-50">
             <button
               type="button"
               onClick={handleCloseModal}
-              className="flex-1 h-9 rounded-md border text-sm font-medium text-foreground hover:bg-muted transition-colors"
+              className="h-9 px-4 rounded border border-gray-300 bg-white text-sm hover:bg-gray-50 transition-colors"
             >
               Annuler
             </button>
             <button
               type="submit"
-              className="flex-1 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+              className="h-9 px-4 rounded bg-primary text-white text-sm font-medium hover:opacity-90 transition-opacity"
             >
-              {editingId ? "Modifier" : "Ajouter"}
+              {editingId ? "Enregistrer" : "Ajouter"}
             </button>
           </div>
         </form>
