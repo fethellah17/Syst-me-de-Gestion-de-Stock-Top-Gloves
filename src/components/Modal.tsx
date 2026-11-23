@@ -12,6 +12,7 @@ interface ModalProps {
   headerClassName?: string;
   bodyClassName?: string;
   footer?: React.ReactNode;
+  hideCloseButton?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({ 
@@ -24,7 +25,8 @@ export const Modal: React.FC<ModalProps> = ({
   className = "",
   headerClassName = "",
   bodyClassName = "",
-  footer
+  footer,
+  hideCloseButton = false
 }) => {
   if (!isOpen) return null;
 
@@ -34,15 +36,17 @@ export const Modal: React.FC<ModalProps> = ({
       <div className={`relative bg-white border border-gray-200 rounded-lg shadow-lg ${maxWidth} w-[95vw] ${maxHeight} overflow-hidden flex flex-col ${className}`}>
         <div className={`flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0 ${headerClassName}`}>
           <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-900"
-            aria-label="Fermer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {!hideCloseButton && (
+            <button
+              onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-900"
+              aria-label="Fermer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
-        <div className={`flex-1 min-h-0 overflow-y-auto ${bodyClassName}`}>{children}</div>
+        <div className={`overflow-y-auto ${bodyClassName}`}>{children}</div>
         {footer && (
           <div className="shrink-0 border-t border-gray-200 bg-gray-50 px-6 py-3">
             {footer}

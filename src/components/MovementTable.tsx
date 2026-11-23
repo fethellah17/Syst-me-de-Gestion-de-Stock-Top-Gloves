@@ -247,16 +247,13 @@ export const MovementTable = ({
               {movements.length > 0 && movements.every(m => m.type === "Entrée") ? "Fournisseur" : "Source"}
             </th>
             <th className="hidden lg:table-cell text-left py-2.5 px-3 text-xs font-medium text-gray-500">Destination</th>
-            <th className="text-center py-2.5 px-3 text-xs font-medium text-gray-500">Statut</th>
-            <th className="hidden md:table-cell text-left py-2.5 px-3 text-xs font-medium text-gray-500">Opérateur</th>
-            <th className="hidden lg:table-cell text-left py-2.5 px-3 text-xs font-medium text-gray-500">Approuvé par</th>
             {showActions && <th className="text-center py-2.5 px-3 text-xs font-medium text-gray-500">Actions</th>}
           </tr>
         </thead>
         <tbody>
           {movements.length === 0 ? (
             <tr>
-              <td colSpan={showActions ? 12 : 11} className="py-8 text-center text-sm text-gray-500">
+              <td colSpan={showActions ? 9 : 8} className="py-8 text-center text-sm text-gray-500">
                 Aucun mouvement récent
               </td>
             </tr>
@@ -356,11 +353,6 @@ export const MovementTable = ({
                   </td>
                   <td className="hidden lg:table-cell py-3 px-3 text-gray-600 text-xs">
                     {getDestinationLabel(m)}
-                  </td>
-                  <td className="py-3 px-3 text-center">{getStatusBadge(m)}</td>
-                  <td className="hidden md:table-cell py-3 px-3 text-gray-600 text-xs">{m.operateur}</td>
-                  <td className="hidden lg:table-cell py-3 px-3 text-gray-600 text-xs">
-                    {getApprovedByLabel(m)}
                   </td>
                   {showActions && (
                     <td className="py-3 px-3 text-center">

@@ -802,26 +802,6 @@ const MouvementsPage = () => {
   };
 
   // Compute counts for landing cards
-  const entreeCounts = useMemo(() => {
-    const entreeMovs = combinedMovements.filter(m => m.type === "Entrée" && m.type !== "Ajustement");
-    const total = entreeMovs.length;
-    const pending = entreeMovs.filter(m => m.qc_status === "pending").length;
-    return { total, pending };
-  }, [combinedMovements]);
-
-  const sortieCounts = useMemo(() => {
-    const sortieMovs = combinedMovements.filter(m => m.type === "Sortie" && m.type !== "Ajustement");
-    const total = sortieMovs.length;
-    const pending = sortieMovs.filter(m => m.qc_status === "pending").length;
-    return { total, pending };
-  }, [combinedMovements]);
-
-  const transfertCounts = useMemo(() => {
-    const transfertMovs = combinedMovements.filter(m => m.type === "Transfert" && m.type !== "Ajustement");
-    const total = transfertMovs.length;
-    return { total };
-  }, [combinedMovements]);
-
   // When a card is clicked, set selectedType and sync typeFilter
   const handleCardClick = (type: "Entrée" | "Sortie" | "Transfert") => {
     setSelectedType(type);
@@ -1085,9 +1065,8 @@ const MouvementsPage = () => {
                 <ArrowDownToLine className="w-6 h-6 text-gray-500" />
                 <div>
                   <div className="text-base font-medium text-gray-900">Entrée</div>
-                  <div className="text-sm text-gray-500 mt-1">
-                    {entreeCounts.total} mouvement{entreeCounts.total > 1 ? 's' : ''}
-                    {entreeCounts.pending > 0 && ` · ${entreeCounts.pending} en attente`}
+                  <div className="text-xs text-gray-400 mt-1.5">
+                    Brouillon {operations.filter(op => op.type === "Entrée" && op.statut === "Brouillon").length} · En inspection {operations.filter(op => op.type === "Entrée" && op.statut === "En inspection").length} · En attente de validation {operations.filter(op => op.type === "Entrée" && op.statut === "En attente de validation").length}
                   </div>
                 </div>
               </div>
@@ -1102,9 +1081,8 @@ const MouvementsPage = () => {
                 <ArrowUpFromLine className="w-6 h-6 text-gray-500" />
                 <div>
                   <div className="text-base font-medium text-gray-900">Sortie</div>
-                  <div className="text-sm text-gray-500 mt-1">
-                    {sortieCounts.total} mouvement{sortieCounts.total > 1 ? 's' : ''}
-                    {sortieCounts.pending > 0 && ` · ${sortieCounts.pending} en attente`}
+                  <div className="text-xs text-gray-400 mt-1.5">
+                    Brouillon {operations.filter(op => op.type === "Sortie" && op.statut === "Brouillon").length} · En inspection {operations.filter(op => op.type === "Sortie" && op.statut === "En inspection").length} · En attente de validation {operations.filter(op => op.type === "Sortie" && op.statut === "En attente de validation").length}
                   </div>
                 </div>
               </div>
@@ -1119,8 +1097,8 @@ const MouvementsPage = () => {
                 <ArrowLeftRight className="w-6 h-6 text-gray-500" />
                 <div>
                   <div className="text-base font-medium text-gray-900">Transfert</div>
-                  <div className="text-sm text-gray-500 mt-1">
-                    {transfertCounts.total} mouvement{transfertCounts.total > 1 ? 's' : ''}
+                  <div className="text-xs text-gray-400 mt-1.5">
+                    Brouillon {operations.filter(op => op.type === "Transfert" && op.statut === "Brouillon").length} · En attente de validation {operations.filter(op => op.type === "Transfert" && op.statut === "En attente de validation").length}
                   </div>
                 </div>
               </div>
@@ -1879,7 +1857,7 @@ const MouvementsPage = () => {
       </Modal>
 
       {/* Delete Confirmation Modal */}
-      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)} title="Confirmer la suppression">
+      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)} title="Confirmer la suppression" hideCloseButton={true}>
         <div className="space-y-4">
           <p className="text-sm text-foreground">Êtes-vous sûr de vouloir supprimer cette ligne ?</p>
           <div className="flex gap-2">
@@ -1900,7 +1878,7 @@ const MouvementsPage = () => {
       </Modal>
 
       {/* Revert Confirmation Modal */}
-      <Modal isOpen={isRevertConfirmOpen} onClose={() => setIsRevertConfirmOpen(false)} title="Confirmer le retour">
+      <Modal isOpen={isRevertConfirmOpen} onClose={() => setIsRevertConfirmOpen(false)} title="Confirmer le retour" hideCloseButton={true}>
         <div className="space-y-4">
           <p className="text-sm text-foreground">
             Retourner en brouillon ? Les résultats du contrôle qualité seront effacés.
@@ -1923,7 +1901,7 @@ const MouvementsPage = () => {
       </Modal>
 
       {/* Redo Inspection Confirmation Modal */}
-      <Modal isOpen={isRedoConfirmOpen} onClose={() => setIsRedoConfirmOpen(false)} title="Refaire le contrôle">
+      <Modal isOpen={isRedoConfirmOpen} onClose={() => setIsRedoConfirmOpen(false)} title="Refaire le contrôle" hideCloseButton={true}>
         <div className="space-y-4">
           <p className="text-sm text-foreground">
             Refaire le contrôle de cette ligne ? Les résultats actuels seront effacés.

@@ -341,9 +341,9 @@ export const BulkMovementModal = ({
 
   return (
     <BulkMovementModalWrapper isOpen={isOpen} onClose={handleClose} title="Ajouter ligne">
-      <form onSubmit={handleSubmit} className="flex flex-col h-full">
+      <form onSubmit={handleSubmit} className="flex flex-col">
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-x-hidden overflow-y-auto">
+        <div className="overflow-x-hidden overflow-y-auto">
           {/* Common Information - Only show when NOT in fixed mode */}
           {!fixedMovementType && !fixedOperateur && (
           <div className="bg-gray-50 border-b border-gray-200 px-6 py-3">
@@ -391,7 +391,7 @@ export const BulkMovementModal = ({
           )}
 
         {/* Form Lines */}
-        <div className="px-6 py-4 space-y-4">
+        <div className="px-6 py-3 space-y-3">
           {items.map((item, index) => {
             const selectedArticle = getArticleById(item.articleId);
             const availableSourceLocations = selectedArticle ? getAvailableSourceLocations(item.articleId) : [];
@@ -414,11 +414,11 @@ export const BulkMovementModal = ({
                 )}
 
                 {/* Section: Article */}
-                <div className="mb-4">
-                  <h4 className="text-xs uppercase tracking-wide text-gray-500 font-medium border-b border-gray-200 pb-2 mb-2">Article</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                <div className="mb-3">
+                  <h4 className="text-xs uppercase tracking-wide text-gray-500 font-medium border-b border-gray-200 pb-1.5 mb-2">Article</h4>
+                  <div className="space-y-2">
                     {/* Article Select */}
-                    <div className="md:col-span-2 min-w-0">
+                    <div className="min-w-0">
                       <label className="block text-[13px] font-medium text-gray-600 mb-1">
                         Article <span className="text-red-500">*</span>
                       </label>
@@ -438,77 +438,98 @@ export const BulkMovementModal = ({
                       {errors[`item-${item.id}-article`] && <p className="text-xs text-red-600 mt-1">{errors[`item-${item.id}-article`]}</p>}
                     </div>
 
-                    {/* Quantity */}
-                    <div className="min-w-0">
-                      <label className="block text-[13px] font-medium text-gray-600 mb-1">
-                        Quantité <span className="text-red-500">*</span>
-                      </label>
-                      <div className="flex gap-2 min-w-0">
-                        <input
-                          type="number"
-                          value={item.quantity === 0 ? "" : item.quantity}
-                          onChange={(e) => updateItem(item.id, "quantity", Number(e.target.value) || 0)}
-                          className={`min-w-0 flex-1 h-9 px-3 rounded bg-white border text-sm hover:border-gray-400 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none placeholder:text-gray-400 ${errors[`item-${item.id}-qty`] ? "border-destructive" : "border-gray-300"}`}
-                          style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
-                          placeholder="0"
-                          min="0"
-                          step="0.01"
-                        />
-                        {selectedArticle && (
-                          <div className="relative flex-shrink-0">
-                            <select
-                              value={item.selectedUnit}
-                              onChange={(e) => updateItem(item.id, "selectedUnit", e.target.value)}
-                              className="w-28 h-9 px-3 pr-8 rounded bg-white border border-gray-300 text-sm appearance-none hover:border-gray-400 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none"
-                            >
-                              <option value={selectedArticle.uniteEntree}>{selectedArticle.uniteEntree}</option>
-                              {selectedArticle.uniteSortie !== selectedArticle.uniteEntree && (
-                                <option value={selectedArticle.uniteSortie}>{selectedArticle.uniteSortie}</option>
-                              )}
-                            </select>
-                            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                          </div>
+                    {/* Quantity + Numéro de Lot in two columns */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Quantity */}
+                      <div className="min-w-0">
+                        <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                          Quantité <span className="text-red-500">*</span>
+                        </label>
+                        <div className="flex gap-2 min-w-0">
+                          <input
+                            type="number"
+                            value={item.quantity === 0 ? "" : item.quantity}
+                            onChange={(e) => updateItem(item.id, "quantity", Number(e.target.value) || 0)}
+                            className={`min-w-0 flex-1 h-9 px-3 rounded bg-white border text-sm hover:border-gray-400 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none placeholder:text-gray-400 ${errors[`item-${item.id}-qty`] ? "border-destructive" : "border-gray-300"}`}
+                            style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
+                            placeholder="0"
+                            min="0"
+                            step="0.01"
+                          />
+                          {selectedArticle && (
+                            <div className="relative flex-shrink-0">
+                              <select
+                                value={item.selectedUnit}
+                                onChange={(e) => updateItem(item.id, "selectedUnit", e.target.value)}
+                                className="w-20 h-9 px-2 pr-6 rounded bg-white border border-gray-300 text-xs appearance-none hover:border-gray-400 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none"
+                              >
+                                <option value={selectedArticle.uniteEntree}>{selectedArticle.uniteEntree}</option>
+                                {selectedArticle.uniteSortie !== selectedArticle.uniteEntree && (
+                                  <option value={selectedArticle.uniteSortie}>{selectedArticle.uniteSortie}</option>
+                                )}
+                              </select>
+                              <ChevronDown className="absolute right-1 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+                            </div>
+                          )}
+                        </div>
+                        {errors[`item-${item.id}-qty`] && <p className="text-xs text-red-600 mt-1">{errors[`item-${item.id}-qty`]}</p>}
+                        {errors[`item-${item.id}-unit`] && <p className="text-xs text-red-600 mt-1">{errors[`item-${item.id}-unit`]}</p>}
+                        {/* Real-time Conversion Display */}
+                        {selectedArticle && item.quantity > 0 && item.selectedUnit && !errors[`item-${item.id}-qty`] && (
+                          (() => {
+                            const isEntryUnit = item.selectedUnit === selectedArticle.uniteEntree;
+                            const conversionFactor = selectedArticle.facteurConversion || 1;
+                            
+                            if (isEntryUnit && conversionFactor > 1) {
+                              const convertedQty = item.quantity * conversionFactor;
+                              return (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  = {convertedQty.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} {selectedArticle.uniteSortie}
+                                </div>
+                              );
+                            }
+                            
+                            if (!isEntryUnit && conversionFactor > 1) {
+                              const convertedQty = item.quantity / conversionFactor;
+                              return (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  = {convertedQty.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} {selectedArticle.uniteEntree}
+                                </div>
+                              );
+                            }
+                            
+                            return null;
+                          })()
                         )}
                       </div>
-                      {errors[`item-${item.id}-qty`] && <p className="text-xs text-red-600 mt-1">{errors[`item-${item.id}-qty`]}</p>}
-                      {errors[`item-${item.id}-unit`] && <p className="text-xs text-red-600 mt-1">{errors[`item-${item.id}-unit`]}</p>}
-                      {/* Real-time Conversion Display */}
-                      {selectedArticle && item.quantity > 0 && item.selectedUnit && !errors[`item-${item.id}-qty`] && (
-                        (() => {
-                          const isEntryUnit = item.selectedUnit === selectedArticle.uniteEntree;
-                          const conversionFactor = selectedArticle.facteurConversion || 1;
-                          
-                          if (isEntryUnit && conversionFactor > 1) {
-                            const convertedQty = item.quantity * conversionFactor;
-                            return (
-                              <div className="text-xs text-gray-500 mt-1">
-                                = {convertedQty.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} {selectedArticle.uniteSortie}
-                              </div>
-                            );
-                          }
-                          
-                          if (!isEntryUnit && conversionFactor > 1) {
-                            const convertedQty = item.quantity / conversionFactor;
-                            return (
-                              <div className="text-xs text-gray-500 mt-1">
-                                = {convertedQty.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} {selectedArticle.uniteEntree}
-                              </div>
-                            );
-                          }
-                          
-                          return null;
-                        })()
-                      )}
+
+                      {/* Numéro de Lot */}
+                      <div className="min-w-0">
+                        <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                          Numéro de Lot <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={item.lotNumber}
+                          onChange={(e) => {
+                            updateItem(item.id, "lotNumber", e.target.value);
+                            setErrors({ ...errors, [`item-${item.id}-lot`]: "" });
+                          }}
+                          className={`w-full h-9 px-3 rounded bg-white border text-sm hover:border-gray-400 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none placeholder:text-gray-400 ${errors[`item-${item.id}-lot`] ? "border-destructive" : "border-gray-300"}`}
+                          placeholder="LOT-XXXX"
+                        />
+                        {errors[`item-${item.id}-lot`] && <p className="text-xs text-red-600 mt-1">{errors[`item-${item.id}-lot`]}</p>}
+                      </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Section: Emplacement (by type) */}
-                <div className="mb-4">
-                  <h4 className="text-xs uppercase tracking-wide text-gray-500 font-medium border-b border-gray-200 pb-2 mb-2">
+                <div className="mb-3">
+                  <h4 className="text-xs uppercase tracking-wide text-gray-500 font-medium border-b border-gray-200 pb-1.5 mb-2">
                     {movementType === "Entrée" ? "Approvisionnement" : movementType === "Sortie" ? "Mouvement de sortie" : "Mouvement de transfert"}
                   </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                  <div className="grid grid-cols-2 gap-3">
                     {/* Entrée: Fournisseur | Destination */}
                     {movementType === "Entrée" && (
                       <>
@@ -705,36 +726,6 @@ export const BulkMovementModal = ({
                         </div>
                       </>
                     )}
-                  </div>
-                </div>
-
-                {/* Section: Traçabilité (Numéro de Lot | Commentaire) */}
-                <div>
-                  <h4 className="text-xs uppercase tracking-wide text-gray-500 font-medium border-b border-gray-200 pb-2 mb-2">Traçabilité</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
-                    <div className="min-w-0">
-                      <label className="block text-[13px] font-medium text-gray-600 mb-1">
-                        Numéro de Lot <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={item.lotNumber}
-                        onChange={(e) => updateItem(item.id, "lotNumber", e.target.value)}
-                        className={`w-full h-9 px-3 rounded bg-white border text-sm hover:border-gray-400 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none placeholder:text-gray-400 ${errors[`item-${item.id}-lot`] ? "border-destructive" : "border-gray-300"}`}
-                        placeholder="LOT-2024-001"
-                      />
-                      {errors[`item-${item.id}-lot`] && <p className="text-xs text-red-600 mt-1">{errors[`item-${item.id}-lot`]}</p>}
-                    </div>
-                    <div className="min-w-0">
-                      <label className="block text-[13px] font-medium text-gray-600 mb-1">Commentaire</label>
-                      <input
-                        type="text"
-                        value={item.commentaire || ""}
-                        onChange={(e) => updateItem(item.id, "commentaire", e.target.value)}
-                        className="w-full h-9 px-3 rounded bg-white border border-gray-300 text-sm hover:border-gray-400 focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none placeholder:text-gray-400"
-                        placeholder="Optionnel"
-                      />
-                    </div>
                   </div>
                 </div>
               </div>

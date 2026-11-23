@@ -283,7 +283,7 @@ export const InspectionModal = ({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-lg max-w-5xl w-[95vw] max-h-[calc(100vh-2rem)] flex flex-col border border-gray-200 overflow-y-auto">
         {/* Header */}
-        <div className="px-6 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+        <div className="px-6 py-3 border-b border-gray-200 flex-shrink-0">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">
               {modalTitle}
@@ -292,16 +292,10 @@ export const InspectionModal = ({
               Vérification de la qualité et de la conformité
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded transition-colors text-gray-400"
-          >
-            <X className="w-5 h-5" />
-          </button>
         </div>
 
         {/* Content */}
-        <div className="px-6 py-4 flex-1">
+        <div className="px-6 py-4">
           <div className="space-y-4">
             {/* Refus Total Toggle - Full width compact row */}
             <div className="md:col-span-2 border border-gray-200 rounded py-2 px-3">
