@@ -5,22 +5,9 @@ import {
   ShieldCheck,
   Lock,
   Users,
-  History,
-  Settings,
-  Download,
-  Upload,
-  FileSpreadsheet,
   LogOut,
   ChevronRight,
 } from "lucide-react";
-
-const auditLogs = [
-  { date: "2026-02-24 14:32", user: "Karim B.", action: "Entrée stock", detail: "Gants Nitrile M: +500" },
-  { date: "2026-02-24 13:15", user: "Sara M.", action: "Sortie stock", detail: "Gants Latex S: -200" },
-  { date: "2026-02-24 11:00", user: "Admin", action: "Modification article", detail: "Seuil GN-XL-004 mis à jour" },
-  { date: "2026-02-24 09:30", user: "Admin", action: "Ajout emplacement", detail: "Zone F-01 créée" },
-  { date: "2026-02-23 16:45", user: "Sara M.", action: "Inventaire", detail: "Écart détecté: SG-PE-005 (-15)" },
-];
 
 const AdminPage = () => {
   const { isAdmin, adminLogin, logoutAdmin } = useAuth();
@@ -94,14 +81,17 @@ const AdminPage = () => {
       </div>
 
       {/* Admin modules */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <button className="bg-card border rounded-lg p-5 text-left hover:shadow-md hover:border-primary/30 transition-all group">
-          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/20 transition-colors">
-            <Settings className="w-5 h-5 text-primary" />
-          </div>
-          <h3 className="font-semibold text-foreground text-sm">Paramètres Système</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Configuration générale</p>
-        </button>
+      <div className="grid grid-cols-1 md:grid-cols-2 max-w-3xl gap-4">
+        {/* TODO 12f: Paramètres Système - non-functional, hidden */}
+        {false && (
+          <button className="bg-card border rounded-lg p-5 text-left hover:shadow-md hover:border-primary/30 transition-all group">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/20 transition-colors">
+              {/* <Settings className="w-5 h-5 text-primary" /> */}
+            </div>
+            <h3 className="font-semibold text-foreground text-sm">Paramètres Système</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">Configuration générale</p>
+          </button>
+        )}
         
         <button 
           onClick={() => navigate("/staff")}
@@ -117,62 +107,37 @@ const AdminPage = () => {
         
         <button className="bg-card border rounded-lg p-5 text-left hover:shadow-md hover:border-primary/30 transition-all group">
           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/20 transition-colors">
-            <History className="w-5 h-5 text-primary" />
+            <ShieldCheck className="w-5 h-5 text-primary" />
           </div>
           <h3 className="font-semibold text-foreground text-sm">Historique Complet</h3>
           <p className="text-xs text-muted-foreground mt-0.5">Audit de toutes les actions</p>
         </button>
         
-        <button className="bg-card border rounded-lg p-5 text-left hover:shadow-md hover:border-primary/30 transition-all group">
-          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/20 transition-colors">
-            <FileSpreadsheet className="w-5 h-5 text-primary" />
-          </div>
-          <h3 className="font-semibold text-foreground text-sm">Import/Export</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">CSV et Excel</p>
-        </button>
+        {/* TODO 12f: Import/Export - non-functional, hidden */}
+        {false && (
+          <button className="bg-card border rounded-lg p-5 text-left hover:shadow-md hover:border-primary/30 transition-all group">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3 group-hover:bg-primary/20 transition-colors">
+              {/* <FileSpreadsheet className="w-5 h-5 text-primary" /> */}
+            </div>
+            <h3 className="font-semibold text-foreground text-sm">Import/Export</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">CSV et Excel</p>
+          </button>
+        )}
       </div>
 
-      {/* Quick actions */}
-      <div className="flex flex-wrap gap-3">
-        <button className="h-9 px-4 border rounded-md text-sm font-medium flex items-center gap-2 text-foreground hover:bg-muted transition-colors">
-          <Download className="w-4 h-4" />
-          Exporter CSV
-        </button>
-        <button className="h-9 px-4 border rounded-md text-sm font-medium flex items-center gap-2 text-foreground hover:bg-muted transition-colors">
-          <Upload className="w-4 h-4" />
-          Importer Données
-        </button>
-      </div>
-
-      {/* Audit logs */}
-      <div className="bg-card border rounded-lg p-5">
-        <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-          <History className="w-4 h-4 text-primary" />
-          Journal d'Audit (Dernières entrées)
-        </h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date</th>
-                <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Utilisateur</th>
-                <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Action</th>
-                <th className="text-left py-2 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden md:table-cell">Détail</th>
-              </tr>
-            </thead>
-            <tbody>
-              {auditLogs.map((log, i) => (
-                <tr key={i} className="border-b border-border/50">
-                  <td className="py-2.5 px-3 font-mono text-xs text-muted-foreground">{log.date}</td>
-                  <td className="py-2.5 px-3 font-medium text-foreground">{log.user}</td>
-                  <td className="py-2.5 px-3 text-muted-foreground">{log.action}</td>
-                  <td className="py-2.5 px-3 text-muted-foreground text-xs hidden md:table-cell">{log.detail}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* TODO 12f: Quick actions - non-functional, hidden */}
+      {false && (
+        <div className="flex flex-wrap gap-3">
+          <button className="h-9 px-4 border rounded-md text-sm font-medium flex items-center gap-2 text-foreground hover:bg-muted transition-colors">
+            {/* <Download className="w-4 h-4" /> */}
+            Exporter CSV
+          </button>
+          <button className="h-9 px-4 border rounded-md text-sm font-medium flex items-center gap-2 text-foreground hover:bg-muted transition-colors">
+            {/* <Upload className="w-4 h-4" /> */}
+            Importer Données
+          </button>
         </div>
-      </div>
+      )}
     </div>
   );
 };
