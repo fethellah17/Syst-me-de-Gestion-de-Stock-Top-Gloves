@@ -1,4 +1,4 @@
-import { Tags, Plus, Edit, Trash2 } from "lucide-react";
+import { Plus, Edit, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useData } from "@/contexts/DataContext";
 import { Modal } from "@/components/Modal";
@@ -77,70 +77,86 @@ const CategoriesPage = () => {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-        {categories.map((c) => (
-          <div key={c.id} className="bg-card border rounded-lg p-5 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between mb-3">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Tags className="w-5 h-5 text-primary" />
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => handleOpenModal(c)}
-                  className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-                >
-                  <Edit className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => handleDelete(c.id)}
-                  className="p-1.5 rounded hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-            <h3 className="font-semibold text-foreground">{c.nom}</h3>
-            <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{c.description}</p>
-          </div>
-        ))}
-      </div>
+      {categories.length === 0 ? (
+        <div className="bg-white border border-gray-200 rounded-md py-12 text-center">
+          <p className="text-sm text-gray-500">Aucune catégorie</p>
+        </div>
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Nom</th>
+                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Description</th>
+                <th className="text-right text-xs font-medium text-gray-500 px-4 py-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {categories.map((c) => (
+                <tr key={c.id} className="border-t border-gray-100 hover:bg-gray-50">
+                  <td className="py-3 px-4 text-sm font-medium text-gray-900">{c.nom}</td>
+                  <td className="py-3 px-4 text-sm text-gray-600 truncate">{c.description || "—"}</td>
+                  <td className="py-3 px-4 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => handleOpenModal(c)}
+                        className="p-1.5 rounded text-gray-500 hover:text-gray-900 transition-colors"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(c.id)}
+                        className="p-1.5 rounded text-gray-500 hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingId ? "Modifier la catégorie" : "Ajouter une catégorie"}>
+      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={editingId ? "Modifier la catégorie" : "Ajouter une catégorie"} hideCloseButton={true} bodyClassName="px-6 py-4">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Nom</label>
+            <label className="block text-[13px] font-medium text-gray-600 mb-1">
+              Nom<span className="text-red-500 ml-0.5">*</span>
+            </label>
             <input
               type="text"
               value={formData.nom}
               onChange={(e) => setFormData({ ...formData, nom: e.target.value })}
-              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
               placeholder="Ex: Gants Nitrile"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-foreground mb-1">Description</label>
+            <label className="block text-[13px] font-medium text-gray-600 mb-1">Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3 py-2 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+              className="w-full px-3 rounded border border-gray-300 bg-white text-sm hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary resize-none"
               rows={3}
               placeholder="Description de la catégorie"
             />
           </div>
 
-          <div className="flex gap-2 pt-4">
+          <div className="flex justify-end gap-2 px-6 py-3 -mx-6 -mb-4 border-t border-gray-200 bg-gray-50">
             <button
               type="button"
               onClick={handleCloseModal}
-              className="flex-1 h-9 rounded-md border text-sm font-medium text-foreground hover:bg-muted transition-colors"
+              className="h-9 px-4 rounded border border-gray-300 bg-white text-sm hover:bg-gray-50 transition-colors"
             >
               Annuler
             </button>
             <button
               type="submit"
-              className="flex-1 h-9 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+              className="h-9 px-4 rounded bg-primary text-white text-sm font-medium hover:opacity-90 transition-opacity"
             >
-              {editingId ? "Modifier" : "Ajouter"}
+              {editingId ? "Enregistrer" : "Ajouter"}
             </button>
           </div>
         </form>
