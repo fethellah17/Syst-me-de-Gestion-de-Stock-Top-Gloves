@@ -11,7 +11,7 @@ import { generateOperationPDF } from "@/lib/operation-pdf";
 import { format } from "date-fns";
 
 const MouvementsPage = () => {
-  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, getArticleStockByLocation, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination, createOperation, createOperationFull, updateOperationFields, updateOperationStatus, applyOperationStock, revertOperation, resetLineQc, operations } = useData();
+  const { mouvements, articles, emplacements, destinations, suppliers, addMouvement, updateArticle, deleteMouvement, getArticleLocations, getArticleStockByLocation, approveQualityControl, rejectQualityControl, processTransfer, recalculateAllOccupancies, addDestination, createOperation, createOperationFull, updateOperationFields, setOperationController, updateOperationStatus, applyOperationStock, revertOperation, resetLineQc, operations } = useData();
   const [selectedType, setSelectedType] = useState<"Entrée" | "Sortie" | "Transfert" | null>(null);
   const [selectedOperationId, setSelectedOperationId] = useState<number | null>(null);
   const [selectedArticleId, setSelectedArticleId] = useState<string>("");
@@ -119,6 +119,12 @@ const MouvementsPage = () => {
         setToast({ message: "Soumettez l'opération pour inspection avant de contrôler les lignes", type: "error" });
         return;
       }
+      
+      // Check that controleur is set before allowing line inspection
+      if (operation && (!operation.controleur || operation.controleur.trim() === "")) {
+        setToast({ message: "Saisissez le nom du contrôleur avant de contrôler les lignes", type: "error" });
+        return;
+      }
     }
     
     setInspectionMouvementId(id);
@@ -136,13 +142,16 @@ const MouvementsPage = () => {
     const mouvement = mouvements.find(m => m.id === inspectionMouvementId);
     if (!mouvement) return;
 
+    // Get operation controller (overrides modal value)
+    const opController = (operations.find(op => op.id === mouvement.operationId)?.controleur ?? "").trim();
+
     // Check if this is a total refusal
     if (data.refusTotalMotif || data.refusalType) {
       // SORTIE ONLY: Dual refusal modes
       if (mouvement.type === "Sortie" && data.refusalType) {
         approveQualityControl(
           inspectionMouvementId,
-          data.controleur,
+          opController || data.controleur,
           "Non-conforme",
           0,
           0,
@@ -150,9 +159,9 @@ const MouvementsPage = () => {
           "",
           data.verificationPoints,
           data.refusalType,
-          data.nomOperateur,
+          opController || data.nomOperateur,
           data.motifErreur,
-          data.nomControleur,
+          opController || data.nomControleur,
           data.motifRejet,
           data.lotDate
         );
@@ -160,9 +169,9 @@ const MouvementsPage = () => {
         // Trigger PDF generation based on refusal type
         const updatedMouvement = {
           ...mouvement,
-          nomOperateur: data.nomOperateur,
+          nomOperateur: opController || data.nomOperateur,
           motifErreur: data.motifErreur,
-          nomControleur: data.nomControleur,
+          nomControleur: opController || data.nomControleur,
           motifRejet: data.motifRejet,
         };
 
@@ -190,7 +199,7 @@ const MouvementsPage = () => {
       else if (mouvement.type === "Entrée" && data.refusTotalMotif) {
         approveQualityControl(
           inspectionMouvementId,
-          data.controleur,
+          opController || data.controleur,
           "Non-conforme",
           0,
           0,
@@ -214,7 +223,7 @@ const MouvementsPage = () => {
       // Normal approval
       approveQualityControl(
         inspectionMouvementId,
-        data.controleur,
+        opController || data.controleur,
         data.qteDefectueuse > 0 ? "Non-conforme" : "Conforme",
         data.qteDefectueuse,
         data.qteValide,
@@ -1458,6 +1467,34 @@ const MouvementsPage = () => {
                   <label className="w-40 text-sm text-gray-500 pt-2 flex-shrink-0">Type d'opération</label>
                   <div className="flex-1 pt-2 text-sm text-gray-900">{getTypeLabelSingular(selectedOperation.type)}</div>
                 </div>
+
+                {/* Nom du contrôleur - only for Entrée/Sortie, not for Brouillon */}
+                {(selectedOperation.type === "Entrée" || selectedOperation.type === "Sortie") && selectedOperation.statut !== "Brouillon" && (
+                  <div className="flex items-start">
+                    <label className="w-40 text-sm text-gray-500 pt-2 flex-shrink-0">
+                      Nom du contrôleur
+                      {selectedOperation.statut === "En inspection" && <span className="text-red-500"> *</span>}
+                    </label>
+                    {selectedOperation.statut === "En inspection" ? (
+                      <input
+                        type="text"
+                        value={selectedOperation.controleur || ""}
+                        onChange={(e) => {
+                          const result = setOperationController(selectedOperation.id, e.target.value);
+                          if (!result.success && result.error) {
+                            setToast({ message: result.error, type: "error" });
+                          }
+                        }}
+                        className="flex-1 h-9 px-3 border border-gray-300 rounded bg-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                        placeholder="Entrez le nom du contrôleur"
+                      />
+                    ) : (
+                      selectedOperation.controleur && (
+                        <div className="flex-1 pt-2 text-sm text-gray-900">{selectedOperation.controleur}</div>
+                      )
+                    )}
+                  </div>
+                )}
 
                 <div className="flex items-start">
                   <label className="w-40 text-sm text-gray-500 pt-2 flex-shrink-0">

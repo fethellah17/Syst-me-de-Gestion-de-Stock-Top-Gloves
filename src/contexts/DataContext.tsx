@@ -61,6 +61,7 @@ export interface Operation {
   datePlanifiee: string;    // ISO string
   statut: OperationStatus;
   documentOrigine?: string; // Optional reference document
+  controleur?: string;      // QC controller name (Entrée/Sortie only, during inspection)
 }
 
 export interface Mouvement {
@@ -160,6 +161,7 @@ interface DataContextType {
   getOperationMovements: (operationId: number) => Mouvement[];
   updateOperationStatus: (operationId: number, statut: OperationStatus) => void;
   updateOperationFields: (operationId: number, fields: { operateur?: string; documentOrigine?: string }) => void;
+  setOperationController: (operationId: number, name: string) => { success: boolean; error?: string };
   applyOperationStock: (operationId: number) => { success: boolean; error?: string; failedLines?: string[] };
   revertOperation: (operationId: number) => { success: boolean; error?: string };
   resetLineQc: (id: string) => { success: boolean; error?: string };
@@ -485,6 +487,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return op;
     }));
+  };
+
+  const setOperationController = (operationId: number, name: string): { success: boolean; error?: string } => {
+    const operation = operations.find(op => op.id === operationId);
+    
+    if (!operation) {
+      return { success: false, error: "Opération introuvable" };
+    }
+    
+    if (operation.type !== "Entrée" && operation.type !== "Sortie") {
+      return { success: false, error: "Le contrôleur ne peut être défini que pour les opérations d'Entrée ou Sortie" };
+    }
+    
+    if (operation.statut !== "En inspection") {
+      return { success: false, error: "Le contrôleur ne peut être modifié que lorsque l'opération est en inspection" };
+    }
+    
+    setOperations(prev => prev.map(op => {
+      if (op.id === operationId) {
+        return { ...op, controleur: name };
+      }
+      return op;
+    }));
+    
+    return { success: true };
   };
 
   const applyOperationStock = (operationId: number): { success: boolean; error?: string; failedLines?: string[] } => {
@@ -1254,6 +1281,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getOperationMovements,
       updateOperationStatus,
       updateOperationFields,
+      setOperationController,
       applyOperationStock,
       revertOperation,
       resetLineQc,

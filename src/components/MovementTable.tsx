@@ -243,7 +243,9 @@ export const MovementTable = ({
             <th className="hidden lg:table-cell text-center py-2.5 px-3 text-xs font-medium text-gray-500">Impact Stock</th>
             <th className="hidden lg:table-cell text-right py-2.5 px-3 text-xs font-medium text-gray-500">Qté Valide</th>
             <th className="hidden lg:table-cell text-right py-2.5 px-3 text-xs font-medium text-gray-500">Qté Défect.</th>
-            <th className="hidden lg:table-cell text-left py-2.5 px-3 text-xs font-medium text-gray-500">Source</th>
+            <th className="hidden lg:table-cell text-left py-2.5 px-3 text-xs font-medium text-gray-500">
+              {movements.length > 0 && movements.every(m => m.type === "Entrée") ? "Fournisseur" : "Source"}
+            </th>
             <th className="hidden lg:table-cell text-left py-2.5 px-3 text-xs font-medium text-gray-500">Destination</th>
             <th className="text-center py-2.5 px-3 text-xs font-medium text-gray-500">Statut</th>
             <th className="hidden md:table-cell text-left py-2.5 px-3 text-xs font-medium text-gray-500">Opérateur</th>

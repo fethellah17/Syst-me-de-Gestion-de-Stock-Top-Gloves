@@ -161,16 +161,10 @@ export const InspectionModal = ({
       }
       
       if (refusalType === "administrative") {
-        if (!nomOperateur.trim()) {
-          newErrors.push("Veuillez renseigner le nom de l'opérateur");
-        }
         if (!motifErreur.trim()) {
           newErrors.push("Veuillez renseigner le motif de l'erreur");
         }
       } else if (refusalType === "defective") {
-        if (!nomControleur.trim()) {
-          newErrors.push("Veuillez renseigner le nom du contrôleur");
-        }
         if (!motifRejet.trim()) {
           newErrors.push("Veuillez renseigner le motif du rejet");
         }
@@ -182,19 +176,11 @@ export const InspectionModal = ({
 
     // ENTRÉE ONLY: Simple refusal logic (no stock impact)
     if (mouvement?.type === "Entrée" && refusTotal) {
-      if (!controleur.trim()) {
-        newErrors.push("Veuillez renseigner le nom du contrôleur");
-      }
       if (!refusTotalMotif.trim()) {
         newErrors.push("Veuillez renseigner le motif du refus total");
       }
       setErrors(newErrors);
       return newErrors.length === 0;
-    }
-
-    // Check controller name
-    if (!controleur.trim()) {
-      newErrors.push("Veuillez renseigner le nom du contrôleur");
     }
 
     // Check quantity validation - must equal total
@@ -402,19 +388,6 @@ export const InspectionModal = ({
                     {/* Conditional Fields Based on Refusal Type */}
                     {refusalType === "administrative" && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
-                        <div className="min-w-0">
-                          <label className="block text-[13px] font-medium text-gray-600 mb-1">
-                            Nom de l'Opérateur <span className="text-red-600">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={nomOperateur}
-                            onChange={(e) => setNomOperateur(e.target.value)}
-                            placeholder="Entrez le nom de l'opérateur"
-                            className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
-                          />
-                        </div>
-
                         <div className="md:col-span-2 min-w-0">
                           <label className="block text-[13px] font-medium text-gray-600 mb-1">
                             Motif de l'Erreur <span className="text-red-600">*</span>
@@ -435,19 +408,6 @@ export const InspectionModal = ({
 
                     {refusalType === "defective" && (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
-                        <div className="min-w-0">
-                          <label className="block text-[13px] font-medium text-gray-600 mb-1">
-                            Nom du Contrôleur <span className="text-red-600">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={nomControleur}
-                            onChange={(e) => setNomControleur(e.target.value)}
-                            placeholder="Entrez le nom du contrôleur"
-                            className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
-                          />
-                        </div>
-
                         <div className="md:col-span-2 min-w-0">
                           <label className="block text-[13px] font-medium text-gray-600 mb-1">
                             Motif du Rejet <span className="text-red-600">*</span>
@@ -470,19 +430,6 @@ export const InspectionModal = ({
                   <>
                     {/* ENTRÉE ONLY: Simple refusal logic */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
-                      <div className="min-w-0">
-                        <label className="block text-[13px] font-medium text-gray-600 mb-1">
-                          Nom du Contrôleur <span className="text-red-600">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={controleur}
-                          onChange={(e) => setControleur(e.target.value)}
-                          placeholder="Entrez votre nom"
-                          className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
-                        />
-                      </div>
-
                       <div className="md:col-span-2 min-w-0">
                         <label className="block text-[13px] font-medium text-gray-600 mb-1">
                           Motif du Refus Total <span className="text-red-600">*</span>
@@ -745,22 +692,6 @@ export const InspectionModal = ({
                       </h3>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
-                        <div className="min-w-0">
-                          <label className="block text-[13px] font-medium text-gray-600 mb-1">
-                            Nom du Contrôleur <span className="text-red-600">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={controleur}
-                            onChange={(e) => setControleur(e.target.value)}
-                            placeholder="Entrez votre nom"
-                            className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm text-gray-900 placeholder-gray-400 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
-                          />
-                          <p className="text-xs text-gray-500 mt-1">
-                            Personne responsable de l'inspection
-                          </p>
-                        </div>
-
                         {/* Note de Contrôle - Mandatory when defective items, full width */}
                         {qteDefectueuse > 0 && (
                           <div className="md:col-span-2 min-w-0">
@@ -815,20 +746,20 @@ export const InspectionModal = ({
             disabled={
               refusTotal
                 ? mouvement?.type === "Sortie"
-                  ? !refusalType || (refusalType === "administrative" && (!nomOperateur.trim() || !motifErreur.trim())) || (refusalType === "defective" && (!nomControleur.trim() || !motifRejet.trim()))
-                  : !controleur.trim() || !refusTotalMotif.trim()
-                : isApproveDisabled || !controleur.trim()
+                  ? !refusalType || (refusalType === "administrative" && !motifErreur.trim()) || (refusalType === "defective" && !motifRejet.trim())
+                  : !refusTotalMotif.trim()
+                : isApproveDisabled
             }
             className={`h-9 px-4 rounded text-sm font-medium transition-colors ${
               refusTotal
                 ? mouvement?.type === "Sortie"
-                  ? !refusalType || (refusalType === "administrative" && (!nomOperateur.trim() || !motifErreur.trim())) || (refusalType === "defective" && (!nomControleur.trim() || !motifRejet.trim()))
+                  ? !refusalType || (refusalType === "administrative" && !motifErreur.trim()) || (refusalType === "defective" && !motifRejet.trim())
                     ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                     : "bg-red-600 text-white hover:bg-red-700"
-                  : !controleur.trim() || !refusTotalMotif.trim()
+                  : !refusTotalMotif.trim()
                   ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                   : "bg-red-600 text-white hover:bg-red-700"
-                : isApproveDisabled || !controleur.trim()
+                : isApproveDisabled
                 ? "bg-gray-200 text-gray-400 cursor-not-allowed"
                 : "bg-green-600 text-white hover:bg-green-700"
             }`}
