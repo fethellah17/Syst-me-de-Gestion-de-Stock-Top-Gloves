@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Users, Plus, Edit, Trash2, Shield, ArrowLeft } from "lucide-react";
+import { Plus, Edit, Trash2, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Toast } from "@/components/Toast";
 
@@ -92,69 +92,60 @@ const StaffPage = () => {
       </div>
 
       {/* Staff Table */}
-      <div className="bg-card border rounded-lg overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-md overflow-hidden">
         {isLoading ? (
           <div className="p-8 text-center text-muted-foreground">
             Chargement...
           </div>
         ) : staff.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground">
-            Aucun membre du personnel
+            Aucun membre
           </div>
         ) : (
           <table className="w-full text-sm">
           <thead>
-            <tr className="border-b bg-muted/50">
-              <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">Nom</th>
-              <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">Email</th>
-              <th className="text-left py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">Rôle</th>
-              <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">Permissions</th>
-              <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">Statut</th>
-              <th className="text-center py-3 px-4 text-xs font-semibold text-muted-foreground uppercase">Actions</th>
+            <tr className="bg-gray-50">
+              <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Nom</th>
+              <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Email</th>
+              <th className="text-left py-3 px-4 text-xs font-medium text-gray-500">Rôle</th>
+              <th className="text-center py-3 px-4 text-xs font-medium text-gray-500">Permissions</th>
+              <th className="text-center py-3 px-4 text-xs font-medium text-gray-500">Statut</th>
+              <th className="text-center py-3 px-4 text-xs font-medium text-gray-500">Actions</th>
             </tr>
           </thead>
           <tbody>
             {staff.map((member) => (
-              <tr key={member.id} className="border-b hover:bg-muted/30 transition-colors">
+              <tr key={member.id} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
                 <td className="py-3 px-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Users className="w-4 h-4 text-primary" />
-                    </div>
-                    <span className="font-medium text-foreground">{member.name}</span>
-                  </div>
+                  <span className="text-sm font-medium text-gray-900">{member.name}</span>
                 </td>
-                <td className="py-3 px-4 text-muted-foreground">{member.email}</td>
+                <td className="py-3 px-4 text-sm text-gray-600">{member.email}</td>
                 <td className="py-3 px-4">
-                  <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-muted text-foreground">
+                  <span className="bg-gray-100 text-gray-700 text-xs px-2 py-0.5 rounded">
                     {member.role}
                   </span>
                 </td>
                 <td className="py-3 px-4 text-center">
-                  <div className="inline-flex items-center gap-1 px-2 py-1 rounded bg-primary/10 text-primary">
-                    <Shield className="w-3 h-3" />
-                    <span className="text-xs font-semibold">{member.permissions.length}</span>
-                  </div>
+                  <span className="text-sm text-gray-600">{member.permissions.length}</span>
                 </td>
-                <td className="py-3 px-4 text-center">
-                  <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                    member.active ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"
-                  }`}>
-                    {member.active ? "Actif" : "Inactif"}
-                  </span>
+                <td className="py-3 px-4">
+                  <div className="flex items-center justify-center gap-1.5">
+                    <div className={`w-1.5 h-1.5 rounded-full ${member.active ? "bg-green-500" : "bg-gray-400"}`} />
+                    <span className="text-sm text-gray-600">{member.active ? "Actif" : "Inactif"}</span>
+                  </div>
                 </td>
                 <td className="py-3 px-4">
                   <div className="flex items-center justify-center gap-1">
                     <button
                       onClick={() => navigate(`/staff/edit/${member.id}`)}
-                      className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                      className="p-1.5 rounded hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-900"
                       title="Modifier"
                     >
                       <Edit className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(member.id)}
-                      className="p-1.5 rounded hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive"
+                      className="p-1.5 rounded hover:bg-red-50 transition-colors text-gray-500 hover:text-red-600"
                       title="Supprimer"
                     >
                       <Trash2 className="w-4 h-4" />

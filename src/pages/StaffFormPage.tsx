@@ -186,7 +186,7 @@ const StaffFormPage = () => {
   const categories = Array.from(new Set(AVAILABLE_PERMISSIONS.map(p => p.category)));
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 w-full">
       {/* Header */}
       <div className="flex items-center gap-4">
         <button
@@ -206,188 +206,190 @@ const StaffFormPage = () => {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Basic Information */}
-        <div className="bg-card border rounded-lg p-6 space-y-4">
-          <h3 className="text-sm font-semibold text-foreground">Informations de base</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
-                Nom complet <span className="text-destructive">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder="Ex: fethellah hadjbouziane"
-                required
-              />
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-6 items-start">
+          {/* Basic Information */}
+          <div className="bg-white border border-gray-200 rounded-md p-6 space-y-4 lg:sticky lg:top-4">
+            <h3 className="text-sm font-medium text-gray-900">Informations de base</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                  Nom complet <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
+                  placeholder="Ex: fethellah hadjbouziane"
+                  required
+                />
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
-                Email <span className="text-destructive">*</span>
-              </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder="Ex: fethellahhadjbouziane@topgloves.com"
-                autoComplete="off"
-                required
-              />
-            </div>
-          </div>
+              <div>
+                <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                  Email <span className="text-destructive">*</span>
+                </label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
+                  placeholder="Ex: fethellahhadjbouziane@topgloves.com"
+                  autoComplete="off"
+                  required
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
-              Mot de passe {!isEditing && <span className="text-destructive">*</span>}
-            </label>
-            <input
-              type="password"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder={isEditing ? "Laisser vide pour ne pas modifier" : "Minimum 6 caractères"}
-              autoComplete="new-password"
-              required={!isEditing}
-              minLength={6}
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              {isEditing 
-                ? "Laisser vide pour conserver le mot de passe actuel" 
-                : "Le mot de passe doit contenir au moins 6 caractères"}
-            </p>
-          </div>
+              <div>
+                <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                  Mot de passe {!isEditing && <span className="text-destructive">*</span>}
+                </label>
+                <input
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
+                  placeholder={isEditing ? "Laisser vide pour ne pas modifier" : "Minimum 6 caractères"}
+                  autoComplete="new-password"
+                  required={!isEditing}
+                  minLength={6}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {isEditing 
+                    ? "Laisser vide pour conserver le mot de passe actuel" 
+                    : "Le mot de passe doit contenir au moins 6 caractères"}
+                </p>
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-1">
-              Rôle <span className="text-destructive">*</span>
-            </label>
-            <select
-              value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-              className="w-full h-9 px-3 rounded-md border bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              required
-            >
-              <option value="">Sélectionner un rôle</option>
-              <option value="Administrateur">Administrateur</option>
-              <option value="Gestionnaire">Gestionnaire</option>
-              <option value="Opérateur">Opérateur</option>
-              <option value="Contrôleur Qualité">Contrôleur Qualité</option>
-              <option value="Magasinier">Magasinier</option>
-            </select>
-          </div>
+              <div>
+                <label className="block text-[13px] font-medium text-gray-600 mb-1">
+                  Rôle <span className="text-destructive">*</span>
+                </label>
+                <select
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  className="w-full h-9 px-3 rounded border border-gray-300 bg-white text-sm hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary"
+                  required
+                >
+                  <option value="">Sélectionner un rôle</option>
+                  <option value="Administrateur">Administrateur</option>
+                  <option value="Gestionnaire">Gestionnaire</option>
+                  <option value="Opérateur">Opérateur</option>
+                  <option value="Contrôleur Qualité">Contrôleur Qualité</option>
+                  <option value="Magasinier">Magasinier</option>
+                </select>
+              </div>
 
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="active"
-              checked={formData.active}
-              onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
-              className="w-4 h-4 rounded border-border text-primary focus:ring-2 focus:ring-ring"
-            />
-            <label htmlFor="active" className="text-sm text-foreground">Compte actif</label>
-          </div>
-        </div>
-
-        {/* Permissions */}
-        <div className="bg-card border rounded-lg p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Shield className="w-5 h-5 text-primary" />
-              <h3 className="text-sm font-semibold text-foreground">Permissions</h3>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={selectAllPermissions}
-                className="text-xs text-primary hover:underline"
-              >
-                Tout sélectionner
-              </button>
-              <span className="text-xs text-muted-foreground">|</span>
-              <button
-                type="button"
-                onClick={clearAllPermissions}
-                className="text-xs text-muted-foreground hover:underline"
-              >
-                Tout désélectionner
-              </button>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="active"
+                  checked={formData.active}
+                  onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
+                  className="w-4 h-4 rounded border-border text-primary focus:ring-2 focus:ring-ring"
+                />
+                <label htmlFor="active" className="text-sm text-foreground">Compte actif</label>
+              </div>
             </div>
           </div>
 
-          <div className="p-3 bg-muted/30 rounded-md">
-            <p className="text-xs text-muted-foreground">
-              {formData.permissions.length} permission{formData.permissions.length > 1 ? 's' : ''} sélectionnée{formData.permissions.length > 1 ? 's' : ''} sur {AVAILABLE_PERMISSIONS.length}
-            </p>
-          </div>
+          {/* Permissions */}
+          <div className="bg-card border rounded-lg p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-primary" />
+                <h3 className="text-sm font-semibold text-foreground">Permissions</h3>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={selectAllPermissions}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Tout sélectionner
+                </button>
+                <span className="text-xs text-muted-foreground">|</span>
+                <button
+                  type="button"
+                  onClick={clearAllPermissions}
+                  className="text-xs text-muted-foreground hover:underline"
+                >
+                  Tout désélectionner
+                </button>
+              </div>
+            </div>
 
-          {/* Permissions by Category */}
-          <div className="space-y-4">
-            {categories.map((category) => {
-              const categoryPermissions = AVAILABLE_PERMISSIONS.filter(p => p.category === category);
-              const selectedCount = categoryPermissions.filter(p => formData.permissions.includes(p.id)).length;
-              
-              return (
-                <div key={category} className="border rounded-lg overflow-hidden">
-                  <div className="bg-muted/50 px-4 py-2 border-b">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-medium text-foreground">{category}</h4>
-                      <span className="text-xs text-muted-foreground">
-                        {selectedCount} / {categoryPermissions.length}
-                      </span>
+            <div className="p-3 bg-muted/30 rounded-md">
+              <p className="text-xs text-muted-foreground">
+                {formData.permissions.length} permission{formData.permissions.length > 1 ? 's' : ''} sélectionnée{formData.permissions.length > 1 ? 's' : ''} sur {AVAILABLE_PERMISSIONS.length}
+              </p>
+            </div>
+
+            {/* Permissions by Category */}
+            <div className="space-y-4">
+              {categories.map((category) => {
+                const categoryPermissions = AVAILABLE_PERMISSIONS.filter(p => p.category === category);
+                const selectedCount = categoryPermissions.filter(p => formData.permissions.includes(p.id)).length;
+                
+                return (
+                  <div key={category} className="border rounded-lg overflow-hidden">
+                    <div className="bg-muted/50 px-4 py-2 border-b">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-medium text-foreground">{category}</h4>
+                        <span className="text-xs text-muted-foreground">
+                          {selectedCount} / {categoryPermissions.length}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="p-3 space-y-2">
+                      {categoryPermissions.map((permission) => (
+                        <div
+                          key={permission.id}
+                          onClick={() => togglePermission(permission.id)}
+                          className="flex items-start gap-3 p-3 rounded hover:bg-muted/50 cursor-pointer transition-colors"
+                        >
+                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
+                            formData.permissions.includes(permission.id)
+                              ? "bg-primary border-primary"
+                              : "border-border bg-background"
+                          }`}>
+                            {formData.permissions.includes(permission.id) && (
+                              <Check className="w-3 h-3 text-white" />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-foreground">{permission.label}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{permission.description}</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                  <div className="p-3 space-y-2">
-                    {categoryPermissions.map((permission) => (
-                      <div
-                        key={permission.id}
-                        onClick={() => togglePermission(permission.id)}
-                        className="flex items-start gap-3 p-3 rounded hover:bg-muted/50 cursor-pointer transition-colors"
-                      >
-                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${
-                          formData.permissions.includes(permission.id)
-                            ? "bg-primary border-primary"
-                            : "border-border bg-background"
-                        }`}>
-                          {formData.permissions.includes(permission.id) && (
-                            <Check className="w-3 h-3 text-white" />
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-foreground">{permission.label}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{permission.description}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 justify-end">
+        <div className="flex gap-3 justify-end mt-6">
           <button
             type="button"
             onClick={() => navigate("/staff")}
-            className="h-9 px-6 rounded-md border text-sm font-medium text-foreground hover:bg-muted transition-colors"
+            className="h-9 px-4 rounded border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
           >
             Annuler
           </button>
           <button
             type="submit"
             disabled={isSubmitting}
-            className="h-9 px-6 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+            className="h-9 px-6 rounded bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSubmitting 
               ? "Enregistrement..." 
               : isEditing 
-                ? "Enregistrer les modifications" 
+                ? "Enregistrer" 
                 : "Créer le membre"}
           </button>
         </div>
