@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState } from "react";
 import { applyEntreeStock, applySortieStock, computeOperationStockEffect, shouldReverseStockOnDelete } from "@/lib/stock-effects";
 import { resetQcFields, canRedoInspection } from "@/lib/qc-reset";
 import { buildOperationMessage, sortMessagesAsc, type OperationMessage, type OperationMessageKind } from "@/lib/operation-messages";
+import { getDemoArticles, getDemoCategories } from "@/lib/demo-seed";
 
 export type { OperationMessage, OperationMessageKind };
 
@@ -323,8 +324,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Initialize operations from seed movements
   const { operations: seedOperations, updatedMovements: seedMovements } = groupSeedMovementsIntoOperations(initialMovements);
 
-  const [articles, setArticles] = useState<Article[]>(initialArticles);
-  const [categories, setCategories] = useState<Categorie[]>(initialCategories);
+  const [articles, setArticles] = useState<Article[]>([...initialArticles, ...getDemoArticles()]);
+  const [categories, setCategories] = useState<Categorie[]>([...initialCategories, ...getDemoCategories()]);
   const [emplacements, setEmplacements] = useState<Emplacement[]>(initialLocations);
   const [destinations, setDestinations] = useState<Destination[]>(initialDestinations);
   const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
