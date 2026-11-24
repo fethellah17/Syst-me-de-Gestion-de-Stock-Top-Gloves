@@ -8,6 +8,9 @@ import {
   LogOut,
   ChevronRight,
   Download,
+  Users,
+  ArrowRight,
+  HelpCircle,
 } from "lucide-react";
 import {
   downloadCsv,
@@ -26,6 +29,19 @@ const AdminPage = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [selectedTable, setSelectedTable] = useState("Articles");
+
+  // Compute active users count on mount (read-only)
+  const activeUsersCount = useState(() => {
+    try {
+      const stored = localStorage.getItem("staff_members");
+      if (!stored) return 0;
+      const staff = JSON.parse(stored);
+      if (!Array.isArray(staff)) return 0;
+      return staff.filter((member: any) => member.active === true).length;
+    } catch {
+      return 0;
+    }
+  })[0];
 
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -146,16 +162,32 @@ const AdminPage = () => {
           </button>
         )}
         
-        <button 
-          onClick={() => navigate("/staff")}
-          className="w-full px-5 py-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
-        >
+        <div className="w-full px-5 py-4 flex items-center justify-between border-b border-gray-100">
           <div>
             <h3 className="text-sm font-medium text-gray-900">Gestion Utilisateurs</h3>
             <p className="text-sm text-gray-500 mt-0.5">Rôles et permissions</p>
           </div>
-          <ChevronRight className="w-4 h-4 text-gray-400" />
-        </button>
+          <div className="ml-auto flex flex-col items-end gap-1">
+            <div className="flex items-center gap-1.5">
+              <Users className="w-5 h-5 text-gray-500" />
+              <span className="font-semibold text-gray-900">{activeUsersCount}</span>
+              <span className="text-sm text-gray-500">
+                {activeUsersCount <= 1 ? "Utilisateur actif" : "Utilisateurs actifs"}
+              </span>
+              <HelpCircle 
+                className="w-4 h-4 text-gray-400 ml-0.5" 
+                title="Membres du personnel au statut actif"
+              />
+            </div>
+            <button
+              onClick={() => navigate("/staff")}
+              className="flex items-center gap-1 text-primary font-medium hover:underline text-sm"
+            >
+              <ArrowRight className="w-4 h-4" />
+              Gérer les utilisateurs
+            </button>
+          </div>
+        </div>
         
         <button 
           onClick={() => navigate("/admin/historique")}
