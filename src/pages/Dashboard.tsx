@@ -3,6 +3,8 @@ import { useData } from "@/contexts/DataContext";
 import { useMemo, useState } from "react";
 import { formatMovementDateTime, getRecentMovements } from "@/lib/dashboard-utils";
 import { computeProductStats, type Period } from "@/lib/product-stats";
+import { buildProductSeries } from "@/lib/product-series";
+import { ProductCharts } from "@/components/ProductCharts";
 
 const Dashboard = () => {
   const { articles, mouvements, operations } = useData();
@@ -33,6 +35,20 @@ const Dashboard = () => {
     }
     const now = new Date();
     return computeProductStats({
+      article: selectedArticle,
+      movements: mouvements,
+      period,
+      now,
+    });
+  }, [selectedArticle, mouvements, period]);
+
+  // Compute series with injected now (same pattern)
+  const series = useMemo(() => {
+    if (!selectedArticle) {
+      return null;
+    }
+    const now = new Date();
+    return buildProductSeries({
       article: selectedArticle,
       movements: mouvements,
       period,
@@ -193,6 +209,16 @@ const Dashboard = () => {
                 </p>
               </div>
             </div>
+          )}
+
+          {/* Product Charts */}
+          {selectedArticle && series && (
+            <ProductCharts
+              points={series.points}
+              granularity={series.granularity}
+              unite={selectedArticle.uniteSortie}
+              seuil={selectedArticle.seuil}
+            />
           )}
         </>
       )}
