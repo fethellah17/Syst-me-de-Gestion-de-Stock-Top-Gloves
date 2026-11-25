@@ -315,6 +315,9 @@ export function getDemoData(now: Date = new Date()): DemoDataResult {
     date: Date;
     type: "Entrée" | "Sortie" | "Transfert";
     hour: number;
+    statut?: "Brouillon" | "En inspection" | "En attente de validation"; // undefined = Terminé
+    hasControleur?: boolean; // For En inspection operations
+    hasGestionnaire?: boolean; // For En attente de validation operations
     lines: Array<{
       article: Article;
       qte: number;
@@ -548,6 +551,314 @@ export function getDemoData(now: Date = new Date()): DemoDataResult {
       });
     });
   }
+  // === STEP 3.5: Build in-flight operations (last 3 working days before now) ===
+  const inflightDays: Date[] = [];
+  const nowDate = new Date(now);
+  nowDate.setHours(0, 0, 0, 0);
+  
+  // Find last 3 working days before `now` (not including today)
+  const checkDate = new Date(nowDate);
+  checkDate.setDate(checkDate.getDate() - 1); // Start from yesterday
+  
+  for (let d = new Date(checkDate); inflightDays.length < 3 && d >= windowStart; d.setDate(d.getDate() - 1)) {
+    if (isWorkingDay(d)) {
+      inflightDays.unshift(new Date(d));
+    }
+  }
+  
+  // Brouillon operations (4): 1 Entrée, 2 Sortie, 1 Transfert
+  if (inflightDays.length >= 1) {
+    const brouillonDay = inflightDays[inflightDays.length - 1]; // Most recent
+    
+    // Brouillon Entrée (LN-60-011)
+    const brouillonEntreeArticle = demoArticles.find(a => a.ref === "LN-60-011")!;
+    opBuilders.push({
+      date: new Date(brouillonDay),
+      type: "Entrée",
+      hour: 17 + 15/60, // 17:15
+      statut: "Brouillon",
+      lines: [{
+        article: brouillonEntreeArticle,
+        qte: lotSizes["LN-60-011"],
+        qteOriginale: lotSizes["LN-60-011"] / brouillonEntreeArticle.facteurConversion,
+        lotNumber: `LOT-${brouillonDay.getFullYear()}-${String(brouillonDay.getMonth() + 1).padStart(2, '0')}-BR1`,
+        lotDate: formatDate(addMonths(brouillonDay, 12)),
+        fournisseur: supplierNames[0],
+        emplacementDestination: brouillonEntreeArticle.inventory[0].zone,
+      }]
+    });
+    
+    // Brouillon Sortie 1 (BR-007 and BD-008)
+    const brouillonSortieArticle1 = demoArticles.find(a => a.ref === "BR-007")!;
+    const brouillonSortieArticle2 = demoArticles.find(a => a.ref === "BD-008")!;
+    opBuilders.push({
+      date: new Date(brouillonDay),
+      type: "Sortie",
+      hour: 17 + 25/60, // 17:25
+      statut: "Brouillon",
+      lines: [
+        {
+          article: brouillonSortieArticle1,
+          qte: 10,
+          qteOriginale: 10,
+          lotNumber: `LOT-INIT-${brouillonSortieArticle1.ref}`,
+          emplacementSource: brouillonSortieArticle1.inventory[0].zone,
+          emplacementDestination: "Département Production",
+        },
+        {
+          article: brouillonSortieArticle2,
+          qte: 100,
+          qteOriginale: 100,
+          lotNumber: `LOT-INIT-${brouillonSortieArticle2.ref}`,
+          emplacementSource: brouillonSortieArticle2.inventory[0].zone,
+          emplacementDestination: "Département Production",
+        }
+      ]
+    });
+    
+    // Brouillon Sortie 2 (GC-T75-009)
+    const brouillonSortieArticle3 = demoArticles.find(a => a.ref === "GC-T75-009")!;
+    opBuilders.push({
+      date: new Date(brouillonDay),
+      type: "Sortie",
+      hour: 17 + 35/60, // 17:35
+      statut: "Brouillon",
+      lines: [
+        {
+          article: brouillonSortieArticle3,
+          qte: 50,
+          qteOriginale: 50,
+          lotNumber: `LOT-INIT-${brouillonSortieArticle3.ref}`,
+          emplacementSource: brouillonSortieArticle3.inventory[0].zone,
+          emplacementDestination: "Client A",
+        },
+        {
+          article: brouillonSortieArticle3,
+          qte: 25,
+          qteOriginale: 25,
+          lotNumber: `LOT-INIT-${brouillonSortieArticle3.ref}`,
+          emplacementSource: brouillonSortieArticle3.inventory[0].zone,
+          emplacementDestination: "Département Production",
+        }
+      ]
+    });
+    
+    // Brouillon Transfert (GE-L-010)
+    if (transfertArticle && transfertArticle.inventory.length >= 2) {
+      opBuilders.push({
+        date: new Date(brouillonDay),
+        type: "Transfert",
+        hour: 17 + 45/60, // 17:45
+        statut: "Brouillon",
+        lines: [{
+          article: transfertArticle,
+          qte: 150,
+          qteOriginale: 150,
+          lotNumber: `LOT-INIT-${transfertArticle.ref}`,
+          emplacementSource: transfertArticle.inventory[0].zone,
+          emplacementDestination: transfertArticle.inventory[1].zone,
+        }]
+      });
+    }
+  }
+  
+  // En inspection operations (3): 1 Entrée, 2 Sortie
+  if (inflightDays.length >= 2) {
+    const inspectionDay = inflightDays[inflightDays.length - 2]; // Second most recent
+    
+    // En inspection Entrée (BD-008, 1 line, NO controleur)
+    const inspectionEntreeArticle = demoArticles.find(a => a.ref === "BD-008")!;
+    opBuilders.push({
+      date: new Date(inspectionDay),
+      type: "Entrée",
+      hour: 18 + 0/60, // 18:00
+      statut: "En inspection",
+      hasControleur: false,
+      lines: [{
+        article: inspectionEntreeArticle,
+        qte: lotSizes["BD-008"],
+        qteOriginale: lotSizes["BD-008"] / inspectionEntreeArticle.facteurConversion,
+        lotNumber: `LOT-${inspectionDay.getFullYear()}-${String(inspectionDay.getMonth() + 1).padStart(2, '0')}-INS1`,
+        lotDate: formatDate(addMonths(inspectionDay, 36)),
+        fournisseur: supplierNames[1],
+        emplacementDestination: inspectionEntreeArticle.inventory[0].zone,
+      }]
+    });
+    
+    // En inspection Sortie 1 (LB-NBR-012, 2 lines, controleur set)
+    const inspectionSortieArticle1 = demoArticles.find(a => a.ref === "LB-NBR-012")!;
+    opBuilders.push({
+      date: new Date(inspectionDay),
+      type: "Sortie",
+      hour: 18 + 10/60, // 18:10
+      statut: "En inspection",
+      hasControleur: true,
+      lines: [
+        {
+          article: inspectionSortieArticle1,
+          qte: 100,
+          qteOriginale: 100,
+          lotNumber: `LOT-INIT-${inspectionSortieArticle1.ref}`,
+          emplacementSource: inspectionSortieArticle1.inventory[0].zone,
+          emplacementDestination: "Département Production",
+        },
+        {
+          article: inspectionSortieArticle1,
+          qte: 50,
+          qteOriginale: 50,
+          lotNumber: `LOT-INIT-${inspectionSortieArticle1.ref}`,
+          emplacementSource: inspectionSortieArticle1.inventory[0].zone,
+          emplacementDestination: "Département Production",
+        }
+      ]
+    });
+    
+    // En inspection Sortie 2 (NC-025-013, 1 line, controleur set)
+    const inspectionSortieArticle2 = demoArticles.find(a => a.ref === "NC-025-013")!;
+    opBuilders.push({
+      date: new Date(inspectionDay),
+      type: "Sortie",
+      hour: 18 + 20/60, // 18:20
+      statut: "En inspection",
+      hasControleur: true,
+      lines: [{
+        article: inspectionSortieArticle2,
+        qte: 25,
+        qteOriginale: 25,
+        lotNumber: `LOT-INIT-${inspectionSortieArticle2.ref}`,
+        emplacementSource: inspectionSortieArticle2.inventory[0].zone,
+        emplacementDestination: "Département Production",
+      }]
+    });
+  }
+  
+  // En attente de validation operations (4): 1 Entrée, 2 Sortie, 1 Transfert
+  if (inflightDays.length >= 3) {
+    const validationDay = inflightDays[inflightDays.length - 3]; // Third most recent
+    
+    // En attente Entrée (GC-T75-009, 2 lines, one partially accepted, gestionnaire set)
+    const validationEntreeArticle = demoArticles.find(a => a.ref === "GC-T75-009")!;
+    const entreeQte1 = 2 * lotSizes["GC-T75-009"]; // 2 lots = 100
+    const entreeQte2 = lotSizes["GC-T75-009"]; // 1 lot = 50
+    opBuilders.push({
+      date: new Date(validationDay),
+      type: "Entrée",
+      hour: 18 + 30/60, // 18:30
+      statut: "En attente de validation",
+      hasControleur: true,
+      hasGestionnaire: true,
+      lines: [
+        {
+          article: validationEntreeArticle,
+          qte: entreeQte1,
+          qteOriginale: entreeQte1 / validationEntreeArticle.facteurConversion,
+          lotNumber: `LOT-${validationDay.getFullYear()}-${String(validationDay.getMonth() + 1).padStart(2, '0')}-VAL1`,
+          lotDate: formatDate(addMonths(validationDay, 24)),
+          validQuantity: entreeQte1 - 2, // Partial acceptance
+          defectiveQuantity: 2,
+          fournisseur: supplierNames[0],
+          emplacementDestination: validationEntreeArticle.inventory[0].zone,
+        },
+        {
+          article: validationEntreeArticle,
+          qte: entreeQte2,
+          qteOriginale: entreeQte2 / validationEntreeArticle.facteurConversion,
+          lotNumber: `LOT-${validationDay.getFullYear()}-${String(validationDay.getMonth() + 1).padStart(2, '0')}-VAL2`,
+          lotDate: formatDate(addMonths(validationDay, 24)),
+          validQuantity: entreeQte2,
+          defectiveQuantity: 0,
+          fournisseur: supplierNames[1],
+          emplacementDestination: validationEntreeArticle.inventory[0].zone,
+        }
+      ]
+    });
+    
+    // En attente Sortie 1 (GE-L-010, 3 lines, NO gestionnaire)
+    if (transfertArticle && transfertArticle.inventory.length >= 2) {
+      opBuilders.push({
+        date: new Date(validationDay),
+        type: "Sortie",
+        hour: 18 + 40/60, // 18:40
+        statut: "En attente de validation",
+        hasControleur: true,
+        hasGestionnaire: false,
+        lines: [
+          {
+            article: transfertArticle,
+            qte: 100,
+            qteOriginale: 100,
+            lotNumber: `LOT-INIT-${transfertArticle.ref}`,
+            emplacementSource: transfertArticle.inventory[0].zone,
+            emplacementDestination: "Client A",
+          },
+          {
+            article: transfertArticle,
+            qte: 50,
+            qteOriginale: 50,
+            lotNumber: `LOT-INIT-${transfertArticle.ref}`,
+            emplacementSource: transfertArticle.inventory[1].zone,
+            emplacementDestination: "Département Production",
+          },
+          {
+            article: transfertArticle,
+            qte: 75,
+            qteOriginale: 75,
+            lotNumber: `LOT-INIT-${transfertArticle.ref}`,
+            emplacementSource: transfertArticle.inventory[0].zone,
+            emplacementDestination: "Client A",
+          }
+        ]
+      });
+    }
+    
+    // En attente Sortie 2 (LN-60-011, 2 lines, gestionnaire set)
+    const validationSortieArticle2 = demoArticles.find(a => a.ref === "LN-60-011")!;
+    opBuilders.push({
+      date: new Date(validationDay),
+      type: "Sortie",
+      hour: 18 + 50/60, // 18:50
+      statut: "En attente de validation",
+      hasControleur: true,
+      hasGestionnaire: true,
+      lines: [
+        {
+          article: validationSortieArticle2,
+          qte: 150,
+          qteOriginale: 150,
+          lotNumber: `LOT-INIT-${validationSortieArticle2.ref}`,
+          emplacementSource: validationSortieArticle2.inventory[0].zone,
+          emplacementDestination: "Département Production",
+        },
+        {
+          article: validationSortieArticle2,
+          qte: 100,
+          qteOriginale: 100,
+          lotNumber: `LOT-INIT-${validationSortieArticle2.ref}`,
+          emplacementSource: validationSortieArticle2.inventory[0].zone,
+          emplacementDestination: "Département Production",
+        }
+      ]
+    });
+    
+    // En attente Transfert (GE-L-010, NO gestionnaire)
+    if (transfertArticle && transfertArticle.inventory.length >= 2) {
+      opBuilders.push({
+        date: new Date(validationDay),
+        type: "Transfert",
+        hour: 18 + 55/60, // 18:55
+        statut: "En attente de validation",
+        hasGestionnaire: false,
+        lines: [{
+          article: transfertArticle,
+          qte: 200,
+          qteOriginale: 200,
+          lotNumber: `LOT-INIT-${transfertArticle.ref}`,
+          emplacementSource: transfertArticle.inventory[1].zone,
+          emplacementDestination: transfertArticle.inventory[0].zone,
+        }]
+      });
+    }
+  }
   
   // === STEP 4: Sort operations chronologically ===
   opBuilders.sort((a, b) => {
@@ -580,24 +891,40 @@ export function getDemoData(now: Date = new Date()): DemoDataResult {
     const controleur = controllers[operationIdCounter % controllers.length];
     const gestionnaire = managers[operationIdCounter % managers.length];
     
+    const finalStatut = opBuilder.statut || "Terminé";
+    
     const operation: Operation = {
       id: operationId,
       reference,
       type: opBuilder.type,
       operateur,
       datePlanifiee: formatDate(opBuilder.date),
-      statut: "Terminé",
+      statut: finalStatut,
     };
     
+    // Set controleur and gestionnaire based on statut and flags
     if (opBuilder.type === "Entrée") {
-      operation.controleur = controleur;
-      operation.gestionnaire = gestionnaire;
-      operation.documentOrigine = `BC-${year}-${String(counter).padStart(4, '0')}`;
+      if (finalStatut !== "Brouillon" && opBuilder.hasControleur !== false) {
+        operation.controleur = controleur;
+      }
+      if ((finalStatut === "En attente de validation" || finalStatut === "Terminé") && opBuilder.hasGestionnaire !== false) {
+        operation.gestionnaire = gestionnaire;
+      }
+      if (finalStatut === "Terminé") {
+        operation.documentOrigine = `BC-${year}-${String(counter).padStart(4, '0')}`;
+      }
     } else if (opBuilder.type === "Sortie") {
-      operation.controleur = controleur;
-      operation.gestionnaire = gestionnaire;
+      if (finalStatut !== "Brouillon" && opBuilder.hasControleur !== false) {
+        operation.controleur = controleur;
+      }
+      if ((finalStatut === "En attente de validation" || finalStatut === "Terminé") && opBuilder.hasGestionnaire !== false) {
+        operation.gestionnaire = gestionnaire;
+      }
     } else {
-      operation.gestionnaire = gestionnaire;
+      // Transfert: no controleur, gestionnaire only in validation/completed
+      if ((finalStatut === "En attente de validation" || finalStatut === "Terminé") && opBuilder.hasGestionnaire !== false) {
+        operation.gestionnaire = gestionnaire;
+      }
     }
     
     operations.push(operation);
@@ -620,29 +947,89 @@ export function getDemoData(now: Date = new Date()): DemoDataResult {
         uniteSortie: line.article.uniteSortie,
         lotNumber: line.lotNumber || `LOT-INIT-${line.article.ref}`,
         operateur,
-        statut: "Terminé",
         operationId,
         emplacementDestination: line.emplacementDestination || "",
-      };
+      } as Mouvement;
       
+      // Set statut and status based on operation statut and line data
+      if (finalStatut === "Brouillon") {
+        // Brouillon lines: statut "En attente", status "pending" for Entrée/Sortie, "Terminé"/"approved" for Transfert
+        if (opBuilder.type === "Entrée" || opBuilder.type === "Sortie") {
+          movement.statut = "En attente";
+          movement.status = "pending";
+        } else {
+          // Transfert: statut "Terminé", status "approved", stockApplied false
+          movement.statut = "Terminé";
+          movement.status = "approved";
+          movement.stockApplied = false;
+        }
+      } else if (finalStatut === "En inspection") {
+        // En inspection lines: statut "En attente", status "pending" (not inspected yet)
+        movement.statut = "En attente";
+        movement.status = "pending";
+      } else if (finalStatut === "En attente de validation") {
+        // En attente de validation lines: ALL inspected (approved)
+        if (opBuilder.type === "Entrée" || opBuilder.type === "Sortie") {
+          movement.statut = "Terminé";
+          movement.status = "approved";
+          movement.stockApplied = false;
+          if (opBuilder.hasControleur !== false) {
+            movement.controleur = controleur;
+          }
+        } else {
+          // Transfert: statut "Terminé", status "approved", stockApplied false
+          movement.statut = "Terminé";
+          movement.status = "approved";
+          movement.stockApplied = false;
+        }
+      } else {
+        // Terminé lines
+        movement.statut = "Terminé";
+      }
+      
+      // Type-specific fields
       if (opBuilder.type === "Entrée") {
         movement.lotDate = line.lotDate;
         movement.fournisseur = line.fournisseur;
         movement.emplacementDestination = line.emplacementDestination!;
-        movement.status = "approved";
-        movement.controleur = controleur;
-        movement.etatArticles = "Conforme";
-        movement.validQuantity = line.validQuantity;
-        movement.defectiveQuantity = line.defectiveQuantity;
-        movement.qcStatus = "Conforme";
-        movement.noteControle = "";
-        movement.verificationPoints = {};
-        movement.wasDelayed = false;
+        
+        if (finalStatut === "Terminé") {
+          movement.status = "approved";
+          movement.controleur = controleur;
+          movement.etatArticles = "Conforme";
+          movement.validQuantity = line.validQuantity;
+          movement.defectiveQuantity = line.defectiveQuantity;
+          movement.qcStatus = "Conforme";
+          movement.noteControle = "";
+          movement.verificationPoints = {};
+          movement.wasDelayed = false;
+        } else if (finalStatut === "En attente de validation") {
+          // Inspected line
+          movement.etatArticles = line.defectiveQuantity && line.defectiveQuantity > 0 ? "Non-conforme" : "Conforme";
+          movement.validQuantity = line.validQuantity;
+          movement.defectiveQuantity = line.defectiveQuantity || 0;
+          movement.qcStatus = movement.etatArticles;
+          movement.noteControle = "";
+          movement.verificationPoints = {};
+          movement.wasDelayed = false;
+        }
       } else if (opBuilder.type === "Sortie") {
         movement.emplacementSource = line.emplacementSource;
         movement.emplacementDestination = line.emplacementDestination!;
-        movement.controleur = controleur;
-        movement.etatArticles = "Conforme";
+        
+        if (finalStatut === "Terminé") {
+          movement.controleur = controleur;
+          movement.etatArticles = "Conforme";
+        } else if (finalStatut === "En attente de validation") {
+          // Inspected line
+          movement.etatArticles = "Conforme";
+          movement.validQuantity = line.qte;
+          movement.defectiveQuantity = 0;
+          movement.qcStatus = "Conforme";
+          movement.noteControle = "";
+          movement.verificationPoints = {};
+          movement.wasDelayed = false;
+        }
       } else {
         // Transfert
         movement.emplacementSource = line.emplacementSource;
