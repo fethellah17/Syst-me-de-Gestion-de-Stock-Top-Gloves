@@ -45,6 +45,7 @@ const ArticlesPage = () => {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [units, setUnits] = useState<string[]>([]);
   const [detailsArticle, setDetailsArticle] = useState<typeof articles[0] | null>(null);
+  const [showAllHistory, setShowAllHistory] = useState(false);
   const [formData, setFormData] = useState({
     ref: "",
     nom: "",
@@ -582,56 +583,68 @@ const ArticlesPage = () => {
         </div>
 
         {consumptionHistory.length > 0 ? (
-          <div className="w-full max-w-full overflow-x-auto bg-white border border-gray-200 rounded-md">
-            <table className="min-w-[700px] w-full">
-              <thead>
-                <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">Date</th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">Référence</th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">Article</th>
-                  <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">
-                    <div className="flex items-center justify-end gap-1">
-                      <Flame className="w-3.5 h-3.5" />
-                      <span>Total Consommé</span>
-                    </div>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {consumptionHistory.map((entry, idx) => {
-                  const today = new Date().toDateString();
-                  const isToday = entry.date === today;
-                  
-                  return (
-                    <tr 
-                      key={idx} 
-                      className={`border-b border-gray-100 transition-colors h-12 ${
-                        isToday 
-                          ? "bg-orange-50 hover:bg-orange-100" 
-                          : "hover:bg-gray-50"
-                      }`}
-                    >
-                      <td className="py-2 px-4 text-sm text-gray-500 whitespace-nowrap tabular-nums">
-                        <div className="flex items-center gap-2">
-                          {isToday && <span className="inline-block w-2 h-2 rounded-full bg-orange-500" />}
-                          {formatDateFR(entry.dateObj)}
-                        </div>
-                      </td>
-                      <td className="py-2 px-4 text-sm text-gray-500 whitespace-nowrap">{entry.ref}</td>
-                      <td className="py-2 px-4 text-sm font-medium text-gray-900">{entry.article}</td>
-                      <td className="py-2 px-4 text-right whitespace-nowrap">
-                        <span className={`text-sm font-medium tabular-nums ${
-                          isToday ? "text-orange-600" : "text-gray-900"
-                        }`}>
-                          {entry.totalConsomme.toLocaleString()}
-                        </span>
-                      </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-          </div>
+          <>
+            <div className="w-full max-w-full overflow-x-auto bg-white border border-gray-200 rounded-md">
+              <table className="min-w-[700px] w-full">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">Date</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">Référence</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide">Article</th>
+                    <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wide whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1">
+                        <Flame className="w-3.5 h-3.5" />
+                        <span>Total Consommé</span>
+                      </div>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(showAllHistory ? consumptionHistory : consumptionHistory.slice(0, 15)).map((entry, idx) => {
+                    const today = new Date().toDateString();
+                    const isToday = entry.date === today;
+                    
+                    return (
+                      <tr 
+                        key={idx} 
+                        className={`border-b border-gray-100 transition-colors h-12 ${
+                          isToday 
+                            ? "bg-orange-50 hover:bg-orange-100" 
+                            : "hover:bg-gray-50"
+                        }`}
+                      >
+                        <td className="py-2 px-4 text-sm text-gray-500 whitespace-nowrap tabular-nums">
+                          <div className="flex items-center gap-2">
+                            {isToday && <span className="inline-block w-2 h-2 rounded-full bg-orange-500" />}
+                            {formatDateFR(entry.dateObj)}
+                          </div>
+                        </td>
+                        <td className="py-2 px-4 text-sm text-gray-500 whitespace-nowrap">{entry.ref}</td>
+                        <td className="py-2 px-4 text-sm font-medium text-gray-900">{entry.article}</td>
+                        <td className="py-2 px-4 text-right whitespace-nowrap">
+                          <span className={`text-sm font-medium tabular-nums ${
+                            isToday ? "text-orange-600" : "text-gray-900"
+                          }`}>
+                            {entry.totalConsomme.toLocaleString()}
+                          </span>
+                        </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+            </div>
+            {consumptionHistory.length > 15 && (
+              <div className="text-center">
+                <button
+                  onClick={() => setShowAllHistory(!showAllHistory)}
+                  className="text-primary font-medium hover:underline text-sm"
+                >
+                  {showAllHistory ? 'Réduire' : `Afficher tout (${consumptionHistory.length})`}
+                </button>
+              </div>
+            )}
+          </>
         ) : (
           <div className="bg-card border rounded-lg p-8 text-center">
             <p className="text-muted-foreground text-sm">Aucune consommation enregistrée pour le moment.</p>

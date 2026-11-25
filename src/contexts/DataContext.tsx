@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState } from "react";
 import { applyEntreeStock, applySortieStock, computeOperationStockEffect, shouldReverseStockOnDelete } from "@/lib/stock-effects";
 import { resetQcFields, canRedoInspection } from "@/lib/qc-reset";
 import { buildOperationMessage, sortMessagesAsc, type OperationMessage, type OperationMessageKind } from "@/lib/operation-messages";
-import { getDemoArticles, getDemoCategories } from "@/lib/demo-seed";
+import { DEMO_SEED_ENABLED, getDemoArticles, getDemoCategories, getDemoData, getDemoInventoryHistory } from "@/lib/demo-seed";
 
 export type { OperationMessage, OperationMessageKind };
 
@@ -324,14 +324,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Initialize operations from seed movements
   const { operations: seedOperations, updatedMovements: seedMovements } = groupSeedMovementsIntoOperations(initialMovements);
 
-  const [articles, setArticles] = useState<Article[]>([...initialArticles, ...getDemoArticles()]);
-  const [categories, setCategories] = useState<Categorie[]>([...initialCategories, ...getDemoCategories()]);
+  const [articles, setArticles] = useState<Article[]>(() => DEMO_SEED_ENABLED ? getDemoArticles() : [...initialArticles, ...getDemoArticles()]);
+  const [categories, setCategories] = useState<Categorie[]>(() => DEMO_SEED_ENABLED ? getDemoCategories() : [...initialCategories, ...getDemoCategories()]);
   const [emplacements, setEmplacements] = useState<Emplacement[]>(initialLocations);
   const [destinations, setDestinations] = useState<Destination[]>(initialDestinations);
   const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
-  const [mouvements, setMouvements] = useState<Mouvement[]>(seedMovements);
-  const [operations, setOperations] = useState<Operation[]>(seedOperations);
-  const [inventoryHistory, setInventoryHistory] = useState<InventoryRecord[]>(initialHistory);
+  const [mouvements, setMouvements] = useState<Mouvement[]>(() => DEMO_SEED_ENABLED ? getDemoData().movements : seedMovements);
+  const [operations, setOperations] = useState<Operation[]>(() => DEMO_SEED_ENABLED ? getDemoData().operations : seedOperations);
+  const [inventoryHistory, setInventoryHistory] = useState<InventoryRecord[]>(() => DEMO_SEED_ENABLED ? getDemoInventoryHistory() : initialHistory);
   const [operationMessages, setOperationMessages] = useState<OperationMessage[]>([]);
 
   const addArticle = (article: Omit<Article, "id">) => {
